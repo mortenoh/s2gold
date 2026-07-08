@@ -85,9 +85,11 @@ class BitmapItem:
 class FontItem:
     """A font: horizontal/vertical spacing plus per-glyph bitmaps.
 
-    Fonts do not occur in any graphics LST shipped with the game (they live in the
-    IDX/DAT resource archive), so this branch is parsed defensively per the documented
-    structure and is not exercised by the real data.
+    Fonts do not occur in any graphics LST shipped with the game; they live in the
+    IDX/DAT resource archives (``RESOURCE.DAT``/``EDITRES.DAT``) and in the standalone
+    ``FONT14.FNT``, all of which reuse this same item layout. Each ``glyphs`` entry keeps
+    its character code in :attr:`BitmapItem.index` (0x20-0xFF); absent characters are
+    simply not present in the list.
     """
 
     index: int
@@ -145,27 +147,32 @@ def _read_raw_bitmap(r: Reader) -> tuple[int, int, int, int, bytes]:
 
 
 def _read_font(r: Reader, index: int) -> FontItem:
-    """Read a font item: ``u8`` dx, ``u8`` dy, then a run of nested glyph bitmaps.
+    """Read a font item: ``u8`` dx, ``u8`` dy, then a glyph per character 0x20-0xFF.
 
-    The documented layout is 224 glyph slots (characters 32-255), each a standard item
-    header followed by a bitmap payload. Not exercised by shipped graphics archives.
+    Layout (verified byte-exactly against ``RESOURCE.DAT``): ``dx``/``dy`` are the
+    horizontal/vertical spacing in pixels. Then, for each character code 0x20 through
+    0xFF, an ``s16`` bob-type is read; ``0`` (``BobType::None``) means the glyph is absent
+    (no further bytes), otherwise a normal bitmap payload of that type follows. Shipped
+    fonts store every glyph as a player-color bitmap (type 4). Unicode fonts (marked by
+    ``dx == dy == 0xFF``) do not ship with the game and are rejected.
     """
     dx = r.u8()
     dy = r.u8()
+    if dx == 0xFF and dy == 0xFF:
+        raise LstError(f"font {index}: Unicode fonts (dx=dy=0xFF) are not supported")
     glyphs: list[BitmapItem] = []
-    for glyph_index in range(224):
-        used = r.s16()
-        if used != 1:
-            continue
+    for char in range(0x20, 0x100):
         bobtype = r.s16()
+        if bobtype == 0:  # BobType::None: glyph not present for this character.
+            continue
         if bobtype in (BOB_BITMAP_RLE, BOB_BITMAP_PLAYER, BOB_BITMAP_SHADOW):
             nx, ny, width, height, block = _read_bitmap_header(r)
-            glyphs.append(BitmapItem(glyph_index, bobtype, _BITMAP_KINDS[bobtype], nx, ny, width, height, block))
+            glyphs.append(BitmapItem(char, bobtype, _BITMAP_KINDS[bobtype], nx, ny, width, height, block))
         elif bobtype == BOB_BITMAP_RAW:
             nx, ny, width, height, pixels = _read_raw_bitmap(r)
-            glyphs.append(BitmapItem(glyph_index, bobtype, "raw", nx, ny, width, height, pixels))
+            glyphs.append(BitmapItem(char, bobtype, "raw", nx, ny, width, height, pixels))
         else:
-            raise LstError(f"font glyph {glyph_index}: unsupported glyph bob-type {bobtype}")
+            raise LstError(f"font glyph U+{char:04X}: unsupported glyph bob-type {bobtype}")
     return FontItem(index, dx, dy, glyphs)
 
 
@@ -201,6 +208,33 @@ def read_lst(data: bytes) -> list[Item]:
             raise LstError(f"item {index} (bob-type {bobtype}) at offset {item_offset}: {exc}") from exc
         items.append(item)
     return items
+
+
+def read_item_at(r: Reader, index: int) -> Item:
+    """Read a single item (``s16`` bob-type then its payload) at the reader's cursor.
+
+    This is the per-item wire format shared by LST slots (after their ``used`` flag) and
+    by IDX/DAT items (at each entry's DAT offset). The reader must already be positioned
+    at the item's leading bob-type.
+
+    Args:
+        r: Reader positioned at the item's ``s16`` bob-type.
+        index: Index recorded on the returned item.
+
+    Returns:
+        The parsed item.
+
+    Raises:
+        LstError: On an item type the walker cannot consume.
+    """
+    item_offset = r.pos
+    bobtype = r.s16()
+    try:
+        return _parse_item(r, index, bobtype)
+    except LstError:
+        raise
+    except (EOFError, ValueError) as exc:
+        raise LstError(f"item {index} (bob-type {bobtype}) at offset {item_offset}: {exc}") from exc
 
 
 def _parse_item(r: Reader, index: int, bobtype: int) -> Item:

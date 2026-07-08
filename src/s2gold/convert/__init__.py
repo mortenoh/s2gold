@@ -23,6 +23,7 @@ CONVERTERS = (
     "palettes",
     "terrain",
     "graphics",
+    "ui",
     "fonts",
     "maps",
     "texts",

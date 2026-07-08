@@ -150,20 +150,38 @@ def _decode_rle(item: BitmapItem, palette: Palette) -> DecodedSprite:
     return DecodedSprite(width, height, item.nx, item.ny, "rle", bytes(out), None, ())
 
 
-def _decode_player(item: BitmapItem, palette: Palette) -> DecodedSprite:
-    """Decode a player-color bitmap (type 4).
+def decode_player_rows(
+    pixels: bytes,
+    offsets: list[int],
+    width: int,
+    palette: Palette,
+) -> tuple[bytes, bytes | None]:
+    """Decode player-color rows from a command stream given per-row start offsets.
+
+    This is the raw type-4 ("player") pixel decoder factored out so it can serve both
+    self-contained bitmap items (whose row offsets live in the payload header) and BOB
+    sprites (whose rows share one color block and carry their offsets separately). Each
+    row ``y`` starts at ``offsets[y]`` in ``pixels`` and is decoded until ``width`` pixels
+    are produced.
 
     Opcodes (command byte ``c``): ``c < 0x40`` transparent run of ``c``; ``0x40-0x7F``
     copy ``c-0x40`` paletted pixels; ``0x80-0xBF`` a run of ``c-0x80`` player-color pixels
     sharing one following shade byte (0-3); ``0xC0-0xFF`` a run of ``c-0xC0`` pixels of one
-    following paletted color. Player-color pixels are rendered in the default-player ramp
-    and recorded in a shade mask.
+    following paletted color. Player-color pixels are rendered in the default-player ramp.
+
+    Args:
+        pixels: The command/pixel byte stream.
+        offsets: Absolute start offset into ``pixels`` for each of ``len(offsets)`` rows.
+        width: Row width in pixels.
+        palette: Palette resolving paletted indices.
+
+    Returns:
+        A tuple ``(rgba, player_mask)``: straight RGBA bytes and, when the sprite has any
+        player-color pixels, a ``width * height`` shade mask (``shade + 1`` per pixel, ``0``
+        elsewhere); ``player_mask`` is ``None`` when there are no player-color pixels.
     """
-    if item.width == 0 or item.height == 0:
-        return _empty_sprite(item, "player")
     colors = palette.colors
-    width, height, block = item.width, item.height, item.payload
-    offsets = _line_offsets(block, height)
+    height = len(offsets)
     out = bytearray(width * height * 4)
     mask = bytearray(width * height)
     has_player = False
@@ -172,7 +190,7 @@ def _decode_player(item: BitmapItem, palette: Palette) -> DecodedSprite:
         row = y * width
         x = 0
         while x < width:
-            cmd = block[p]
+            cmd = pixels[p]
             p += 1
             if cmd < 0x40:
                 x += cmd
@@ -180,11 +198,11 @@ def _decode_player(item: BitmapItem, palette: Palette) -> DecodedSprite:
                 for _ in range(cmd - 0x40):
                     if x >= width:
                         break
-                    _put(out, (row + x) * 4, colors[block[p]])
+                    _put(out, (row + x) * 4, colors[pixels[p]])
                     p += 1
                     x += 1
             elif cmd < 0xC0:
-                shade = block[p]
+                shade = pixels[p]
                 p += 1
                 has_player = True
                 color = colors[PLAYER_COLOR_BASE + shade]
@@ -195,17 +213,26 @@ def _decode_player(item: BitmapItem, palette: Palette) -> DecodedSprite:
                     mask[row + x] = shade + 1
                     x += 1
             else:
-                color = colors[block[p]]
+                color = colors[pixels[p]]
                 p += 1
                 for _ in range(cmd - 0xC0):
                     if x >= width:
                         break
                     _put(out, (row + x) * 4, color)
                     x += 1
-    if not has_player:
-        return DecodedSprite(width, height, item.nx, item.ny, "player", bytes(out), None, ())
+    return bytes(out), (bytes(mask) if has_player else None)
+
+
+def _decode_player(item: BitmapItem, palette: Palette) -> DecodedSprite:
+    """Decode a self-contained player-color bitmap (type 4); see :func:`decode_player_rows`."""
+    if item.width == 0 or item.height == 0:
+        return _empty_sprite(item, "player")
+    offsets = _line_offsets(item.payload, item.height)
+    rgba, mask = decode_player_rows(item.payload, offsets, item.width, palette)
+    if mask is None:
+        return DecodedSprite(item.width, item.height, item.nx, item.ny, "player", rgba, None, ())
     indices = tuple(PLAYER_COLOR_BASE + s for s in range(PLAYER_COLOR_COUNT))
-    return DecodedSprite(width, height, item.nx, item.ny, "player", bytes(out), bytes(mask), indices)
+    return DecodedSprite(item.width, item.height, item.nx, item.ny, "player", rgba, mask, indices)
 
 
 def _decode_shadow(item: BitmapItem) -> DecodedSprite:
