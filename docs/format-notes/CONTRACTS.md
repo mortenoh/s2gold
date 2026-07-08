@@ -46,7 +46,7 @@ maps/<name>.json                  parsed map (see maps agent brief)
 texts/<lang>/<name>.json          string arrays keyed by original file
 sfx/<id>.wav + sfx/index.json
 music/<track>.mp3 + music/index.json      MP3: plays natively everywhere incl. Safari
-video/intro.webm                  (optional)
+video/intro.mp4                   (optional; H.264+AAC for universal playback)
 ```
 
 Naming: lowercase, original basenames (`mapbobs`, `rom_y`, `tex5`, ...).

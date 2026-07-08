@@ -1,8 +1,11 @@
-"""Video converter: the Smacker intro (VIDEO/INTRO.SMK) to WebM.
+"""Video converter: the Smacker intro (VIDEO/INTRO.SMK) to MP4.
 
 ffmpeg decodes the Smacker container (smackvideo + smackaudio) directly, so conversion is
-a single transcode to VP9 video + Opus audio. The step is skipped with a notice (never a
-hard failure) when ffmpeg is unavailable or no intro file is present.
+a single transcode to H.264 video + AAC audio. MP4/H.264 is used because it plays
+natively in every browser (Safari included, unlike WebM/VP9); ``yuv420p`` and
+``+faststart`` are required for Safari playback and progressive web streaming. The step
+is skipped with a notice (never a hard failure) when ffmpeg is unavailable or no intro
+file is present.
 """
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ def _probe_has_audio(ffprobe: str, src: Path) -> bool:
 
 
 def run(extracted: Path, assets: Path = ASSETS_DIR) -> None:
-    """Convert VIDEO/INTRO.SMK to video/intro.webm and register it in the manifest.
+    """Convert VIDEO/INTRO.SMK to video/intro.mp4 and register it in the manifest.
 
     Args:
         extracted: innoextract output root (contains ``VIDEO/``).
@@ -39,14 +42,31 @@ def run(extracted: Path, assets: Path = ASSETS_DIR) -> None:
 
     out_dir = assets / "video"
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / "intro.webm"
+    out_path = out_dir / "intro.mp4"
 
     ffprobe = find_tool("ffprobe")
     has_audio = _probe_has_audio(ffprobe, src) if ffprobe else True
 
-    args = [ffmpeg, "-y", "-v", "error", "-i", str(src), "-c:v", "libvpx-vp9", "-crf", "33", "-b:v", "0"]
+    args = [
+        ffmpeg,
+        "-y",
+        "-v",
+        "error",
+        "-i",
+        str(src),
+        "-c:v",
+        "libx264",
+        "-crf",
+        "20",
+        "-preset",
+        "slow",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+    ]
     if has_audio:
-        args += ["-c:a", "libopus"]
+        args += ["-c:a", "aac", "-b:a", "128k"]
     else:
         args += ["-an"]
     args.append(str(out_path))
@@ -54,6 +74,6 @@ def run(extracted: Path, assets: Path = ASSETS_DIR) -> None:
     run_tool(args)
 
     manifest = Manifest()
-    manifest.add("video", {"dir": "video", "intro": "video/intro.webm"})
+    manifest.add("video", {"dir": "video", "intro": "video/intro.mp4"})
     manifest.save(assets)
-    write_json(out_dir / "index.json", {"intro": "video/intro.webm"})
+    write_json(out_dir / "index.json", {"intro": "video/intro.mp4"})
