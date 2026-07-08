@@ -1,0 +1,22 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Never commit game assets or the installer — see docs/FEASIBILITY.md §1
+extracted/
+*.exe
+*.gog
+*.sf2
+assets-cache/
+
+# Node
+node_modules/
+coverage/
+.DS_Store

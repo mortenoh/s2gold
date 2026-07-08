@@ -1,0 +1,102 @@
+[project]
+name = "s2gold"
+version = "0.1.0"
+description = "Asset pipeline for a clean-room browser reimplementation of The Settlers II Gold (loads the user's own GOG assets; never redistributes them)"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pillow>=12.3.0",
+    "typer>=0.26.8",
+]
+
+[project.scripts]
+s2gold = "s2gold.cli:main"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.20",
+    "pyright>=1.1.409",
+    "pytest>=9",
+    "pytest-cov>=7",
+    "ruff>=0.15",
+    "types-pillow>=10.2.0.20240822",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.0,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+
+[tool.ruff.lint]
+fixable = ["ALL"]
+select = ["E", "W", "F", "I", "D"]
+ignore = ["D203", "D213"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["D"]
+"**/__init__.py" = ["D104"]
+"src/**/*.py" = ["D102", "D105", "D107"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [".git", ".venv", "__pycache__", "node_modules", "extracted", "packages"]
+markers = [
+    "assets: tests that need real extracted game data (skipped when extracted/ is absent)",
+]
+
+[tool.coverage.run]
+branch = true
+relative_files = true
+source = ["s2gold"]
+
+[tool.coverage.report]
+exclude_also = ["if TYPE_CHECKING:"]
+precision = 2
+show_missing = true
+skip_covered = true
+
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_unused_ignores = true
+strict_equality = true
+mypy_path = ["src"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[tool.pyright]
+include = ["src", "tests"]
+exclude = ["**/.venv", "**/node_modules"]
+pythonVersion = "3.13"
+typeCheckingMode = "strict"
+useLibraryCodeForTypes = true
+reportPrivateUsage = false
+reportUnusedFunction = false
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+reportUnknownParameterType = false
+reportUnknownVariableType = false
+reportMissingTypeArgument = false
+reportMissingTypeStubs = false
+reportUnknownLambdaType = false
+reportMissingImports = "warning"
+reportMissingModuleSource = false
