@@ -15,6 +15,7 @@ extracted/
 *.gog
 *.sf2
 assets-cache/
+packages/app/public/assets/
 
 # Node
 node_modules/

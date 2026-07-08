@@ -45,7 +45,7 @@ fonts/<name>.png + <name>.json    glyph atlas + metrics
 maps/<name>.json                  parsed map (see maps agent brief)
 texts/<lang>/<name>.json          string arrays keyed by original file
 sfx/<id>.wav + sfx/index.json
-music/<track>.ogg + music/index.json
+music/<track>.mp3 + music/index.json      MP3: plays natively everywhere incl. Safari
 video/intro.webm                  (optional)
 ```
 
@@ -69,11 +69,12 @@ tint at runtime. Record the palette indices used in atlas.json.
 - `GFX/TEXTURES/TEX5.LBM`: IFF `FORM`/`PBM `, BMHD (big-endian: w,h u16; compression
   byte flag 1 = PackBits), CMAP, BODY. 256×256, 8bpp chunky. Decodes correctly.
 - `GFX/PALETTE/PAL5.BBM`: IFF with 768-byte CMAP. (LST-embedded palettes exist too.)
-- `DATA/SOUNDDAT/SOUND.LST`: 200 items — 199 sounds are raw **unsigned 8-bit PCM,
-  no header**, play at 11025 Hz mono; item 0 is XMIDI. Wrapping with a 44-byte WAV
-  header at 11025 Hz produces correct audio (verified with ffprobe).
+- `DATA/SOUNDDAT/SOUND.LST`: 200 item slots, 55 used (54 raw-PCM sounds + 1 XMIDI);
+  unused slots are just the 2-byte used=0 flag. PCM is raw **unsigned 8-bit, no
+  header**, plays at 11025 Hz mono; a 44-byte WAV header at 11025 Hz produces correct
+  audio (verified with ffprobe).
 - `DATA/SOUNDDAT/SNG/SNG_*.DAT`: bare XMIDI: `FORM????XDIR` + `CAT ????XMID` with
-  TIMB/EVNT chunks. 25 tracks.
+  TIMB/EVNT chunks. 14 tracks in this install.
 - Maps `DATA/MAPS*/*.WLD`, `WORLDS/*.SWD`: header starts with magic `WORLD_V1.0`
   then 20-byte NUL-padded title (verified: "I - Off we go").
 - Texts `DATA/TXT*/*.{ENG,GER}` and `DATA/MISSIONS/*.RTX`: magic u16 0xFDE7 (bytes

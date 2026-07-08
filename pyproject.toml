@@ -55,6 +55,7 @@ testpaths = ["tests"]
 norecursedirs = [".git", ".venv", "__pycache__", "node_modules", "extracted", "packages"]
 markers = [
     "assets: tests that need real extracted game data (skipped when extracted/ is absent)",
+    "slow: expensive rendering tests (deselect with -m 'not slow')",
 ]
 
 [tool.coverage.run]
