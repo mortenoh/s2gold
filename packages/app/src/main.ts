@@ -31,6 +31,8 @@ async function boot(): Promise<void> {
         el(
           'p',
           {},
+          el('a', { class: 'btn', href: '/game.html', text: 'Play (terrain demo)' }),
+          ' ',
           el('a', { class: 'btn', href: '/inspector.html', text: 'Open asset inspector' }),
         ),
       ),

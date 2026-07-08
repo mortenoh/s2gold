@@ -21,3 +21,6 @@ packages/app/public/assets/
 node_modules/
 coverage/
 .DS_Store
+
+# Claude Code runtime state
+.claude/

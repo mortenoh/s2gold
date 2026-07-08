@@ -1,0 +1,113 @@
+/* Game page: fullscreen terrain canvas with a light HUD overlay. */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+
+.game {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.game-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+}
+
+.game-canvas.dragging {
+  cursor: grabbing;
+}
+
+.hud-top {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: rgba(20, 20, 24, 0.8);
+  border: 1px solid #3a3a44;
+  border-radius: 6px;
+  color: #ddd;
+  font-size: 13px;
+  z-index: 10;
+}
+
+.hud-top a {
+  color: #9cf;
+  text-decoration: none;
+}
+
+.hud-top .map-title {
+  font-weight: 600;
+  color: #fff;
+}
+
+.hud-top select,
+.hud-top button {
+  background: #2a2a32;
+  color: #ddd;
+  border: 1px solid #4a4a55;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.hud-top .fps {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: #8f8;
+}
+
+.minimap-box {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  padding: 4px;
+  background: rgba(20, 20, 24, 0.85);
+  border: 1px solid #3a3a44;
+  border-radius: 6px;
+  z-index: 10;
+}
+
+.minimap-box canvas {
+  display: block;
+  image-rendering: pixelated;
+  cursor: crosshair;
+}
+
+.game-message {
+  color: #ddd;
+  max-width: 40rem;
+  margin: 4rem auto;
+  padding: 1rem 1.5rem;
+  background: #1c1c22;
+  border: 1px solid #3a3a44;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.game-message code,
+.game-message pre {
+  background: #14141a;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
