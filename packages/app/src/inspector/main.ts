@@ -52,6 +52,10 @@ async function boot(): Promise<void> {
   root.append(sidebar, main);
 
   const selectCategory = async (name: string, item: HTMLElement): Promise<void> => {
+    // Selection lives in the URL hash so it survives reloads and is shareable.
+    if (window.location.hash.slice(1) !== name) {
+      history.replaceState(null, '', `#${name}`);
+    }
     list.querySelectorAll('.cat-item.active').forEach((n) => n.classList.remove('active'));
     item.classList.add('active');
     clear(main);
@@ -75,6 +79,7 @@ async function boot(): Promise<void> {
   };
 
   let first: { name: string; item: HTMLElement } | null = null;
+  const items = new Map<string, HTMLElement>();
   for (const name of categories) {
     const converted = name in manifest.categories;
     const item = el('li', {
@@ -87,13 +92,25 @@ async function boot(): Promise<void> {
     );
     list.append(item);
     if (converted) {
+      items.set(name, item);
       item.addEventListener('click', () => void selectCategory(name, item));
       if (!first) first = { name, item };
     }
   }
 
-  if (first) {
-    await selectCategory(first.name, first.item);
+  const fromHash = (): { name: string; item: HTMLElement } | null => {
+    const name = window.location.hash.slice(1);
+    const item = items.get(name);
+    return item ? { name, item } : null;
+  };
+  window.addEventListener('hashchange', () => {
+    const target = fromHash();
+    if (target) void selectCategory(target.name, target.item);
+  });
+
+  const initial = fromHash() ?? first;
+  if (initial) {
+    await selectCategory(initial.name, initial.item);
   } else {
     main.append(
       el('div', {

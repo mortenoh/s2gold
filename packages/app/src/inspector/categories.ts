@@ -152,9 +152,66 @@ const terrain: CategoryRenderer = {
 const fonts: CategoryRenderer = {
   label: 'fonts',
   async render(container, payload) {
-    const files = unique(collectStrings(payload, (s) => s.toLowerCase().endsWith('.png')));
-    renderImageGrid(container, files, 'fonts');
-    if (files.length === 0) dumpJson(container, payload);
+    // Converter shape: { font11: "fonts/font11.json", ... }; each JSON holds
+    // { name, dx, dy, image, width, height, glyphs: { charCode: {x,y,w,h,...} } }.
+    const entries = isRecord(payload)
+      ? Object.entries(payload).filter((e): e is [string, string] => typeof e[1] === 'string')
+      : [];
+    if (entries.length === 0) {
+      emptyNote(container, 'No fonts listed in the manifest entry.');
+      dumpJson(container, payload);
+      return;
+    }
+    for (const [name, jsonPath] of entries) {
+      const meta = await fetchJson(assetUrl(jsonPath));
+      if (!isRecord(meta)) {
+        container.append(el('div', { class: 'empty-note', text: `Could not load ${jsonPath}` }));
+        continue;
+      }
+      const glyphs = isRecord(meta.glyphs) ? Object.entries(meta.glyphs) : [];
+      const image = typeof meta.image === 'string' ? meta.image : `${name}.png`;
+      const rel = image.includes('/') ? image : `fonts/${image}`;
+      const block = el('div', { class: 'atlas-block' });
+      block.append(
+        el('h3', { class: 'section-title', text: name }),
+        el('p', {
+          class: 'section-sub',
+          text: `spacing dx=${String(meta.dx)} dy=${String(meta.dy)}, ${glyphs.length} glyphs — ${rel}`,
+        }),
+      );
+      const img = new Image();
+      img.src = assetUrl(rel);
+      img.className = 'pixelated checker';
+      img.style.imageRendering = 'pixelated';
+      await img.decode().catch(() => undefined);
+      // Draw at 2x with glyph boxes so small fonts are inspectable.
+      const canvas = el('canvas') as HTMLCanvasElement;
+      canvas.width = img.naturalWidth * 2;
+      canvas.height = img.naturalHeight * 2;
+      canvas.style.maxWidth = '100%';
+      const ctx = canvas.getContext('2d');
+      if (ctx && img.naturalWidth > 0) {
+        ctx.imageSmoothingEnabled = false;
+        ctx.scale(2, 2);
+        ctx.fillStyle = '#334';
+        ctx.fillRect(0, 0, img.naturalWidth, img.naturalHeight);
+        ctx.drawImage(img, 0, 0);
+        ctx.strokeStyle = 'rgba(120,160,255,0.5)';
+        ctx.lineWidth = 0.5;
+        for (const [, g] of glyphs) {
+          if (!isRecord(g)) continue;
+          const x = pickNumber(g, 'x') ?? 0;
+          const y = pickNumber(g, 'y') ?? 0;
+          const w = pickNumber(g, 'w') ?? 0;
+          const h = pickNumber(g, 'h') ?? 0;
+          ctx.strokeRect(x + 0.25, y + 0.25, w - 0.5, h - 0.5);
+        }
+        block.append(canvas);
+      } else {
+        block.append(el('div', { class: 'empty-note', text: `Missing image ${rel}` }));
+      }
+      container.append(block);
+    }
   },
 };
 
@@ -488,22 +545,30 @@ interface TextFile {
 
 function discoverTextFiles(payload: Json): TextFile[] {
   const out: TextFile[] = [];
-  // Shape A: { langs: { eng: ["misstxt", ...], ger: [...] } }
   const langs = isRecord(payload) ? (payload.langs ?? payload) : payload;
   if (isRecord(langs)) {
     for (const [lang, val] of Object.entries(langs)) {
-      const names = collectStrings(val, () => true);
-      for (const name of names) {
-        const base = name.replace(/\.json$/i, '');
-        const rel = name.includes('/') ? name : `texts/${lang}/${base}.json`;
-        out.push({ lang, name: base, rel });
+      if (!Array.isArray(val)) continue;
+      // Converter shape: { eng: [{file, name, count}, ...], mission: [...] }
+      for (const entry of val) {
+        if (isRecord(entry) && typeof entry.file === 'string') {
+          const name = typeof entry.name === 'string' ? entry.name : entry.file;
+          out.push({ lang, name, rel: entry.file });
+          continue;
+        }
+        if (typeof entry === 'string') {
+          const base = entry.replace(/\.json$/i, '');
+          out.push({ lang, name: base, rel: entry.includes('/') ? entry : `texts/${lang}/${base}.json` });
+        }
       }
     }
   }
-  // Fallback: any json paths mentioned anywhere.
+  // Fallback: any json paths mentioned anywhere, except the index itself.
   if (out.length === 0) {
     for (const p of unique(collectStrings(payload, (s) => s.toLowerCase().endsWith('.json')))) {
-      out.push({ lang: '', name: p, rel: p.includes('/') ? p : `texts/${p}` });
+      const rel = p.includes('/') ? p : `texts/${p}`;
+      if (rel === 'texts/index.json') continue;
+      out.push({ lang: '', name: p, rel });
     }
   }
   return out;
@@ -520,7 +585,8 @@ function parseStrings(data: Json): string[] {
 const texts: CategoryRenderer = {
   label: 'texts',
   async render(container, payload) {
-    const files = discoverTextFiles(payload);
+    const index = await fetchJson(assetUrl('texts/index.json'));
+    const files = discoverTextFiles(index ?? payload);
     if (files.length === 0) {
       emptyNote(container, 'No text files listed in the manifest entry.');
       dumpJson(container, payload);
