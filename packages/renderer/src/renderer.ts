@@ -28,7 +28,9 @@ void main() {
   vec2 world = aPos + uTranslate;
   float clipX = world.x * uScale.x - 1.0;
   float clipY = 1.0 - world.y * uScale.y;
-  gl_Position = vec4(clipX, clipY, 0.0, 1.0);
+  // Terrain sits at the far plane (0.99) so roads and sprites — which map into
+  // [0, 0.98] by screen depth — always draw over the ground (see roads/sprites).
+  gl_Position = vec4(clipX, clipY, 0.99, 1.0);
   vUv = aUv;
   vBright = aBright;
 }
@@ -248,7 +250,13 @@ export class TerrainRenderer {
     const cw = this.canvas.width;
     const ch = this.canvas.height;
     gl.viewport(0, 0, cw, ch);
-    gl.clear(gl.COLOR_BUFFER_BIT);
+    // Depth-buffered so roads and sprites occlude by their on-screen position
+    // (a road in front of a building draws over it; one behind is hidden). The
+    // terrain pass owns clearing depth for the frame; later passes test against it.
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LEQUAL);
+    gl.depthMask(true);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     if (!this.loaded) return;
 
     gl.useProgram(this.program);

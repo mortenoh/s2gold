@@ -861,21 +861,6 @@ async function boot(): Promise<void> {
         const [r, g, b] = unpackColor(PLAYER_COLORS[p % PLAYER_COLORS.length] ?? 0xffffff);
         roads.render(camera, stones, [r, g, b, 1]);
       }
-      // Live road-build preview: translucent path + an end marker (green when a
-      // road can be built to the hovered node, red when it cannot).
-      const preview = interaction.roadPreview;
-      if (preview && preview.node >= 0) {
-        if (preview.valid && preview.path) {
-          roads.render(
-            camera,
-            pathSegments(session.world, session.geom, preview.path),
-            [0.5, 0.8, 1.0, 0.5],
-          );
-          roads.render(camera, nodeMarkerSegments(session.world, preview.node), [0.4, 1.0, 0.5, 0.85]);
-        } else {
-          roads.render(camera, nodeMarkerSegments(session.world, preview.node), [1.0, 0.3, 0.3, 0.85]);
-        }
-      }
     }
 
     const waveFrame = Math.floor(now / ANIM_FRAME_MS);
@@ -895,16 +880,28 @@ async function boot(): Promise<void> {
     // the sprite layer so they are never hidden by the building.
     if (session) {
       const vis = session.fogEnabled ? session.visibility : null;
+      // Overlays drawn on top of everything (onGround=false: no depth test).
       for (let p = 0; p < session.playerCount; p++) {
         const dots = garrisonDotSegments(session.world, p, vis);
         if (dots.length === 0) continue;
         const [r, g, b] = unpackColor(PLAYER_COLORS[p % PLAYER_COLORS.length] ?? 0xffffff);
-        roads.render(camera, dots, [r, g, b, 1]);
+        roads.render(camera, dots, [r, g, b, 1], false);
       }
       // Warn about own buildings with no road path to a warehouse (they can't
       // receive materials, so a site there never builds). Bright orange "!".
       const disc = disconnectedBuildingMarkers(session.world, session.localPlayer);
-      if (disc.length > 0) roads.render(camera, disc, [1.0, 0.55, 0.0, 0.95]);
+      if (disc.length > 0) roads.render(camera, disc, [1.0, 0.55, 0.0, 0.95], false);
+      // Live road-build preview on top: translucent path + an end marker (green
+      // when a road can be built to the hovered node, red when it cannot).
+      const preview = interaction.roadPreview;
+      if (preview && preview.node >= 0) {
+        if (preview.valid && preview.path) {
+          roads.render(camera, pathSegments(session.world, session.geom, preview.path), [0.5, 0.8, 1.0, 0.5], false);
+          roads.render(camera, nodeMarkerSegments(session.world, preview.node), [0.4, 1.0, 0.5, 0.85], false);
+        } else {
+          roads.render(camera, nodeMarkerSegments(session.world, preview.node), [1.0, 0.3, 0.3, 0.85], false);
+        }
+      }
     }
     minimap.draw(camera, canvas.width, canvas.height);
 

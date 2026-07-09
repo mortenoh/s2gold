@@ -35,6 +35,7 @@ layout(location = 0) in vec2 aPos;     // world px relative to camera top-left
 layout(location = 1) in vec2 aUv;      // atlas uv (normalized)
 layout(location = 2) in vec3 aTint;    // player tint rgb
 layout(location = 3) in vec2 aMaskUv;  // pmask uv, (<0) = no mask
+layout(location = 4) in float aAnchorY; // sprite foot screen y (constant per quad)
 
 uniform vec2 uScale; // 2 * zoom / canvas size
 
@@ -45,7 +46,12 @@ out vec2 vMaskUv;
 void main() {
   float clipX = aPos.x * uScale.x - 1.0;
   float clipY = 1.0 - aPos.y * uScale.y;
-  gl_Position = vec4(clipX, clipY, 0.0, 1.0);
+  // Depth from the foot anchor (not the vertex), so the whole billboard occludes
+  // at its ground position — a road in front of it draws over, one behind hides.
+  // Mapped into [0, 0.98] (in front of terrain's 0.99) with top of screen = far.
+  float footClipY = 1.0 - aAnchorY * uScale.y;
+  float z = clamp((footClipY + 1.0) * 0.5 * 0.98, 0.0, 0.98);
+  gl_Position = vec4(clipX, clipY, z, 1.0);
   vUv = aUv;
   vTint = aTint;
   vMaskUv = aMaskUv;
@@ -86,7 +92,7 @@ void main() {
 `;
 
 /** Floats per vertex: x, y, u, v, tintR, tintG, tintB, maskU, maskV. */
-const FLOATS_PER_VERTEX = 9;
+const FLOATS_PER_VERTEX = 10;
 const VERTS_PER_QUAD = 6;
 /** Max on-screen node raise (matches the terrain cull margin). */
 const MAX_RAISE = 60 * HEIGHT_FACTOR;
@@ -126,6 +132,8 @@ interface QuadItem {
   archive: string;
   page: number;
   depth: number;
+  /** Sprite foot screen y — the constant depth anchor for the whole billboard. */
+  anchorY: number;
   x0: number;
   y0: number;
   x1: number;
@@ -244,6 +252,8 @@ export class SpriteRenderer {
     gl.vertexAttribPointer(2, 3, gl.FLOAT, false, stride, 16);
     gl.enableVertexAttribArray(3);
     gl.vertexAttribPointer(3, 2, gl.FLOAT, false, stride, 28);
+    gl.enableVertexAttribArray(4);
+    gl.vertexAttribPointer(4, 1, gl.FLOAT, false, stride, 36);
     gl.bindVertexArray(null);
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
@@ -420,6 +430,7 @@ export class SpriteRenderer {
       archive,
       page: s.atlas,
       depth,
+      anchorY: ay,
       x0,
       y0,
       x1,
@@ -552,6 +563,11 @@ export class SpriteRenderer {
     gl.uniform1i(this.uPmask, 1);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    // Depth-test against the ground/road pass (a road in front of a building
+    // wins); still drawn back-to-front (painter order) so overlapping sprites
+    // blend correctly. Transparent pixels are discarded, so they write no depth.
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthMask(true);
 
     let drawCalls = 0;
     let i = 0;
@@ -604,6 +620,7 @@ export class SpriteRenderer {
       buf[o++] = q.tint[2];
       buf[o++] = q.masked ? u : -1; // maskU
       buf[o++] = q.masked ? v : -1; // maskV
+      buf[o++] = q.anchorY; // foot depth anchor
     };
     push(q.x0, q.y0, q.u0, q.v0);
     push(q.x1, q.y0, q.u1, q.v0);

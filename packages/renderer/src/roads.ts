@@ -27,10 +27,15 @@ export interface RoadSegment {
 const VERTEX_SHADER = `#version 300 es
 layout(location = 0) in vec2 aPos; // world px relative to camera top-left
 uniform vec2 uScale;               // 2 * zoom / canvas size
+uniform float uZ;                  // <0 = derive depth from screen y; else this constant z
 void main() {
   float clipX = aPos.x * uScale.x - 1.0;
   float clipY = 1.0 - aPos.y * uScale.y;
-  gl_Position = vec4(clipX, clipY, 0.0, 1.0);
+  // Ground roads take a screen-y depth (top of screen = far) into [0, 0.98] so a
+  // road occludes buildings behind it and is occluded by those in front; overlays
+  // pass a fixed uZ (0, nearest) so they always sit on top.
+  float z = uZ < 0.0 ? clamp((clipY + 1.0) * 0.5 * 0.98, 0.0, 0.98) : uZ;
+  gl_Position = vec4(clipX, clipY, z, 1.0);
 }
 `;
 
@@ -65,6 +70,7 @@ export class RoadRenderer {
   private readonly program: WebGLProgram;
   private readonly uScale: WebGLUniformLocation;
   private readonly uColor: WebGLUniformLocation;
+  private readonly uZ: WebGLUniformLocation;
   private readonly vao: WebGLVertexArrayObject;
   private readonly vbo: WebGLBuffer;
 
@@ -89,9 +95,11 @@ export class RoadRenderer {
     this.program = program;
     const uScale = gl.getUniformLocation(program, 'uScale');
     const uColor = gl.getUniformLocation(program, 'uColor');
-    if (!uScale || !uColor) throw new Error('missing road uniforms');
+    const uZ = gl.getUniformLocation(program, 'uZ');
+    if (!uScale || !uColor || !uZ) throw new Error('missing road uniforms');
     this.uScale = uScale;
     this.uColor = uColor;
+    this.uZ = uZ;
 
     const vao = gl.createVertexArray();
     const vbo = gl.createBuffer();
@@ -121,6 +129,7 @@ export class RoadRenderer {
     camera: Camera,
     segments: readonly RoadSegment[],
     color: readonly [number, number, number, number] = DIRT_COLOR,
+    onGround = true,
   ): void {
     if (segments.length === 0 || this.worldW === 0) return;
     const gl = this.gl;
@@ -166,6 +175,16 @@ export class RoadRenderer {
     gl.bindVertexArray(this.vao);
     gl.uniform2f(this.uScale, (2 * camera.zoom) / cw, (2 * camera.zoom) / ch);
     gl.uniform4f(this.uColor, color[0], color[1], color[2], color[3]);
+    // Ground roads take a screen-y depth and test/write it; overlays (markers,
+    // preview, garrison) sit on top: no depth test, fixed near z, no depth write.
+    gl.uniform1f(this.uZ, onGround ? -1 : 0);
+    if (onGround) {
+      gl.enable(gl.DEPTH_TEST);
+      gl.depthMask(true);
+    } else {
+      gl.disable(gl.DEPTH_TEST);
+      gl.depthMask(false);
+    }
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
