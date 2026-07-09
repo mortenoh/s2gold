@@ -24,6 +24,7 @@ import {
   resourceType,
   SEA,
   TICKS,
+  WARE,
   type BuildingDef,
   type WareType,
 } from '../constants';
@@ -44,6 +45,59 @@ import {
 import { beginWalk, spawnSettler, stepWalk, walkDone } from './movement';
 import { ensureWorkerAvailable } from './recruit';
 import { playerHasDockedHarbor, spawnShip } from './seafaring';
+
+/**
+ * Wares a producer never idles for: construction materials, tools, weapons and
+ * coins have sinks (sites, recruitment, military) the building input table can't
+ * see, so gating them on a stored reserve would wrongly stall those chains.
+ */
+const ALWAYS_WANTED: ReadonlySet<WareType> = new Set<WareType>([
+  WARE.plank, WARE.stone, WARE.coins,
+  WARE.sword, WARE.shield, WARE.bow,
+  WARE.tongs, WARE.hammer, WARE.axe, WARE.saw, WARE.pickaxe, WARE.shovel,
+  WARE.crucible, WARE.rodandline, WARE.scythe, WARE.cleaver, WARE.rollingpin,
+]);
+
+/**
+ * How much of a ware a player may hold (warehouse stock + everything already in
+ * transit) before its producers idle. Keeps a working buffer while stopping
+ * wells / hunters / etc. from flooding the road network with goods nothing is
+ * draining — surplus otherwise saturates every flag and gridlocks unrelated
+ * deliveries. In transit is counted so a jam that starves its own consumers (the
+ * consumers look hungry, so a stock-only check would keep overproducing) still
+ * stops production.
+ */
+const SURPLUS_RESERVE = 40;
+
+/** Per-player, per-ware count of wares currently in transit (on flags or carried). */
+function transitCensus(world: World): Map<number, Record<string, number>> {
+  const census = new Map<number, Record<string, number>>();
+  for (const w of storeLive(world.wares)) {
+    const b = world.buildings.items[w.targetBuildingId];
+    const player = b ? b.player : -1;
+    if (player < 0) continue;
+    const rec = census.get(player) ?? {};
+    rec[w.type] = (rec[w.type] ?? 0) + 1;
+    census.set(player, rec);
+  }
+  return census;
+}
+
+/**
+ * True when it's still worth producing `ware`: the player's stock plus in-transit
+ * supply is below the reserve cap. Always-wanted wares (construction materials,
+ * tools, weapons, coins — see {@link ALWAYS_WANTED}) never gate.
+ */
+function wareWanted(player: Player, ware: WareType, transit: Record<string, number>): boolean {
+  if (ALWAYS_WANTED.has(ware)) return true;
+  const supply = (player.wares[ware] ?? 0) + (transit[ware] ?? 0);
+  return supply < SURPLUS_RESERVE;
+}
+
+/** A building's primary produced ware for demand-gating, or null (no output). */
+function producedWare(def: BuildingDef): WareType | null {
+  return def.outputs.length > 0 ? def.outputs[0] : null;
+}
 
 /** Mature any saplings and crop fields whose growth timer has elapsed. */
 function runGrowth(world: World): void {
@@ -525,6 +579,7 @@ export function runProduction(
   events: EventSink,
 ): void {
   runGrowth(world);
+  const transit = transitCensus(world);
 
   for (const b of storeLive(world.buildings)) {
     if (b.state !== 'working') continue;
@@ -535,6 +590,23 @@ export function runProduction(
     const player = world.players[b.player];
     if (!player) continue;
     const worker = b.workerId >= 0 ? world.settlers.items[b.workerId] : null;
+
+    // Demand gate: if the output isn't wanted and the building is between cycles,
+    // skip starting a new one — but never freeze a worker already out on a trip,
+    // and always drain whatever is already queued (placeOutput). A congested flag
+    // leaves queued output, so gate on the work timer (about to restart) rather
+    // than an empty queue, or a jammed producer would never idle.
+    const ware = producedWare(def);
+    if (ware && !wareWanted(player, ware, transit.get(b.player) ?? {})) {
+      const betweenCycles =
+        def.kind === 'harvester' || def.kind === 'farm'
+          ? !worker || worker.state === 'idle'
+          : b.workTimer === 0;
+      if (betweenCycles) {
+        placeOutput(world, events, b);
+        continue;
+      }
+    }
 
     switch (def.kind) {
       case 'harvester':

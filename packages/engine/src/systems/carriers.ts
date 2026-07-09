@@ -123,18 +123,38 @@ function stepCarrier(world: World, carrier: Settler): void {
       // highest transport priority first, then queue order.
       const backFlag = dropFlagId === road.flagA ? road.flagB : road.flagA;
       const prio = world.players[road.player]?.transportPriority;
+      const prioOf = (t: string): number => (prio ? (prio[t] ?? 999) : 999);
       let swapIdx = -1;
       let bestPrio = Infinity;
+      // Displacement fallback: the lowest-priority ware on the flag, so a needed
+      // good can bump surplus when no genuine exchange is available (below).
+      let worstIdx = -1;
+      let worstPrio = -Infinity;
       for (let i = 0; i < flag.wares.length; i++) {
         const w = world.wares.items[flag.wares[i]];
-        if (!w || w.nextFlag !== backFlag) continue;
-        const p = prio ? (prio[w.type] ?? 999) : 999;
-        if (p < bestPrio) {
+        if (!w) continue;
+        const p = prioOf(w.type);
+        if (w.nextFlag === backFlag && p < bestPrio) {
           bestPrio = p;
           swapIdx = i;
         }
+        if (p > worstPrio) {
+          worstPrio = p;
+          worstIdx = i;
+        }
       }
-      if (swapIdx < 0) return; // nothing to exchange: wait for a slot
+      if (swapIdx < 0) {
+        // No return-bound exchange. If we carry something strictly higher
+        // priority than the flag's least-wanted ware, displace it: ours takes the
+        // slot and the surplus rides back to re-route. This lets a construction
+        // plank punch forward through a jam of low-value goods instead of
+        // deadlocking behind them (the displaced good moves one flag back while
+        // ours advances one flag on — so the needed ware makes monotonic progress).
+        const myWare0 = world.wares.items[carrier.carryingWareId];
+        const myPrio = myWare0 ? prioOf(myWare0.type) : 999;
+        if (worstIdx >= 0 && myPrio < worstPrio) swapIdx = worstIdx;
+      }
+      if (swapIdx < 0) return; // nothing to give way: wait for a slot
       const outWare = world.wares.items[flag.wares[swapIdx]];
       const myWare = world.wares.items[carrier.carryingWareId];
       if (!outWare || !myWare) return;
