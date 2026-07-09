@@ -58,6 +58,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         async def setup_page() -> FileResponse:
             return FileResponse(dist / "index.html")
 
+        @app.get("/campaign", include_in_schema=False)
+        @app.get("/campaign/{chapter}", include_in_schema=False)
+        async def campaign_page(chapter: str = "") -> FileResponse:
+            return FileResponse(dist / "index.html")
+
         app.mount("/", StaticFiles(directory=dist, html=True), name="frontend")
 
     return app

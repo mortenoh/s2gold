@@ -15,6 +15,7 @@ import { fontHeading, menuEntry } from '../ui/widgets';
 import { applyBackdrop, TITLE_PIC_KEYS } from './pics';
 import { menuStrings } from './strings';
 import { MenuMusic } from './music';
+import { openIntro, introWatched } from './intro';
 
 /** Gold tint approximating the original menu lettering. */
 const GOLD = '#f0c84a';
@@ -50,6 +51,14 @@ export async function renderTitle(root: HTMLElement): Promise<void> {
     list.append(
       menuEntry({
         font,
+        label: strings.campaign,
+        color: CREAM,
+        href: '/campaign',
+        tooltip: 'Play the ten-chapter Roman campaign',
+        testid: 'menu-campaign',
+      }),
+      menuEntry({
+        font,
         label: strings.unlimited,
         color: CREAM,
         href: '/setup',
@@ -58,19 +67,19 @@ export async function renderTitle(root: HTMLElement): Promise<void> {
       }),
       menuEntry({
         font,
+        label: introWatched() ? 'Replay intro' : 'Intro',
+        color: CREAM,
+        onClick: () => void openIntro(root),
+        tooltip: 'Watch the intro video',
+        testid: 'menu-intro',
+      }),
+      menuEntry({
+        font,
         label: 'Asset inspector',
         color: CREAM,
         href: '/inspector',
         tooltip: 'Browse the converted game assets',
         testid: 'menu-inspector',
-      }),
-      menuEntry({
-        font,
-        label: strings.campaign,
-        color: CREAM,
-        disabled: true,
-        tooltip: 'Campaign missions arrive in a later phase',
-        testid: 'menu-campaign',
       }),
       menuEntry({
         font,
@@ -86,14 +95,24 @@ export async function renderTitle(root: HTMLElement): Promise<void> {
     // No font atlas: still render a usable menu with plain DOM text.
     panel.append(
       el('h1', { class: 'menu-fallback-title', text: strings.title, attrs: { 'data-testid': 'title-heading' } }),
-      el(
-        'nav',
-        { class: 'menu-list', attrs: { 'data-testid': 'menu-list' } },
-        el('a', { class: 'menu-entry', href: '/setup', text: strings.unlimited, attrs: { 'data-testid': 'menu-freeplay' } }),
-        el('a', { class: 'menu-entry', href: '/inspector', text: 'Asset inspector', attrs: { 'data-testid': 'menu-inspector' } }),
-        el('span', { class: 'menu-entry disabled', text: strings.campaign, attrs: { 'data-testid': 'menu-campaign', 'aria-disabled': 'true' } }),
-        el('span', { class: 'menu-entry disabled', text: strings.loadGame, attrs: { 'data-testid': 'menu-loadgame', 'aria-disabled': 'true' } }),
-      ),
+      (() => {
+        const nav = el('nav', { class: 'menu-list', attrs: { 'data-testid': 'menu-list' } });
+        const introEntry = el('button', {
+          class: 'menu-entry',
+          type: 'button',
+          text: introWatched() ? 'Replay intro' : 'Intro',
+          attrs: { 'data-testid': 'menu-intro' },
+        });
+        introEntry.addEventListener('click', () => void openIntro(root));
+        nav.append(
+          el('a', { class: 'menu-entry', href: '/campaign', text: strings.campaign, attrs: { 'data-testid': 'menu-campaign' } }),
+          el('a', { class: 'menu-entry', href: '/setup', text: strings.unlimited, attrs: { 'data-testid': 'menu-freeplay' } }),
+          introEntry,
+          el('a', { class: 'menu-entry', href: '/inspector', text: 'Asset inspector', attrs: { 'data-testid': 'menu-inspector' } }),
+          el('span', { class: 'menu-entry disabled', text: strings.loadGame, attrs: { 'data-testid': 'menu-loadgame', 'aria-disabled': 'true' } }),
+        );
+        return nav;
+      })(),
     );
   }
 

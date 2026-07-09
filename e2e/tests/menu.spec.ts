@@ -27,10 +27,13 @@ test('title screen renders the menu without console errors', async ({ page }) =>
   await expect(page.getByTestId('title-panel')).toBeVisible();
   await expect(page.getByTestId('menu-list')).toBeVisible();
 
-  // The four expected entries, in their enabled/disabled states.
+  // The expected entries, in their enabled/disabled states. Campaign is now
+  // enabled (P7); Load game remains disabled.
   await expect(page.getByTestId('menu-freeplay')).toBeVisible();
   await expect(page.getByTestId('menu-inspector')).toBeVisible();
-  await expect(page.getByTestId('menu-campaign')).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.getByTestId('menu-campaign')).toBeVisible();
+  await expect(page.getByTestId('menu-campaign')).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(page.getByTestId('menu-intro')).toBeVisible();
   await expect(page.getByTestId('menu-loadgame')).toHaveAttribute('aria-disabled', 'true');
 
   expect(errors, `unexpected console errors: ${errors.join('\n')}`).toEqual([]);

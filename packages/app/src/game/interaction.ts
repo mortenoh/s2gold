@@ -67,6 +67,10 @@ const BUILDINGS_BY_SIZE: Readonly<Record<BuildingSize, BuildingType[]>> = (() =>
     house: [],
     castle: [],
     mine: [],
+    // Harbors are a warehouse-class engine building not offered in the node
+    // build menu (see BUILD_CATEGORIES); the group exists only to satisfy the
+    // size map and is intentionally left unrendered.
+    harbor: [],
   };
   for (const [type, def] of Object.entries(BUILDING_DEFS)) {
     if (type === 'headquarters') continue; // the HQ is a scenario start, never built

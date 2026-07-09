@@ -9,6 +9,8 @@
 import './styles.css';
 import { renderTitle } from './menu/title';
 import { renderSetup } from './menu/setup';
+import { renderCampaign } from './menu/campaign';
+import { renderBriefing } from './menu/briefing';
 
 async function boot(): Promise<void> {
   const root = document.querySelector<HTMLElement>('#app');
@@ -18,6 +20,13 @@ async function boot(): Promise<void> {
   try {
     if (path === '/setup' || path.startsWith('/setup/') || path.startsWith('/setup?')) {
       await renderSetup(root);
+    } else if (path === '/campaign' || path.startsWith('/campaign?')) {
+      await renderCampaign(root);
+    } else if (path.startsWith('/campaign/')) {
+      // /campaign/<id> -> the chapter briefing. Non-numeric ids render an error
+      // panel inside renderBriefing.
+      const id = Number.parseInt(path.slice('/campaign/'.length), 10);
+      await renderBriefing(root, id);
     } else {
       await renderTitle(root);
     }
