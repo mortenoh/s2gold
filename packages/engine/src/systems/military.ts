@@ -84,6 +84,12 @@ function isMilitary(b: Building): boolean {
   return buildingDef(b.type)?.kind === 'military';
 }
 
+/** True when a building can be the target of an attack: a military building or the HQ. */
+function isAttackTarget(b: Building): boolean {
+  const kind = buildingDef(b.type)?.kind;
+  return kind === 'military' || kind === 'hq';
+}
+
 // --- Recruitment (MILITARY.md §6 / CONSTANTS.md §7) ------------------------
 
 /** Unmet garrison demand across a player's military buildings. */
@@ -262,6 +268,31 @@ function captureBuilding(
   events.emit({ type: 'TerritoryChanged', player: to });
 }
 
+/**
+ * Send a surviving attacker that can't garrison the captured building back to
+ * its home military building (reusing the occupy walk). If home is gone or
+ * already full it rejoins the player's idle soldier pool instead of vanishing.
+ */
+function sendSoldierHome(world: World, geom: Geometry, rules: TerrainRules, s: Settler): void {
+  const home = s.homeBuildingId >= 0 ? world.buildings.items[s.homeBuildingId] : null;
+  if (home && home.player === s.player && isMilitary(home)) {
+    const cap = buildingDef(home.type)?.maxTroops ?? 0;
+    if (garrisonCount(home) + home.incoming < cap) {
+      s.state = 'soldierToOccupy';
+      s.targetNode = home.node;
+      const path = findWalkPath(world, geom, rules, s.node, home.node);
+      if (path) beginWalk(s, path, TICKS.walkPerEdge);
+      else s.node = home.node;
+      home.incoming++;
+      return;
+    }
+  }
+  // No home to return to (razed / full): rejoin the idle soldier pool.
+  const owner = world.players[s.player];
+  if (owner) owner.soldiers[s.rank]++;
+  storeFree(world.settlers, s.id);
+}
+
 /** A soldier walking in to garrison: on arrival, join the garrison. */
 function stepOccupy(world: World, geom: Geometry, events: EventSink, s: Settler): void {
   const arrived = walkDone(s) ? true : stepWalk(s);
@@ -305,7 +336,13 @@ function fightOngoing(world: World, buildingId: number): boolean {
  * arrived `soldierMarch` state) — the actual capture is resolved centrally once
  * no duels remain, so defenders currently out fighting are never skipped.
  */
-function stepMarch(world: World, _geom: Geometry, events: EventSink, s: Settler): void {
+function stepMarch(
+  world: World,
+  geom: Geometry,
+  rules: TerrainRules,
+  events: EventSink,
+  s: Settler,
+): void {
   const arrived = walkDone(s) ? true : stepWalk(s);
   if (!arrived) return;
   const b = world.buildings.items[s.attackTargetId];
@@ -314,10 +351,18 @@ function stepMarch(world: World, _geom: Geometry, events: EventSink, s: Settler)
     return;
   }
   if (b.player === s.player) {
-    // Already ours (captured before we arrived): reinforce it.
+    // Already ours (captured before we arrived): reinforce up to capacity,
+    // otherwise walk back home.
     if (isMilitary(b)) {
-      b.garrison[s.rank]++;
-      b.occupied = true;
+      const cap = buildingDef(b.type)?.maxTroops ?? 0;
+      if (garrisonCount(b) < cap) {
+        b.garrison[s.rank]++;
+        b.occupied = true;
+        storeFree(world.settlers, s.id);
+      } else {
+        sendSoldierHome(world, geom, rules, s);
+      }
+      return;
     }
     storeFree(world.settlers, s.id);
     return;
@@ -383,7 +428,12 @@ function stepFight(world: World, events: EventSink, s: Settler): void {
  * it — the lowest-id attacker captures and garrisons it, and the rest join the
  * new garrison (MILITARY.md §4: nearby attackers join the capture).
  */
-function resolveCaptures(world: World, geom: Geometry, events: EventSink): void {
+function resolveCaptures(
+  world: World,
+  geom: Geometry,
+  rules: TerrainRules,
+  events: EventSink,
+): void {
   // Group waiting attackers (arrived marchers) by target building, id order.
   const waiting = new Map<number, number[]>();
   for (const s of storeLive(world.settlers)) {
@@ -405,20 +455,30 @@ function resolveCaptures(world: World, geom: Geometry, events: EventSink): void 
     const isHq = buildingDef(b.type)?.kind === 'hq';
     captureBuilding(world, geom, events, b, first);
     storeFree(world.settlers, first.id);
-    // Remaining attackers reinforce the freshly captured building (unless razed).
+    // Remaining attackers reinforce the freshly captured building up to its
+    // capacity; any excess (or all of them, when the HQ was razed) walk home.
+    const survived = !isHq && !!world.buildings.items[buildingId];
+    const cap = survived ? (buildingDef(b.type)?.maxTroops ?? 0) : 0;
     for (let i = 1; i < attackerIds.length; i++) {
       const s = world.settlers.items[attackerIds[i]];
       if (!s) continue;
-      if (!isHq && world.buildings.items[buildingId]) {
+      if (survived && garrisonCount(b) < cap) {
         b.garrison[s.rank]++;
+        storeFree(world.settlers, s.id);
+      } else {
+        sendSoldierHome(world, geom, rules, s);
       }
-      storeFree(world.settlers, s.id);
     }
   }
 }
 
 /** Step every soldier settler this tick, then resolve any pending captures. */
-function runSoldiers(world: World, geom: Geometry, events: EventSink): void {
+function runSoldiers(
+  world: World,
+  geom: Geometry,
+  rules: TerrainRules,
+  events: EventSink,
+): void {
   // Snapshot ids so freeing / capture mutations don't disturb iteration.
   const ids: number[] = [];
   for (const s of storeLive(world.settlers)) if (s.rank >= 0) ids.push(s.id);
@@ -430,7 +490,7 @@ function runSoldiers(world: World, geom: Geometry, events: EventSink): void {
         stepOccupy(world, geom, events, s);
         break;
       case 'soldierMarch':
-        stepMarch(world, geom, events, s);
+        stepMarch(world, geom, rules, events, s);
         break;
       case 'soldierFight':
         stepFight(world, events, s);
@@ -439,7 +499,7 @@ function runSoldiers(world: World, geom: Geometry, events: EventSink): void {
         break;
     }
   }
-  resolveCaptures(world, geom, events);
+  resolveCaptures(world, geom, rules, events);
 }
 
 // --- Promotion (MILITARY.md §6) -------------------------------------------
@@ -535,7 +595,7 @@ export function execAttack(
   soldierCount: number,
 ): void {
   const target = world.buildings.items[targetBuildingId];
-  if (!target || target.player === player || !isMilitary(target) || !target.occupied) return;
+  if (!target || target.player === player || !isAttackTarget(target) || !target.occupied) return;
   const targetNode = target.node;
 
   const sources: Array<{ b: Building; dist: number }> = [];
@@ -583,7 +643,7 @@ export function runMilitary(
 ): void {
   runRecruitment(world, events);
   runOccupation(world, geom, rules, events);
-  runSoldiers(world, geom, events);
+  runSoldiers(world, geom, rules, events);
   runPromotion(world, events);
   runCatapults(world, geom, events);
 }

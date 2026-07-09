@@ -186,6 +186,73 @@ describe('deterministic combat between two players (MILITARY.md §4-5)', () => {
   });
 });
 
+describe('attacking a headquarters (MILITARY.md §4)', () => {
+  it('razes an enemy HQ when attacked, removing its territory anchor', () => {
+    const world = createWorld(makeFlatMap2(60, 20, [5, 10], [50, 10]), { seed: 7 });
+    const geom = worldGeometry(world);
+    world.players[0].soldiers = [0, 0, 0, 0, 0];
+    world.players[1].soldiers = [0, 0, 0, 0, 0];
+    const fort = spawnBuilding(world, geom, geom.index(44, 10), 'fortress', 0, false);
+    garrisonBuilding(fort, [3, 3, 3, 0, 0]); // 9 soldiers
+    const hqId = world.players[1].hqBuildingId;
+    expect(hqId).toBeGreaterThanOrEqual(0);
+
+    // Attack the enemy HQ directly (kind 'hq', not 'military').
+    applyCommand(world, { player: 0, type: 'attack', targetBuildingId: hqId, soldiers: 3 });
+    const events = runTicks(world, 800);
+
+    let burned = false;
+    let capturedByP0 = false;
+    for (const e of events) {
+      if (e.type === 'BuildingCaptured' && e.toPlayer === 0) {
+        capturedByP0 = true;
+        burned = e.burned;
+      }
+    }
+    expect(capturedByP0).toBe(true);
+    expect(burned).toBe(true); // taking the HQ razes it
+    expect(world.players[1].hqBuildingId).toBe(-1); // lost its HQ anchor
+    expect(world.buildings.items[hqId]).toBeNull(); // building removed
+  });
+});
+
+describe('capture reinforcement is capped at maxTroops (MILITARY.md §4)', () => {
+  it('caps a captured building at its capacity; excess attackers do not vanish', () => {
+    const world = createWorld(makeFlatMap2(60, 20, [5, 10], [50, 10]), { seed: 11 });
+    const geom = worldGeometry(world);
+    world.players[0].soldiers = [0, 0, 0, 0, 0];
+    world.players[1].soldiers = [0, 0, 0, 0, 0];
+    world.players[0].wares.sword = 0; // no recruitment to perturb the soldier count
+    const fort = spawnBuilding(world, geom, geom.index(20, 10), 'fortress', 0, false);
+    garrisonBuilding(fort, [3, 3, 3, 0, 0]); // 9 soldiers (strongest sent first)
+    const bar = spawnBuilding(world, geom, geom.index(26, 10), 'barracks', 1, false);
+    garrisonBuilding(bar, [2, 0, 0, 0, 0]); // 2 defending privates, maxTroops 2
+
+    // Over-send: 6 attackers at a maxTroops-2 barracks.
+    applyCommand(world, { player: 0, type: 'attack', targetBuildingId: bar.id, soldiers: 6 });
+    const events = runTicks(world, 1000);
+
+    const view = militaryView(world, bar.id);
+    expect(view?.occupied).toBe(true);
+    expect(world.buildings.items[bar.id]?.player).toBe(0); // captured
+    // The invariant: garrison never exceeds the building's capacity.
+    expect(view?.troops).toBeLessThanOrEqual(2);
+    expect(view?.troops).toBeGreaterThanOrEqual(1);
+
+    // Surviving attackers walked home rather than vanishing: player 0's total
+    // soldier population is conserved apart from its own battle casualties.
+    const p0deaths = events.filter((e) => e.type === 'SoldierDied' && e.player === 0).length;
+    let total = world.players[0].soldiers.reduce((a, c) => a + c, 0);
+    for (const b of world.buildings.items) {
+      if (b && b.player === 0) total += b.garrison.reduce((a, c) => a + c, 0);
+    }
+    for (const s of world.settlers.items) {
+      if (s && s.player === 0 && s.rank >= 0) total += 1;
+    }
+    expect(total).toBe(9 - p0deaths);
+  });
+});
+
 describe('catapult attrition (MILITARY.md §7)', () => {
   it('throws stones that kill soldiers in a nearby enemy building', () => {
     const world = createWorld(makeFlatMap2(40, 20, [4, 10], [36, 10]), { seed: 5 });
