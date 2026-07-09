@@ -89,17 +89,21 @@ body {
   cursor: pointer;
 }
 
-/* Custom dropdown (native select popups use the OS font and ignore CSS). */
+/* Custom dropdown (native select popups use the OS font and ignore CSS).
+   The min/max width lives on the WRAPPER so the button can never overflow it
+   and overlap neighboring HUD buttons when the bar squeezes. */
 .dropdown {
   position: relative;
   display: inline-flex;
-  min-width: 0;
+  min-width: 120px;
+  max-width: 260px;
   flex-shrink: 1;
+  overflow: hidden;
 }
 
 .dropdown-button {
-  min-width: 150px;
-  max-width: 260px;
+  width: 100%;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
