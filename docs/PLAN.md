@@ -105,14 +105,23 @@ Subcommands for dev: `s2gold inspect <file>`, `s2gold convert <category>`, `s2go
 
 ## Progress (updated 2026-07-09)
 
-P0 through P6 are implemented and gate-verified: asset pipeline (`make install`),
-terrain renderer, playable economy with build UI and carriers, full production
-chains through coins, positional sound + music, military (territory, combat,
-catapults, fog of war), save/load via the FastAPI server, title/setup menus with
-original art, and a deterministic AI opponent selectable in the setup flow with an
-in-game statistics panel. Remaining: P7 (ships/harbors/expeditions, campaign
-missions with briefings, intro video, polish) plus deferred items tracked in agent
-reports (donkey roads, nation-specific art verification, sprite-based in-game UI).
+All planned phases P0 through P7 are implemented and gate-verified: asset pipeline
+(`make install`), terrain renderer, playable economy with build UI and carriers,
+full production chains through coins, positional sound + music, military
+(territory, combat, catapults, fog of war), save/load via the FastAPI server,
+title/setup/campaign menus with original art, deterministic AI opponents with an
+in-game statistics panel, seafaring (harbors, ships, expeditions) with its browser
+UI, the Roman campaign with briefings/objectives/victory flow, and the intro video.
+
+Polish backlog (deferred items from agent reports, in rough priority order):
+sprite-based in-game UI from IO.LST (windows, icon build menu), donkey roads and
+road upgrade, terrain edge blending + water/lava palette animation, palette-exact
+gouraud lighting, geologists, ground ware-stack sprites, soldier rank overlays and
+researched fight animations, border-stone nation sprites, catapult play for the AI,
+AI seafaring, wasteland/winter terrain rules for the engine, storehouse-local
+inventories, harbor territory recalc on construction, Gold-edition extra chains
+(vineyard/charburner variants), original combat/sea sound-id verification, and the
+world campaign (Gold edition second campaign) mission set.
 
 ## Phases & milestone gates
 
