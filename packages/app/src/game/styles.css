@@ -47,6 +47,14 @@ body {
   color: #ddd;
   font-size: 13px;
   z-index: 10;
+  /* The bar must never wrap; the map title may shrink instead. */
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.hud-top > * {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .hud-top a {
@@ -57,6 +65,10 @@ body {
 .hud-top .map-title {
   font-weight: 600;
   color: #fff;
+  flex-shrink: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
 }
 
 .hud-top select,
@@ -121,9 +133,25 @@ body {
   color: #bbb;
 }
 
-.hud-top .build-status {
+/* Transient hint (road mode etc.): floating toast below the bar, not in it. */
+.build-status {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  padding: 5px 14px;
+  background: rgba(20, 20, 24, 0.85);
+  border: 1px solid #3f6fb0;
+  border-radius: 6px;
   color: #9fd0ff;
+  font-size: 13px;
   font-style: italic;
+  white-space: nowrap;
+}
+
+.build-status:empty {
+  display: none;
 }
 
 /* Node context menu (place flag / build / demolish / road). */

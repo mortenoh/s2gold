@@ -143,7 +143,10 @@ async function boot(): Promise<void> {
     text: 'Pause',
     attrs: { 'data-testid': 'pause-toggle', type: 'button' },
   });
-  const status = el('span', { class: 'build-status', attrs: { 'data-testid': 'build-status' } });
+  // Long, transient hints (road mode etc.) float in their own toast below the
+  // bar so the top bar never has to wrap to make room for them.
+  const status = el('div', { class: 'status-toast', attrs: { 'data-testid': 'build-status' } });
+  status.hidden = true;
   const minimapCanvas = el('canvas', { attrs: { 'data-testid': 'minimap' } });
 
   const speedButtons = SPEEDS.map((s) =>
@@ -251,9 +254,9 @@ async function boot(): Promise<void> {
       audioControls,
       resources,
       tickLabel,
-      status,
       fps,
     ),
+    status, // transient hint toast, floats below the bar (see .build-status)
     el('div', { class: 'minimap-box' }, minimapCanvas),
   );
 
