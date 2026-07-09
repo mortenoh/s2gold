@@ -103,6 +103,17 @@ Subcommands for dev: `s2gold inspect <file>`, `s2gold convert <category>`, `s2go
 - SFX trigger table (which sound at which event/animation frame), positional volume;
   music playlist (pre-rendered OGGs) per documented track order; volume settings.
 
+## Progress (updated 2026-07-09)
+
+P0 through P6 are implemented and gate-verified: asset pipeline (`make install`),
+terrain renderer, playable economy with build UI and carriers, full production
+chains through coins, positional sound + music, military (territory, combat,
+catapults, fog of war), save/load via the FastAPI server, title/setup menus with
+original art, and a deterministic AI opponent selectable in the setup flow with an
+in-game statistics panel. Remaining: P7 (ships/harbors/expeditions, campaign
+missions with briefings, intro video, polish) plus deferred items tracked in agent
+reports (donkey roads, nation-specific art verification, sprite-based in-game UI).
+
 ## Phases & milestone gates
 
 | Phase | Deliverable | Gate (Playwright-verified) |
