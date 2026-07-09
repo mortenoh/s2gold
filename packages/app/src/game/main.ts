@@ -42,6 +42,7 @@ import { MilitaryPanel } from './military-ui';
 import { HarborPanel } from './harbor-ui';
 import { SaveMenu } from './save-ui';
 import { StatsPanel } from './stats-ui';
+import { GoodsPanel } from './inventory-ui';
 import { createDropdown } from '../ui/dropdown';
 import { AudioEngine, positional } from './audio';
 import { CampaignController } from './campaign-ui';
@@ -242,6 +243,10 @@ async function boot(): Promise<void> {
     text: 'Stats',
     attrs: { 'data-testid': 'stats-toggle', type: 'button', title: 'In-game statistics' },
   });
+  const goodsButton = el('button', {
+    text: 'Goods',
+    attrs: { 'data-testid': 'goods-toggle', type: 'button', title: 'Full goods inventory' },
+  });
   // Long, transient hints (road mode etc.) float in their own toast below the
   // bar so the top bar never has to wrap to make room for them.
   const status = el('div', { class: 'status-toast', attrs: { 'data-testid': 'build-status' } });
@@ -348,6 +353,7 @@ async function boot(): Promise<void> {
     menuButton,
     fogButton,
     statsButton,
+    goodsButton,
     ...speedButtons,
     audioControls,
     resources,
@@ -775,6 +781,8 @@ async function boot(): Promise<void> {
   // In-game statistics panel (per-player time-series charts).
   const statsPanel = new StatsPanel({ root, session: () => session });
   statsButton.addEventListener('click', () => statsPanel.toggle());
+  const goodsPanel = new GoodsPanel({ root, session: () => session });
+  goodsButton.addEventListener('click', () => goodsPanel.toggle());
   window.addEventListener('keydown', (ev) => {
     if (ev.key === 'F5') {
       ev.preventDefault();
@@ -930,7 +938,9 @@ async function boot(): Promise<void> {
     const inv = session.inventory;
     // Fixed-width cells (white-space: pre in CSS) keep the bar from reflowing
     // as counts grow.
-    resources.textContent = `Trunk${pad4(inv.trunk)} Plank${pad4(inv.plank)} Stone${pad4(inv.stone)}`;
+    // Build materials only (full inventory is the Goods panel). Names follow the
+    // original S2 UI: Wood (raw log), Boards (sawn), Stone.
+    resources.textContent = `Wood${pad4(inv.trunk)} Boards${pad4(inv.plank)} Stone${pad4(inv.stone)}`;
     tickLabel.textContent = `tick ${String(session.world.tick).padStart(7, ' ')}`;
     const dbg = window.__s2debug;
     if (dbg) {

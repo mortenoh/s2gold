@@ -98,9 +98,13 @@ const BUILDINGS_BY_SIZE: Readonly<Record<BuildingSize, BuildingType[]>> = (() =>
 })();
 
 /** Board/stone cost rendered compactly, e.g. "2b 2s" or "4b". */
+/** Human-readable build cost, e.g. "2 boards" or "2 boards, 3 stone". */
 function costText(type: BuildingType): string {
   const cost = BUILD_COST[type];
-  return `${cost.boards}b${cost.stones > 0 ? ` ${cost.stones}s` : ''}`;
+  const parts: string[] = [];
+  if (cost.boards > 0) parts.push(`${cost.boards} board${cost.boards === 1 ? '' : 's'}`);
+  if (cost.stones > 0) parts.push(`${cost.stones} stone`);
+  return parts.join(', ');
 }
 
 /** Dependencies the interaction layer reads live (they change on map switch). */

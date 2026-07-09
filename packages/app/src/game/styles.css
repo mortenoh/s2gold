@@ -601,7 +601,8 @@ body {
 
 /* --- Statistics panel ----------------------------------------------------- */
 
-.stats-panel {
+.stats-panel,
+.goods-panel {
   position: absolute;
   top: 52px;
   left: 50%;
@@ -616,6 +617,67 @@ body {
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
   color: #ddd;
   font-size: 13px;
+}
+
+.goods-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.goods-panel-title {
+  font-weight: 700;
+  color: #fff;
+  font-size: 14px;
+}
+.goods-panel-head button {
+  background: transparent;
+  color: #aaa;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+}
+.goods-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: 6px 18px;
+}
+.goods-group-title {
+  color: #ffd479;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  font-size: 11px;
+  margin: 4px 0 4px;
+  border-bottom: 1px solid #33333c;
+  padding-bottom: 2px;
+}
+.goods-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.goods-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+.goods-row:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.03);
+}
+.goods-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: #fff;
+}
+.goods-zero {
+  color: #666;
+}
+.goods-zero .goods-count {
+  color: #666;
+  font-weight: 400;
 }
 
 .stats-panel-head {

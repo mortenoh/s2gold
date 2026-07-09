@@ -225,6 +225,11 @@ export class GameSession {
     return { trunk: w?.trunk ?? 0, plank: w?.plank ?? 0, stone: w?.stone ?? 0 };
   }
 
+  /** The local player's full ware inventory (all goods) for the goods window. */
+  get goods(): Record<string, number> {
+    return { ...(this.world.players[0]?.wares ?? {}) };
+  }
+
   /**
    * Advance real time by `dtMs`, running as many fixed ticks as fit. Returns
    * the interpolation fraction into the next tick for smooth rendering.
