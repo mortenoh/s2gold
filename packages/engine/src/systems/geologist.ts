@@ -6,7 +6,15 @@
  * rejoins the Helper pool. Signs are replaced if the geologist re-surveys a node.
  */
 
-import { GEOLOGIST_RADIUS, GEOLOGIST_SURVEY_TICKS, JOB, resourceType, TICKS } from '../constants';
+import {
+  GEOLOGIST_RADIUS,
+  GEOLOGIST_SURVEY_TICKS,
+  JOB,
+  RESOURCE,
+  resourceAmount,
+  resourceType,
+  TICKS,
+} from '../constants';
 import type { EventSink } from '../events';
 import type { Geometry } from '../geometry';
 import { findWalkPath } from '../pathfinding';
@@ -28,7 +36,11 @@ function survey(world: World, geom: Geometry, center: number): void {
   for (let node = 0; node < geom.size; node++) {
     if (geom.distance(center, node) > GEOLOGIST_RADIUS) continue;
     if (!isMountainNode(world, geom, node)) continue;
-    const res = resourceType(world.resource[node]);
+    // A depleted deposit (amount 0) still reads as its ore kind but has nothing
+    // left to mine, so record it as nothing — otherwise the sign lures the player
+    // into building a mine that can never produce.
+    const byte = world.resource[node];
+    const res = resourceAmount(byte) > 0 ? resourceType(byte) : RESOURCE.none;
     const existing = world.signs.find((s) => s.node === node);
     if (existing) existing.res = res;
     else world.signs.push({ node, res });
