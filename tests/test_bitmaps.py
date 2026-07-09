@@ -48,14 +48,14 @@ def test_decode_rle_line() -> None:
 
 
 def test_decode_shadow_alpha() -> None:
-    # 4px line: transparent(1), shadow(2), then 0xFF.
+    # 4px line, shadow-first runs: shadow(1), transparent(2), then 0xFF.
     block = struct.pack("<H", 2) + bytes([0x01, 0x02, 0xFF])
     item = lst.BitmapItem(0, lst.BOB_BITMAP_SHADOW, "shadow", 0, 0, 4, 1, block)
     sprite = decode_bitmap(item, _solid_palette())
-    assert sprite.rgba[3] == 0  # first pixel transparent
-    assert sprite.rgba[7] == SHADOW_ALPHA
-    assert sprite.rgba[11] == SHADOW_ALPHA
-    assert sprite.rgba[4:7] == bytes([0, 0, 0])  # shadow is black
+    assert sprite.rgba[3] == SHADOW_ALPHA  # first pixel is shadow
+    assert sprite.rgba[0:3] == bytes([0, 0, 0])  # shadow is black
+    assert sprite.rgba[7] == 0  # then two transparent pixels
+    assert sprite.rgba[11] == 0
 
 
 def test_decode_player_color_and_mask() -> None:

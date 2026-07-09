@@ -238,8 +238,11 @@ def _decode_player(item: BitmapItem, palette: Palette) -> DecodedSprite:
 def _decode_shadow(item: BitmapItem) -> DecodedSprite:
     """Decode a monochrome shadow bitmap (type 7) as semi-transparent black pixels.
 
-    Each line alternates a transparent run with a shadow run (counts only, no pixel data);
-    a ``0xFF`` in the count slot ends the line.
+    Each line alternates a shadow run with a transparent run (counts only, no pixel data),
+    shadow-first like the type-2 opaque-first order; a ``0xFF`` in the count slot ends the
+    line. Verified against the real data: transparent-first decoding fills two thirds of
+    each bounding box (the silhouette becomes the hole), shadow-first yields proper
+    tree-shaped silhouettes covering roughly a third.
     """
     if item.width == 0 or item.height == 0:
         return _empty_sprite(item, "shadow")
@@ -250,7 +253,7 @@ def _decode_shadow(item: BitmapItem) -> DecodedSprite:
         p = offsets[y]
         row = y * width * 4
         x = 0
-        shadow = False
+        shadow = True
         while True:
             count = block[p]
             p += 1
