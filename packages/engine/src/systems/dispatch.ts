@@ -66,7 +66,10 @@ function demand(b: Building, wareType: WareType): number {
 /**
  * Find the best building of `player` still needing `wareType`: the neediest
  * (largest remaining demand net of en-route wares), tie-broken by nearest flag
- * then lowest id. Returns -1 when nobody needs it.
+ * then lowest id. Buildings in `skip` are ignored — the warehouse supply pass
+ * uses this to pass over targets it has found to be unroutable, so one
+ * unconnected site can't block delivery to the reachable ones. Returns -1 when
+ * nobody (else) needs it.
  */
 function findNeeder(
   world: World,
@@ -74,12 +77,14 @@ function findNeeder(
   player: number,
   wareType: WareType,
   fromNode: number,
+  skip?: Set<number>,
 ): number {
   let best = -1;
   let bestNeed = 0;
   let bestDist = Infinity;
   for (const b of storeLive(world.buildings)) {
     if (b.player !== player) continue;
+    if (skip?.has(b.id)) continue;
     const need = demand(b, wareType) - enRoute(world, b.id, wareType);
     if (need <= 0) continue;
     const d = geom.distance(fromNode, getFlag(world, b.flagId).node);
@@ -182,17 +187,24 @@ function runWarehouseSupply(world: World, geom: Geometry, seaCtx: SeaContext): v
       if (wh.player !== player.index || wh.state !== 'working' || !isWarehouse(wh)) continue;
       const whFlag = getFlag(world, wh.flagId);
       for (const wareType of order) {
+        // Targets found to be unroutable this pass; skipped so the neediest
+        // unconnected site can't starve the reachable ones behind it.
+        const skip = new Set<number>();
         while (player.wares[wareType] > 0 && whFlag.wares.length < 8) {
-          const target = findNeeder(world, geom, player.index, wareType, whFlag.node);
+          const target = findNeeder(world, geom, player.index, wareType, whFlag.node, skip);
           if (target < 0) break;
           // A ware only leaves the warehouse when it can actually travel: either
           // the target uses this very flag, or a road/sea route exists. Without
           // this check the ware would freeze at the flag (and its slot) forever
-          // when the player has not yet connected the target's flag.
+          // when the player has not yet connected the target's flag. Skip such a
+          // target and try the next-neediest rather than abandoning the pass.
           const targetBuilding = getBuilding(world, target);
           if (targetBuilding.flagId !== whFlag.id) {
             const route = chooseWareRoute(seaCtx, whFlag.id, target);
-            if (route.nextFlag < 0 && !route.useSea) break;
+            if (route.nextFlag < 0 && !route.useSea) {
+              skip.add(target);
+              continue;
+            }
           }
           const wid = storeAlloc(world.wares, (id) => ({
             id,
