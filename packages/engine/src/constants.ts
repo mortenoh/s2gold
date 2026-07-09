@@ -697,8 +697,13 @@ export function isFieldObject(objType: number): boolean {
   return objType === OBJ_TYPE_SAPLING || objType === OBJ_TYPE_CROP;
 }
 
-// --- Subsurface resource layer (OBJECTS.md §5a, authoritative runtime form) --
-/** Runtime ResourceType high-nibble values (OBJECTS.md §5a). */
+// --- Subsurface resource layer -------------------------------------------
+// The byte is the original Settlers II WLD resource encoding (map layer 12),
+// which the runtime uses directly: the type is a value RANGE and the amount is
+// the low 3 bits (0..7). Each ore range is 8 wide; water is a singleton.
+//   0x20-0x27 fish   0x40-0x47 coal   0x48-0x4F iron
+//   0x50-0x57 gold   0x58-0x5F granite   0x87 water   else nothing
+/** Resource kind ids used by building defs (`def.resource`). */
 export const RESOURCE = {
   none: 0,
   iron: 1,
@@ -709,15 +714,35 @@ export const RESOURCE = {
   fish: 6,
 } as const;
 
-/** Resource type nibble of a runtime resource byte (high nibble). */
+const RESOURCE_BASE: Readonly<Record<number, number>> = {
+  [RESOURCE.fish]: 0x20,
+  [RESOURCE.coal]: 0x40,
+  [RESOURCE.iron]: 0x48,
+  [RESOURCE.gold]: 0x50,
+  [RESOURCE.granite]: 0x58,
+};
+
+/** Resource kind of a raw S2 resource byte (see the range table above). */
 export function resourceType(byte: number): number {
-  return (byte >> 4) & 0x0f;
+  if (byte === 0x87) return RESOURCE.water;
+  if (byte >= 0x20 && byte <= 0x27) return RESOURCE.fish;
+  if (byte >= 0x40 && byte <= 0x47) return RESOURCE.coal;
+  if (byte >= 0x48 && byte <= 0x4f) return RESOURCE.iron;
+  if (byte >= 0x50 && byte <= 0x57) return RESOURCE.gold;
+  if (byte >= 0x58 && byte <= 0x5f) return RESOURCE.granite;
+  return RESOURCE.none;
 }
-/** Remaining amount of a runtime resource byte (low nibble, 0..15). */
+/** Remaining minable amount (0..7) of a raw resource byte; water is a fixed 1. */
 export function resourceAmount(byte: number): number {
-  return byte & 0x0f;
+  const t = resourceType(byte);
+  if (t === RESOURCE.none) return 0;
+  if (t === RESOURCE.water) return 1;
+  return byte & 0x07;
 }
-/** Compose a runtime resource byte from a type nibble + amount (0..15). */
+/** Compose a resource byte from a kind + amount (0..7); decrement by 1 to mine. */
 export function makeResource(type: number, amount: number): number {
-  return ((type & 0x0f) << 4) | (Math.max(0, Math.min(15, amount)) & 0x0f);
+  if (type === RESOURCE.water) return 0x87;
+  const base = RESOURCE_BASE[type];
+  if (base === undefined) return 0;
+  return base | (Math.max(0, Math.min(7, amount)) & 0x07);
 }

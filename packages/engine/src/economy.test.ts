@@ -50,14 +50,25 @@ describe('BUILDING_DEFS table', () => {
   });
 });
 
-describe('resource layer encoding (OBJECTS.md §5a)', () => {
-  it('round-trips type + amount and clamps the amount nibble', () => {
+describe('resource layer encoding (original S2 WLD ranges)', () => {
+  it('round-trips type + amount and clamps the amount to 0..7', () => {
     const b = makeResource(RESOURCE.gold, 7);
     expect(resourceType(b)).toBe(RESOURCE.gold);
     expect(resourceAmount(b)).toBe(7);
-    // Amount clamps to 0..15.
-    expect(resourceAmount(makeResource(RESOURCE.coal, 20))).toBe(15);
+    // Amount is the low 3 bits (0..7), matching the 8-wide S2 resource ranges.
+    expect(resourceAmount(makeResource(RESOURCE.coal, 20))).toBe(7);
     expect(resourceAmount(makeResource(RESOURCE.coal, -3))).toBe(0);
+  });
+
+  it('decodes the raw S2 resource byte ranges', () => {
+    expect(resourceType(0x47)).toBe(RESOURCE.coal); // 0x40-0x47 coal
+    expect(resourceType(0x4e)).toBe(RESOURCE.iron); // 0x48-0x4F iron
+    expect(resourceAmount(0x4e)).toBe(6);
+    expect(resourceType(0x54)).toBe(RESOURCE.gold); // 0x50-0x57 gold
+    expect(resourceType(0x5d)).toBe(RESOURCE.granite); // 0x58-0x5F granite
+    expect(resourceType(0x21)).toBe(RESOURCE.fish); // 0x20-0x27 fish
+    expect(resourceType(0x87)).toBe(RESOURCE.water); // singleton
+    expect(resourceType(0x00)).toBe(RESOURCE.none);
   });
 });
 
