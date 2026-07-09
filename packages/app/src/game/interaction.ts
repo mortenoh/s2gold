@@ -46,6 +46,15 @@ const COASTAL_TYPES: BuildingType[] = Object.keys(BUILDING_DEFS)
   .sort((a, b) => (a === 'harbor' ? -1 : b === 'harbor' ? 1 : a.localeCompare(b)));
 
 /** Human-readable menu label per building type (falls back to a title-cased id). */
+/** Geologist survey label per resource kind (RESOURCE.*): what a sign means. */
+const SIGN_LABEL: Readonly<Record<number, string>> = {
+  0: 'nothing here',
+  1: 'iron ore',
+  2: 'gold',
+  3: 'coal',
+  4: 'granite (build a granite mine for stone)',
+};
+
 const BUILDING_LABEL: Readonly<Record<string, string>> = {
   woodcutter: 'Woodcutter',
   forester: 'Forester',
@@ -300,6 +309,10 @@ export class Interaction {
   private openMenu(clientX: number, clientY: number, node: number): void {
     const session = this.deps.session();
     const items: HTMLElement[] = [];
+
+    // Geologist survey result at this spot, so clicking a sign reads its ore.
+    const sign = session.signAt(node);
+    if (sign >= 0) items.push(this.categoryLabel(`Survey: ${SIGN_LABEL[sign] ?? 'unknown'}`));
 
     const building = buildingAt(session.world, node);
     const flagId = session.flagIdAt(node);

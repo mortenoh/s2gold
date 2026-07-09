@@ -67,20 +67,20 @@ const GAME_SEED = 0x5eed;
  * gold 2, granite 4, nothing 0. Each is drawn in its own overlay pass.
  */
 const SIGN_COLORS: readonly (readonly [number, readonly [number, number, number, number]])[] = [
-  [3, [0.12, 0.12, 0.14, 0.95]], // coal — near-black
-  [1, [0.9, 0.5, 0.25, 0.95]], // iron — orange
-  [2, [0.98, 0.85, 0.15, 0.95]], // gold — yellow
-  [4, [0.7, 0.7, 0.78, 0.95]], // granite — light grey
-  [0, [0.55, 0.55, 0.55, 0.8]], // nothing — faint X
+  [3, [0.1, 0.1, 0.12, 0.98]], // coal — black
+  [1, [0.95, 0.45, 0.1, 0.98]], // iron — orange
+  [2, [1.0, 0.85, 0.1, 0.98]], // gold — yellow
+  [4, [0.35, 0.6, 1.0, 0.98]], // granite — blue (kept well clear of coal/nothing greys)
+  [0, [0.6, 0.6, 0.6, 0.8]], // nothing — grey X
 ];
 
 /** Legend rows for the geologist signs: [css colour, label], sign-colour order. */
 const SIGN_LEGEND: readonly (readonly [string, string])[] = [
-  ['rgb(31,31,36)', 'Coal'],
-  ['rgb(230,128,64)', 'Iron'],
-  ['rgb(250,217,38)', 'Gold'],
-  ['rgb(179,179,199)', 'Granite'],
-  ['rgb(140,140,140)', 'Nothing (X)'],
+  ['rgb(26,26,31)', 'Coal'],
+  ['rgb(242,115,26)', 'Iron'],
+  ['rgb(255,217,26)', 'Gold'],
+  ['rgb(89,153,255)', 'Granite'],
+  ['rgb(153,153,153)', 'Nothing (X)'],
 ];
 
 /** BOB archive keys registered once for the settler layers. */

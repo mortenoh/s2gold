@@ -531,6 +531,11 @@ export class GameSession {
     applyCommand(this.world, { type: 'sendGeologist', player: 0, flagNode });
   }
 
+  /** The surveyed resource kind (RESOURCE.*) at a node, or -1 if not surveyed. */
+  signAt(node: number): number {
+    return this.world.signs.find((s) => s.node === node)?.res ?? -1;
+  }
+
   demolish(node: number): void {
     applyCommand(this.world, { type: 'demolish', player: 0, node });
   }
