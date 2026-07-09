@@ -203,6 +203,42 @@ describe('P7 expedition founding', () => {
     expect(ownerAt(world, targetSpot)).toBe(0); // territory established on the far island
     expect(expeditionStatus(world, harborA.id)).toBeNull(); // kit consumed
   });
+
+  it('refuses to found on a spot whose door flag belongs to another player', () => {
+    const world = createWorld(makeTwoIslandMap(), { seed: 4, players: 2 });
+    const geom = worldGeometry(world);
+    const harborA = spawnBuilding(world, geom, geom.index(TWO_ISLAND.harborA.x, TWO_ISLAND.harborA.y), BUILDING.harbor);
+    manufactureShip(world, geom, harborA.id);
+    const targetSpot = geom.index(TWO_ISLAND.harborB.x, TWO_ISLAND.harborB.y);
+    const doorNode = geom.neighbour(targetSpot, 'SE');
+
+    // Player 1 claims the target's door flag before player 0 can settle there.
+    applyCommand(world, { player: 1, type: 'placeFlag', node: doorNode });
+    tickWorld(world);
+    const foreignFlag = world.flagAtNode[doorNode];
+    expect(foreignFlag).toBeGreaterThanOrEqual(0);
+    expect(getFlag(world, foreignFlag).player).toBe(1);
+
+    // Assemble player 0's kit and launch at the foreign-flagged spot.
+    applyCommand(world, { player: 0, type: 'prepareExpedition', harborId: harborA.id });
+    let ready = false;
+    for (let i = 0; i < 50; i++) {
+      for (const e of tickWorld(world)) if (e.type === 'ExpeditionReady') ready = true;
+      if (ready) break;
+    }
+    expect(ready).toBe(true);
+
+    applyCommand(world, { player: 0, type: 'startExpedition', harborId: harborA.id, targetSpot });
+    let landed = -1;
+    for (let i = 0; i < 300; i++) {
+      for (const e of tickWorld(world)) if (e.type === 'ExpeditionLanded') landed = e.node;
+      if (landed >= 0) break;
+    }
+
+    expect(landed).toBe(-1); // launch refused -> never lands
+    expect(harborsOf(world, 0).some((h) => h.node === targetSpot)).toBe(false);
+    expect(expeditionStatus(world, harborA.id)?.ready).toBe(true); // kit intact for a valid retry
+  });
 });
 
 describe('P7 determinism with seafaring active', () => {
