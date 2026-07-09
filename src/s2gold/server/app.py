@@ -53,6 +53,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         async def inspector_page() -> FileResponse:
             return FileResponse(dist / "inspector.html")
 
+        # The menu is a single Vite entry that routes on pathname.
+        @app.get("/setup", include_in_schema=False)
+        async def setup_page() -> FileResponse:
+            return FileResponse(dist / "index.html")
+
         app.mount("/", StaticFiles(directory=dist, html=True), name="frontend")
 
     return app

@@ -24,12 +24,10 @@ test('index page loads without console errors', async ({ page }) => {
   page.on('pageerror', (err) => errors.push(String(err)));
 
   await page.goto('/');
-  await expect(page.getByTestId('title')).toHaveText('s2gold');
 
-  // Either assets are ready (inspector link) or missing (install instructions).
-  const ready = page.getByTestId('assets-ready');
-  const missing = page.getByTestId('assets-missing');
-  await expect(ready.or(missing)).toBeVisible();
+  // The title screen renders its menu (P5) with the free-play entry present.
+  await expect(page.getByTestId('title-panel')).toBeVisible();
+  await expect(page.getByTestId('menu-freeplay')).toBeVisible();
 
   expect(errors, `unexpected console errors: ${errors.join('\n')}`).toEqual([]);
 });

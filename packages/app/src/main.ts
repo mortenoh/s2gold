@@ -1,58 +1,29 @@
+/**
+ * Menu entry point. The title screen ("/") and free-play setup ("/setup") are
+ * served by this single Vite entry (index.html); the Vite dev middleware and
+ * the FastAPI server both rewrite "/setup" to it. Which screen renders is
+ * decided from the pathname; navigation between them uses ordinary links so
+ * each screen is a real, shareable URL.
+ */
+
 import './styles.css';
-import { clear, el } from './lib/dom';
-import { loadManifest } from './lib/manifest';
+import { renderTitle } from './menu/title';
+import { renderSetup } from './menu/setup';
 
 async function boot(): Promise<void> {
   const root = document.querySelector<HTMLElement>('#app');
   if (!root) return;
-  clear(root);
 
-  root.append(
-    el('h1', { text: 's2gold', attrs: { 'data-testid': 'title' } }),
-    el('p', {
-      class: 'tagline',
-      text: 'The Settlers II Gold — clean-room browser reimplementation',
-    }),
-  );
-
-  const manifest = await loadManifest();
-
-  if (manifest) {
-    const categories = Object.keys(manifest.categories);
-    root.append(
-      el(
-        'div',
-        { class: 'card ok', attrs: { 'data-testid': 'assets-ready' } },
-        el('p', {
-          text: `Assets installed (manifest v${manifest.version}, ${categories.length} categor${
-            categories.length === 1 ? 'y' : 'ies'
-          }).`,
-        }),
-        el(
-          'p',
-          {},
-          el('a', { class: 'btn', href: '/game.html', text: 'Play (terrain demo)' }),
-          ' ',
-          el('a', { class: 'btn', href: '/inspector.html', text: 'Open asset inspector' }),
-        ),
-      ),
-    );
-  } else {
-    root.append(
-      el(
-        'div',
-        { class: 'card warn', attrs: { 'data-testid': 'assets-missing' } },
-        el('p', { html: 'No converted assets found at <code>/assets/manifest.json</code>.' }),
-        el('p', { text: 'Run the asset pipeline against your GOG installer, then reload:' }),
-        el('pre', { text: 'make install INSTALLER=path/to/gog.exe' }),
-        el('p', {
-          class: 'sub',
-          html:
-            'This extracts and converts the game files into ' +
-            '<code>packages/app/public/assets/</code> (git-ignored).',
-        }),
-      ),
-    );
+  const path = window.location.pathname;
+  try {
+    if (path === '/setup' || path.startsWith('/setup/') || path.startsWith('/setup?')) {
+      await renderSetup(root);
+    } else {
+      await renderTitle(root);
+    }
+  } catch (err) {
+    console.error('[s2gold] menu failed to render', err);
+    root.textContent = 'Menu failed to load.';
   }
 }
 
