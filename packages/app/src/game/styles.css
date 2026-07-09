@@ -235,6 +235,15 @@ body {
   font-style: normal;
 }
 
+/* Seafaring notification toast: sits above the save toast, tinted sea-blue so
+   expedition-ready / -landed messages read distinctly from the other toasts. */
+.status-toast.sea-toast {
+  top: 124px;
+  color: #8fe0ff;
+  border-color: #2f8fc0;
+  font-style: normal;
+}
+
 /* Node context menu (place flag / build / demolish / road). */
 .ctx-menu {
   position: absolute;

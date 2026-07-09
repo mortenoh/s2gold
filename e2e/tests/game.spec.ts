@@ -34,6 +34,10 @@ const P6UI_DIR =
   '/private/tmp/claude-502/-Users-morteoh-dev-local-s2gold/' +
   'bb77c315-f7af-4a5f-a4d3-fe7955aadc74/scratchpad/p6ui';
 
+const P7_DIR =
+  '/private/tmp/claude-502/-Users-morteoh-dev-local-s2gold/' +
+  'bb77c315-f7af-4a5f-a4d3-fe7955aadc74/scratchpad/p7sea';
+
 async function readDebug(page: Page): Promise<S2Debug> {
   return page.evaluate(() => {
     const dbg = (window as unknown as { __s2debug?: S2Debug }).__s2debug;
@@ -874,6 +878,174 @@ test('MISS200 scene contains trees and granite, rendered over terrain', async ({
   await page.getByTestId('game-canvas').screenshot({
     path: `${SCREENSHOT_DIR}/miss200-objects-2x.png`,
   });
+
+  expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);
+});
+
+// --- P7 gate: seafaring — harbor, ship, expedition --------------------------
+
+/** The seafaring debug slice the P7 test drives. */
+interface S2Sea {
+  hqNode: number;
+  ships: number;
+  harbors: number;
+  counters: Record<string, number>;
+  nodeOf(x: number, y: number): number;
+  canBuild(node: number, type: string): boolean;
+  debugWaterConnected(a: number, b: number): boolean;
+  debugSpawnHarbor(player: number, node: number): number;
+  debugSpawnShip(player: number, harborId: number): number;
+  debugGrantExpeditionSupplies(player: number): void;
+  expeditionReady(harborId: number): boolean;
+  harborIdAt(node: number): number;
+  centerNode(node: number): void;
+}
+
+/** Read the seafaring debug surface (throws if missing). */
+function readSea(
+  page: Page,
+): Promise<{ ships: number; harbors: number; counters: Record<string, number> }> {
+  return page.evaluate(() => {
+    const d = (window as unknown as { __s2debug?: S2Sea }).__s2debug;
+    if (!d) throw new Error('window.__s2debug missing');
+    return { ships: d.ships, harbors: d.harbors, counters: d.counters };
+  });
+}
+
+test('P7: seafaring — harbor + ship + expedition founds a harbor on another island', async ({
+  page,
+}) => {
+  test.skip(!(await assetsPresent(page)), 'converted assets not installed');
+  test.setTimeout(120_000);
+  const errors = collectErrors(page);
+
+  // "On the high seas" is an archipelago: islands separated by navigable water.
+  await page.goto('/game.html?map=maps_miss203');
+  await expect(page.locator('body[data-map-ready]')).toBeAttached({ timeout: 15_000 });
+  await expect(page.locator('body')).toHaveAttribute('data-map-ready', 'maps_miss203');
+  await disableFog(page);
+
+  // Plan: the coastal harbor site nearest our HQ, plus a distant harbor site on
+  // another shore reachable from it by an all-water route (the engine's own
+  // connectivity check), so an expedition can actually cross to it.
+  await page.getByTestId('pause-toggle').click();
+  const plan = await page.evaluate(() => {
+    const d = (window as unknown as { __s2debug: S2Sea }).__s2debug;
+    const W = 128;
+    const H = 128;
+    const hq = d.hqNode;
+    const hx = hq % W;
+    const hy = Math.floor(hq / W);
+    const sites: number[] = [];
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const n = d.nodeOf(x, y);
+        if (d.canBuild(n, 'harbor')) sites.push(n);
+      }
+    }
+    let near = -1;
+    let best = Infinity;
+    for (const n of sites) {
+      const dx = (n % W) - hx;
+      const dy = Math.floor(n / W) - hy;
+      const dd = dx * dx + dy * dy;
+      if (dd < best) {
+        best = dd;
+        near = n;
+      }
+    }
+    let target = -1;
+    for (const n of sites) {
+      if (n === near) continue;
+      const dx = (n % W) - (near % W);
+      const dy = Math.floor(n / W) - Math.floor(near / W);
+      if (Math.hypot(dx, dy) < 20) continue; // a genuinely distant shore
+      if (d.debugWaterConnected(near, n)) {
+        target = n;
+        break;
+      }
+    }
+    return { near, target };
+  });
+  expect(plan.near, 'a coastal harbor site exists near HQ').toBeGreaterThanOrEqual(0);
+  expect(plan.target, 'a distant water-connected harbor site exists').toBeGreaterThanOrEqual(0);
+
+  // Cheat-place a working harbor + an idle ship + an expedition kit worth of
+  // supplies (assembly still runs through the real engine command), queue
+  // prepareExpedition, and centre the view on the harbor for the panel click.
+  const harborId = await page.evaluate((p) => {
+    const d = (
+      window as unknown as { __s2debug: S2Sea & { prepareExpedition(h: number): void } }
+    ).__s2debug;
+    const h = d.debugSpawnHarbor(0, p.near);
+    d.debugSpawnShip(0, h);
+    d.debugGrantExpeditionSupplies(0);
+    d.prepareExpedition(h);
+    d.centerNode(p.near);
+    return h;
+  }, plan);
+  expect(harborId, 'the debug harbor was founded').toBeGreaterThanOrEqual(0);
+
+  // Run until the expedition kit finishes assembling (ExpeditionReady).
+  await page.getByTestId('pause-toggle').click();
+  await page.getByTestId('speed-10').click();
+  await page.waitForFunction(
+    (h) => (window as unknown as { __s2debug: S2Sea }).__s2debug.expeditionReady(h),
+    harborId,
+    { timeout: 30_000 },
+  );
+
+  const mid = await readSea(page);
+  expect(mid.ships, 'a ship is docked at the harbor').toBeGreaterThanOrEqual(1);
+  expect(mid.harbors, 'the harbor is working').toBeGreaterThanOrEqual(1);
+  expect(mid.counters.expeditionsReady, 'the expedition assembled').toBeGreaterThanOrEqual(1);
+
+  // Open the harbor panel and confirm the ready-expedition UI + Start button.
+  await page.getByTestId('pause-toggle').click(); // pause for a stable panel click
+  await page.evaluate(
+    (n) => (window as unknown as { __s2debug: S2Sea }).__s2debug.centerNode(n),
+    plan.near,
+  );
+  await clickNode(page, plan.near);
+  await expect(page.getByTestId('harbor-panel')).toBeVisible();
+  await expect(page.getByTestId('expedition-status')).toContainText('Expedition ready');
+  await expect(page.getByTestId('start-expedition')).toBeVisible();
+  await page.getByTestId('game-canvas').screenshot({ path: `${P7_DIR}/harbor-panel.png` });
+
+  // Click Start expedition -> the interaction layer enters target-select mode (a
+  // hint toast appears); then click the distant shore to launch the ship.
+  await page.getByTestId('start-expedition').click();
+  await expect(page.getByTestId('build-status')).toContainText('Expedition');
+  await page.evaluate(
+    (t) => (window as unknown as { __s2debug: S2Sea }).__s2debug.centerNode(t),
+    plan.target,
+  );
+  await clickNode(page, plan.target);
+
+  // Resume and watch the expedition cross the sea and found a new harbor.
+  await page.getByTestId('pause-toggle').click();
+  await page.waitForFunction(
+    () => (window as unknown as { __s2debug: S2Sea }).__s2debug.counters.expeditionsLanded >= 1,
+    undefined,
+    { timeout: 60_000 },
+  );
+
+  const after = await readSea(page);
+  expect(after.counters.expeditionsLanded, 'the expedition landed').toBeGreaterThanOrEqual(1);
+  expect(after.harbors, 'a second harbor now exists').toBeGreaterThanOrEqual(2);
+  const newHarbor = await page.evaluate(
+    (t) => (window as unknown as { __s2debug: S2Sea }).__s2debug.harborIdAt(t),
+    plan.target,
+  );
+  expect(newHarbor, 'a harbor was founded on the far shore').toBeGreaterThanOrEqual(0);
+
+  // Centre on the new colony for the landed screenshot.
+  await page.evaluate(
+    (t) => (window as unknown as { __s2debug: S2Sea }).__s2debug.centerNode(t),
+    plan.target,
+  );
+  await page.waitForTimeout(250);
+  await page.getByTestId('game-canvas').screenshot({ path: `${P7_DIR}/expedition-landed.png` });
 
   expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);
 });

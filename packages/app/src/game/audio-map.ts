@@ -30,6 +30,12 @@
  * plausible clip picked from the installed SOUND.LST set for its event, not a
  * researched constant. They keep the audio layer voiced for combat without
  * copying any code.
+ *
+ * Seafaring cues (P7): likewise DOCUMENTED CHOICES. The fetched RttR ship sources
+ * (`noShip.cpp`) do not expose a SOUND.LST index we could treat as a fact, so the
+ * four sea events (ship built, expedition ready, expedition landed, ship arrived)
+ * are voiced with plausible clips from the installed SOUND.LST set, chosen to be
+ * distinct from the economy/military cues. No code was copied.
  */
 
 import type { GameEvent, World } from '@s2gold/engine';
@@ -48,6 +54,11 @@ export const SOUND = {
   soldierDied: 92,
   buildingCaptured: 87,
   catapultFire: 74,
+  // Seafaring (documented choices; see module header).
+  shipBuilt: 84,
+  expeditionReady: 66,
+  expeditionLanded: 90,
+  shipArrived: 67,
 } as const;
 
 /** A positioned sound cue: which clip, and the map node it originates at. */
@@ -89,6 +100,20 @@ export function soundForEvent(e: GameEvent, world: World): SoundCue | null {
         world.buildings.items[e.targetBuildingId]?.node ??
         world.buildings.items[e.buildingId]?.node;
       return node === undefined ? null : { id: SOUND.catapultFire, node };
+    }
+    case 'ShipBuilt': {
+      const node = world.buildings.items[e.buildingId]?.node;
+      return node === undefined ? null : { id: SOUND.shipBuilt, node };
+    }
+    case 'ExpeditionReady': {
+      const node = world.buildings.items[e.harborId]?.node;
+      return node === undefined ? null : { id: SOUND.expeditionReady, node };
+    }
+    case 'ExpeditionLanded':
+      return { id: SOUND.expeditionLanded, node: e.node };
+    case 'ShipArrived': {
+      const node = world.buildings.items[e.harborId]?.node;
+      return node === undefined ? null : { id: SOUND.shipArrived, node };
     }
     default:
       return null;

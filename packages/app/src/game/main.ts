@@ -34,9 +34,11 @@ import {
   roadSegments,
   BUILDING_ARCHIVE,
   BOB_ARCHIVE,
+  SHIP_ARCHIVE,
 } from './game-render';
 import { Interaction } from './interaction';
 import { MilitaryPanel } from './military-ui';
+import { HarborPanel } from './harbor-ui';
 import { SaveMenu } from './save-ui';
 import { StatsPanel } from './stats-ui';
 import { createDropdown } from '../ui/dropdown';
@@ -80,6 +82,10 @@ interface S2Debug {
   flags: number;
   buildings: number;
   roads: number;
+  /** Live ship count (all players). */
+  ships: number;
+  /** Live working-harbor count for the local player. */
+  harbors: number;
   /** Audio engine counters for e2e (context state + sfx buffer/voice tallies). */
   audio: {
     contextState: string;
@@ -136,6 +142,27 @@ interface S2Debug {
   setPaused(paused: boolean): void;
   /** Current road-build preview state (null when not in road mode). */
   roadPreview(): { node: number; valid: boolean; hasPath: boolean } | null;
+  // Seafaring (P7).
+  /** Queue a prepareExpedition command at one of the local player's harbors. */
+  prepareExpedition(harborId: number): void;
+  /** Queue a startExpedition command toward a coastal target spot. */
+  startExpedition(harborId: number, targetSpot: number): void;
+  /** Cheat: found a fully-working harbor for a player at a coastal node (-1 fail). */
+  debugSpawnHarbor(player: number, node: number): number;
+  /** Cheat: dock an idle ship of a player at a harbor (-1 fail). */
+  debugSpawnShip(player: number, harborId: number): number;
+  /** Cheat: grant a player an expedition kit worth of boards/stones + a builder. */
+  debugGrantExpeditionSupplies(player: number): void;
+  /** Whether the docks of two coastal nodes are joined by an all-water route. */
+  debugWaterConnected(nodeA: number, nodeB: number): boolean;
+  /** The local player's working-harbor building id at a node, or -1. */
+  harborIdAt(node: number): number;
+  /** True when a ready expedition is prepared at a harbor. */
+  expeditionReady(harborId: number): boolean;
+  /** Live ships as {id, node, state} (all players). */
+  shipStates(): { id: number; node: number; state: string }[];
+  /** Center the camera on a lattice node (test helper for off-screen picking). */
+  centerNode(node: number): void;
 }
 
 declare global {
@@ -332,6 +359,9 @@ async function boot(): Promise<void> {
   // for the Roman nation; register them once.
   const romanAtlas = await loadAtlas(BUILDING_ARCHIVE);
   if (romanAtlas) sprites.registerAtlas(romanAtlas.meta, romanAtlas.pages, romanAtlas.pmaskPages);
+  // Ship sprites (boot_z) are nation-independent; register once alongside rom_z.
+  const shipAtlas = await loadAtlas(SHIP_ARCHIVE);
+  if (shipAtlas) sprites.registerAtlas(shipAtlas.meta, shipAtlas.pages, shipAtlas.pmaskPages);
   const carrier: BobAtlas | null = await loadBobAtlas('carrier', BOB_ARCHIVE);
   if (carrier) sprites.registerAtlas(carrier.meta, carrier.pages, carrier.pmaskPages);
   const jobs: BobAtlas | null = await loadBobAtlas('jobs', JOBS_ARCHIVE);
@@ -464,6 +494,8 @@ async function boot(): Promise<void> {
       flags: 0,
       buildings: 0,
       roads: 0,
+      ships: 0,
+      harbors: 0,
       audio: audio.debug(),
       hqNode: hqNode(),
       nodeOf: (x, y) => s.geom.index(x, y),
@@ -498,6 +530,19 @@ async function boot(): Promise<void> {
       roadPreview: () => {
         const rp = interaction.roadPreview;
         return rp ? { node: rp.node, valid: rp.valid, hasPath: rp.path !== null } : null;
+      },
+      prepareExpedition: (harborId) => s.prepareExpedition(harborId),
+      startExpedition: (harborId, targetSpot) => s.startExpedition(harborId, targetSpot),
+      debugSpawnHarbor: (player, node) => s.debugSpawnHarbor(player, node),
+      debugSpawnShip: (player, harborId) => s.debugSpawnShip(player, harborId),
+      debugGrantExpeditionSupplies: (player) => s.debugGrantExpeditionSupplies(player),
+      debugWaterConnected: (nodeA, nodeB) => s.debugWaterConnected(nodeA, nodeB),
+      harborIdAt: (node) => s.harborAt(node)?.id ?? -1,
+      expeditionReady: (harborId) => s.expeditionAt(harborId)?.ready ?? false,
+      shipStates: () => s.shipStates(),
+      centerNode: (node) => {
+        const a = nodeAnchor(s.world, node);
+        camera.centerOn(a.x, a.y, canvas.width, canvas.height);
       },
     };
     rebuildStatics();
@@ -625,6 +670,18 @@ async function boot(): Promise<void> {
     },
   });
 
+  // The harbor panel hands off to the interaction layer's expedition target-select
+  // mode; the two reference each other, so a late-bound ref breaks the cycle.
+  let interactionRef: Interaction | null = null;
+  const harbor = new HarborPanel({
+    root,
+    session: () => {
+      if (!session) throw new Error('no session');
+      return session;
+    },
+    beginExpeditionTarget: (harborId) => interactionRef?.startExpeditionSelect(harborId),
+  });
+
   const interaction = new Interaction({
     canvas,
     root,
@@ -640,7 +697,10 @@ async function boot(): Promise<void> {
     suppressClick: () => draggedFar,
     openMilitary: (node, x, y) => military.openAt(node, x, y),
     closeMilitary: () => military.close(),
+    openHarbor: (node, x, y) => harbor.openAt(node, x, y),
+    closeHarbor: () => harbor.close(),
   });
+  interactionRef = interaction;
 
   // --- Save / load ----------------------------------------------------------
 
@@ -658,6 +718,26 @@ async function boot(): Promise<void> {
       toast.remove();
       if (saveToastEl === toast) saveToastEl = null;
     }, 2200);
+  }
+
+  // Seafaring notifications (expedition ready / landed) float as their own toast,
+  // slightly higher than the save toast so the two never overlap.
+  let seaToastEl: HTMLElement | null = null;
+  let seaToastTimer = 0;
+  function seaToast(text: string): void {
+    if (seaToastEl) seaToastEl.remove();
+    const toast = el('div', {
+      class: 'status-toast sea-toast',
+      text,
+      attrs: { 'data-testid': 'sea-toast' },
+    });
+    gameRoot.append(toast);
+    seaToastEl = toast;
+    window.clearTimeout(seaToastTimer);
+    seaToastTimer = window.setTimeout(() => {
+      toast.remove();
+      if (seaToastEl === toast) seaToastEl = null;
+    }, 3000);
   }
 
   const saveMenu = new SaveMenu({
@@ -688,6 +768,9 @@ async function boot(): Promise<void> {
   let fpsWindowStart = performance.now();
   let lastFrame = performance.now();
   let prevSaplings = 0;
+  // Sea-event toast edge-detection (fire once per new ready/landed event).
+  let prevExpReady = 0;
+  let prevExpLanded = 0;
   function frame(now: number): void {
     const dt = Math.min(100, now - lastFrame);
     lastFrame = now;
@@ -730,6 +813,13 @@ async function boot(): Promise<void> {
       // sapling count drops so the new full tree appears.
       if (session.world.saplings.length < prevSaplings) session.staticsDirty = true;
       prevSaplings = session.world.saplings.length;
+
+      // Seafaring toasts on the rising edge of the ready/landed counters.
+      const c = session.counters;
+      if (c.expeditionsReady > prevExpReady) seaToast('Expedition ready to launch');
+      if (c.expeditionsLanded > prevExpLanded) seaToast('Expedition landed — new harbor founded');
+      prevExpReady = c.expeditionsReady;
+      prevExpLanded = c.expeditionsLanded;
     }
 
     if (session?.staticsDirty) rebuildStatics();
@@ -831,6 +921,8 @@ async function boot(): Promise<void> {
       dbg.flags = countLive(session.world.flags);
       dbg.buildings = countLive(session.world.buildings);
       dbg.roads = countLive(session.world.roads);
+      dbg.ships = countLive(session.world.ships);
+      dbg.harbors = session.harbors().length;
       dbg.audio = audio.debug();
       dbg.hqNode = hqNode();
     }

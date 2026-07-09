@@ -25,6 +25,7 @@ import {
   type Geometry,
   type JobType,
   type Settler,
+  type Ship,
   type WareType,
   type World,
 } from '@s2gold/engine';
@@ -34,6 +35,29 @@ import type { BobAtlas } from './bob-atlas';
 /** Archive keys the sprite renderer indexes these layers by. */
 export const BUILDING_ARCHIVE = 'rom_z';
 export const BOB_ARCHIVE = 'carrier';
+/** Ship-sprite archive (converted BOOT_Z.LST): the big sailing ship + shadows. */
+export const SHIP_ARCHIVE = 'boot_z';
+
+/**
+ * Ship sprites (boot_z / converted BOOT_Z.LST, clean-room FACTS verified by
+ * rendering the archive's atlas): item indices 0..23 are twelve ship bodies at
+ * the EVEN indices (kind "rle") each paired with its drop-shadow at the next ODD
+ * index (kind "shadow"). The twelve bodies are six sailing directions, two
+ * sail-animation frames each (direction-major: a direction's two frames are
+ * adjacent pairs — (0,2), (4,6), ... (20,22)). Indices >=24 are the shipyard's
+ * build stages and full-screen sea pictures, unused here.
+ *
+ * The engine-direction -> body-base map was read off the rendered atlas by the
+ * bow heading of each frame (E points right, W left, S toward the camera, the
+ * N* headings show the stern): E->8, SE->4, SW->0, W->12, NW->16, NE->20. A
+ * frame's shadow is body+1; its second animation frame is body+2 (shadow +3).
+ * Engine DIRECTIONS order is [E, SE, SW, W, NW, NE] = index 0..5.
+ */
+const SHIP_DIR_BASE: readonly number[] = [8, 4, 0, 12, 16, 20];
+/** Idle/docked ships face SE (engine dir 1): a pleasant 3/4 view toward camera. */
+const SHIP_IDLE_DIR = 1;
+/** Sail-animation frames per direction (the two adjacent body sprites). */
+const SHIP_ANIM_FRAMES = 2;
 
 /**
  * s25 BuildingType id per engine building name (drives the rom_z sprite index
@@ -146,25 +170,39 @@ function unwrappedNeighbour(x: number, y: number, dirIndex: number): { x: number
   }
 }
 
-/** Interpolated ground anchor + facing for a settler, `alpha` into the tick. */
-function settlerAnchor(
+/** The lattice-mover fields settlers and ships share (node + edge progress). */
+interface MoverLike {
+  node: number;
+  path: readonly number[];
+  pathIndex: number;
+  edgeProgress: number;
+  ticksPerEdge: number;
+}
+
+/**
+ * Interpolated ground anchor + facing for any lattice mover (settler or ship),
+ * `alpha` into the current tick. Idle movers face `idleDir` (default SE, toward
+ * the camera). Shared so ships glide between water nodes exactly like settlers.
+ */
+function moverAnchor(
   world: World,
   geom: Geometry,
-  s: Settler,
+  m: MoverLike,
   alpha: number,
+  idleDir = 1,
 ): { x: number; y: number; dir: number; moving: boolean } {
-  const fx = s.node % world.width;
-  const fy = Math.floor(s.node / world.width);
-  const from = nodeWorldPos({ x: fx, y: fy }, world.heightMap[s.node] ?? 0);
-  if (s.pathIndex < s.path.length) {
-    const to = s.path[s.pathIndex];
-    const dirIndex = dirIndexBetween(geom, s.node, to);
+  const fx = m.node % world.width;
+  const fy = Math.floor(m.node / world.width);
+  const from = nodeWorldPos({ x: fx, y: fy }, world.heightMap[m.node] ?? 0);
+  if (m.pathIndex < m.path.length) {
+    const to = m.path[m.pathIndex];
+    const dirIndex = dirIndexBetween(geom, m.node, to);
     if (dirIndex >= 0) {
       const np = unwrappedNeighbour(fx, fy, dirIndex);
       const toElev = world.heightMap[geom.index(np.x, np.y)] ?? 0;
       const toPos = nodeWorldPos(np, toElev);
-      const denom = Math.max(1, s.ticksPerEdge);
-      const frac = Math.min(1, (s.edgeProgress + alpha) / denom);
+      const denom = Math.max(1, m.ticksPerEdge);
+      const frac = Math.min(1, (m.edgeProgress + alpha) / denom);
       return {
         x: from.x + (toPos.x - from.x) * frac,
         y: from.y + (toPos.y - from.y) * frac,
@@ -173,7 +211,17 @@ function settlerAnchor(
       };
     }
   }
-  return { x: from.x, y: from.y, dir: 1 /* SE, faces the camera */, moving: false };
+  return { x: from.x, y: from.y, dir: idleDir, moving: false };
+}
+
+/** Interpolated ground anchor + facing for a settler, `alpha` into the tick. */
+function settlerAnchor(
+  world: World,
+  geom: Geometry,
+  s: Settler,
+  alpha: number,
+): { x: number; y: number; dir: number; moving: boolean } {
+  return moverAnchor(world, geom, s, alpha);
 }
 
 /** Options controlling the animation phase of the built scene. */
@@ -375,7 +423,40 @@ export function buildDynamics(
     }
   }
 
+  // Ships gliding over the water lattice (same interpolation as settlers). A
+  // moving ship animates its two sail frames and faces its travel direction; an
+  // idle/docked ship shows a still 3/4 view. Ships are always drawn (never
+  // fogged): the player's own fleet stays visible even out on open sea.
+  for (const sh of world.ships.items) {
+    if (!sh) continue;
+    shipSprite(world, geom, sh, anim, out);
+  }
+
   return out;
+}
+
+/** Append one ship's body + shadow sprites (interpolated) to the scene list. */
+function shipSprite(
+  world: World,
+  geom: Geometry,
+  sh: Ship,
+  anim: SceneAnimation,
+  out: DynamicSprite[],
+): void {
+  const pos = moverAnchor(world, geom, sh, anim.alpha, SHIP_IDLE_DIR);
+  const base = SHIP_DIR_BASE[pos.moving ? pos.dir : SHIP_IDLE_DIR] ?? SHIP_DIR_BASE[SHIP_IDLE_DIR];
+  // Roll the sail through its two frames only while under way; docked ships hold
+  // frame 0 so wake/idle share the same sprite (a slow cadence reads as sailing).
+  const frame = pos.moving ? Math.floor(anim.waveFrame / 2) % SHIP_ANIM_FRAMES : 0;
+  const body = base + frame * 2;
+  out.push({
+    worldX: pos.x,
+    worldY: pos.y,
+    archive: SHIP_ARCHIVE,
+    spriteIndex: body,
+    shadowIndex: body + 1,
+    player: sh.player,
+  });
 }
 
 /**

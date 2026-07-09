@@ -14,18 +14,25 @@ import {
   buildingDef,
   canPlaceBuilding,
   canPlaceFlag,
+  canPlaceHarbor,
   createAiState,
   createWorld,
   deserializeWorld,
+  expeditionStatus,
   findWalkPath,
+  findWaterPath,
   flagAt,
   GREENLAND_RULES,
+  harborDockNode,
+  harborsOf,
   militaryView,
   MILITARY_ATTACK,
   NUM_SOLDIER_RANKS,
   ownerAt,
   runAi,
+  SEA,
   serializeWorld,
+  shipsOf,
   territoryOf,
   tickWorld,
   visibleNodes,
@@ -33,10 +40,12 @@ import {
   type AiState,
   type Building,
   type BuildingType,
+  type ExpeditionView,
   type Flag,
   type Geometry,
   type MapJson,
   type MilitaryView,
+  type Ship,
   type World,
 } from '@s2gold/engine';
 import { soundForEvent, type SoundCue } from './audio-map';
@@ -104,6 +113,11 @@ export interface GameCounters {
   buildingsCaptured: number;
   soldiersPromoted: number;
   catapultShots: number;
+  // Seafaring (P7). Player-agnostic tallies for the HUD + e2e.
+  shipsBuilt: number;
+  shipsArrived: number;
+  expeditionsReady: number;
+  expeditionsLanded: number;
 }
 
 function zeroCounters(): GameCounters {
@@ -128,6 +142,10 @@ function zeroCounters(): GameCounters {
     buildingsCaptured: 0,
     soldiersPromoted: 0,
     catapultShots: 0,
+    shipsBuilt: 0,
+    shipsArrived: 0,
+    expeditionsReady: 0,
+    expeditionsLanded: 0,
   };
 }
 
@@ -451,6 +469,21 @@ export class GameSession {
       case 'CatapultFired':
         c.catapultShots++;
         break;
+      case 'ShipBuilt':
+        c.shipsBuilt++;
+        break;
+      case 'ShipArrived':
+        c.shipsArrived++;
+        break;
+      case 'ExpeditionReady':
+        c.expeditionsReady++;
+        break;
+      case 'ExpeditionLanded':
+        c.expeditionsLanded++;
+        this.staticsDirty = true; // the founded harbor clears its site node
+        this.territoryDirty = true;
+        this.recomputeVisibility();
+        break;
       default:
         break;
     }
@@ -597,6 +630,167 @@ export class GameSession {
       total += sendable;
     }
     return total;
+  }
+
+  // --- Seafaring command surface + queries (P7) -----------------------------
+
+  /** Begin assembling an expedition kit at one of the local player's harbors. */
+  prepareExpedition(harborId: number): void {
+    applyCommand(this.world, { type: 'prepareExpedition', player: this.localPlayer, harborId });
+  }
+
+  /** Launch a ready expedition from a harbor toward a coastal target spot. */
+  startExpedition(harborId: number, targetSpot: number): void {
+    applyCommand(this.world, {
+      type: 'startExpedition',
+      player: this.localPlayer,
+      harborId,
+      targetSpot,
+    });
+  }
+
+  /** The local player's own working harbor at a node, or null. */
+  harborAt(node: number): Building | null {
+    const b = buildingAt(this.world, node);
+    return b && b.player === this.localPlayer && b.type === 'harbor' && b.state === 'working'
+      ? b
+      : null;
+  }
+
+  /** Pending-expedition snapshot at a harbor, or null when none is prepared. */
+  expeditionAt(harborId: number): ExpeditionView | null {
+    return expeditionStatus(this.world, harborId);
+  }
+
+  /** True when an idle, empty ship of the local player is homed at `harborId`. */
+  hasIdleShipAt(harborId: number): boolean {
+    for (const s of shipsOf(this.world, this.localPlayer)) {
+      if (s.homeHarborId === harborId && s.state === 'idle' && s.cargo.length === 0) return true;
+    }
+    return false;
+  }
+
+  /** Working harbors of the local player (id order). */
+  harbors(): Building[] {
+    return harborsOf(this.world, this.localPlayer);
+  }
+
+  /** Ship entities of the local player (id order). */
+  ships(): Ship[] {
+    return shipsOf(this.world, this.localPlayer);
+  }
+
+  /** Debug/e2e: live ships as {id, node, state} (all players; id order). */
+  shipStates(): { id: number; node: number; state: string }[] {
+    const out: { id: number; node: number; state: string }[] = [];
+    for (const s of this.world.ships.items) {
+      if (s) out.push({ id: s.id, node: s.node, state: s.state });
+    }
+    return out;
+  }
+
+  /**
+   * Debug/e2e cheat: found a fully-working harbor (HQ-lite warehouse) for
+   * `player` at a coastal `node`, bypassing construction, plus its SE door flag.
+   * Returns the new building id, or -1 when the spot is not a valid harbor site.
+   * Territory does not activate until the next global recalc (a military event or
+   * a founded expedition), matching the engine's own harbor anchoring.
+   */
+  debugSpawnHarbor(player: number, node: number): number {
+    const world = this.world;
+    const geom = this.geom;
+    if (!canPlaceHarbor(world, geom, this.rules, node)) return -1;
+    const def = buildingDef('harbor');
+    if (!def) return -1;
+    const flagNode = geom.neighbour(node, 'SE');
+    let flagId = world.flagAtNode[flagNode];
+    if (flagId < 0) {
+      flagId = storeAllocLocal<Flag>(world.flags, (id) => ({
+        id,
+        node: flagNode,
+        player,
+        wares: [],
+      }));
+      world.flagAtNode[flagNode] = flagId;
+    }
+    const bId = storeAllocLocal<Building>(world.buildings, (id) => ({
+      id,
+      type: 'harbor',
+      node,
+      player,
+      flagId,
+      state: 'working',
+      deliveredBoards: def.cost.boards,
+      deliveredStones: def.cost.stones,
+      needBoards: def.cost.boards,
+      needStones: def.cost.stones,
+      buildProgress: 0,
+      buildTicks: 0,
+      workerId: -1,
+      staffed: true,
+      inputStock: [],
+      outputQueue: [],
+      workTimer: 0,
+      altToggle: 0,
+      garrison: new Array<number>(NUM_SOLDIER_RANKS).fill(0),
+      occupied: false,
+      coinsEnabled: false,
+      incoming: 0,
+      promotionTimer: -1,
+    }));
+    world.buildingAtNode[node] = bId;
+    return bId;
+  }
+
+  /**
+   * Debug/e2e cheat: dock an idle, empty ship of `player` at `harborId` (bypasses
+   * shipyard construction). Returns the new ship id, or -1 when the harbor has no
+   * navigable-water dock.
+   */
+  debugSpawnShip(player: number, harborId: number): number {
+    const world = this.world;
+    const harbor = world.buildings.items[harborId];
+    if (!harbor || harbor.type !== 'harbor') return -1;
+    const dock = harborDockNode(world, this.geom, harbor.node);
+    if (dock < 0) return -1;
+    return storeAllocLocal<Ship>(world.ships, (id) => ({
+      id,
+      player,
+      node: dock,
+      state: 'idle',
+      homeHarborId: harborId,
+      destHarborId: -1,
+      path: [],
+      pathIndex: 0,
+      edgeProgress: 0,
+      ticksPerEdge: SEA.ticksPerEdge,
+      cargo: [],
+      expeditionTargetSpot: -1,
+      expeditionBoards: 0,
+      expeditionStones: 0,
+      expeditionBuilder: false,
+    }));
+  }
+
+  /**
+   * Debug/e2e cheat: top up `player`'s warehouse with an expedition kit worth of
+   * boards + stones and an idle builder, so a prepared expedition assembles at
+   * once. Exercises the real assembly path (no expedition state is forced ready).
+   */
+  debugGrantExpeditionSupplies(player: number): void {
+    const p = this.world.players[player];
+    if (!p) return;
+    p.wares.plank = (p.wares.plank ?? 0) + SEA.expeditionBoards;
+    p.wares.stone = (p.wares.stone ?? 0) + SEA.expeditionStones;
+    p.workers.builder = (p.workers.builder ?? 0) + 1;
+  }
+
+  /** Debug/e2e: is there an all-water route between the docks of two coastal nodes? */
+  debugWaterConnected(nodeA: number, nodeB: number): boolean {
+    const dockA = harborDockNode(this.world, this.geom, nodeA);
+    const dockB = harborDockNode(this.world, this.geom, nodeB);
+    if (dockA < 0 || dockB < 0) return false;
+    return findWaterPath(this.world, this.geom, dockA, dockB) !== null;
   }
 
   /** Toggle fog of war on/off (HUD debug button). Marks the layer dirty. */

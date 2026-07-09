@@ -9,6 +9,7 @@ import {
   BUILD_COST,
   BUILDING_DEFS,
   buildingAt,
+  requiresCoast,
   type BuildingSize,
   type BuildingType,
 } from '@s2gold/engine';
@@ -32,6 +33,18 @@ const BUILD_CATEGORIES: { size: BuildingSize; label: string }[] = [
   { size: 'mine', label: 'Mines' },
 ];
 
+/**
+ * Coastal buildings (harbor + shipyard) get their own build-menu category: the
+ * engine gates them on {@link requiresCoast} (buildable shore land touching
+ * navigable water), so they only appear when the clicked node is a valid coast
+ * — canPlaceHarbor for the harbor, canPlaceBuilding for the shipyard, both via
+ * session.canBuild. Read from BUILDING_DEFS so the list stays data-driven; the
+ * harbor is listed first (the bigger, territory-anchoring building).
+ */
+const COASTAL_TYPES: BuildingType[] = Object.keys(BUILDING_DEFS)
+  .filter((t) => t !== 'headquarters' && requiresCoast(t))
+  .sort((a, b) => (a === 'harbor' ? -1 : b === 'harbor' ? 1 : a.localeCompare(b)));
+
 /** Human-readable menu label per building type (falls back to a title-cased id). */
 const BUILDING_LABEL: Readonly<Record<string, string>> = {
   woodcutter: 'Woodcutter',
@@ -51,6 +64,8 @@ const BUILDING_LABEL: Readonly<Record<string, string>> = {
   metalworks: 'Metalworks',
   mint: 'Mint',
   storehouse: 'Storehouse',
+  harbor: 'Harbor',
+  shipyard: 'Shipyard',
   farm: 'Farm',
   pigfarm: 'Pig farm',
   donkeybreeder: 'Donkey breeder',
@@ -74,6 +89,7 @@ const BUILDINGS_BY_SIZE: Readonly<Record<BuildingSize, BuildingType[]>> = (() =>
   };
   for (const [type, def] of Object.entries(BUILDING_DEFS)) {
     if (type === 'headquarters') continue; // the HQ is a scenario start, never built
+    if (requiresCoast(type)) continue; // harbor/shipyard live in the Coastal category
     const group = groups[def.size];
     if (!group) continue; // unknown/future size class: skip defensively
     group.push(type);
@@ -104,6 +120,13 @@ export interface InteractionDeps {
   openMilitary?(node: number, clientX: number, clientY: number): boolean;
   /** Close any open military panel (e.g. a click landed elsewhere). */
   closeMilitary?(): void;
+  /**
+   * Try to open the harbor panel at a node. Returns true when an own working
+   * harbor was there (so the build menu is suppressed).
+   */
+  openHarbor?(node: number, clientX: number, clientY: number): boolean;
+  /** Close any open harbor panel. */
+  closeHarbor?(): void;
 }
 
 /** Live road-build preview: the hovered destination and the path to it. */
@@ -119,6 +142,8 @@ export interface RoadPreview {
 export class Interaction {
   private menu: HTMLElement | null = null;
   private roadStartFlagNode = -1;
+  /** Harbor id awaiting an expedition target click (-1 = not selecting). */
+  private expeditionHarborId = -1;
 
   // Road-build preview state (recomputed only when the hovered node changes;
   // hover picking is coalesced to one animation frame to bound the node scan).
@@ -173,17 +198,50 @@ export class Interaction {
 
   private onClick(ev: MouseEvent): void {
     this.closeMenu();
-    this.deps.closeMilitary?.();
     if (this.deps.suppressClick?.()) return;
     const node = this.screenToNode(ev.clientX, ev.clientY);
     if (node < 0) return;
+    // Expedition target-select mode: the next map click is the landing spot.
+    if (this.expeditionMode) {
+      this.finishExpedition(node);
+      return;
+    }
+    this.deps.closeMilitary?.();
+    this.deps.closeHarbor?.();
     if (this.roadMode) {
       this.finishRoad(node);
       return;
     }
-    // A military building (own or enemy) opens its garrison/attack panel first.
+    // A military building (own or enemy) opens its garrison/attack panel first;
+    // an own harbor opens its expedition panel; otherwise the build menu.
     if (this.deps.openMilitary?.(node, ev.clientX, ev.clientY)) return;
+    if (this.deps.openHarbor?.(node, ev.clientX, ev.clientY)) return;
     this.openMenu(ev.clientX, ev.clientY, node);
+  }
+
+  // --- Expedition target-select mode ---------------------------------------
+
+  /** True while awaiting a click that picks an expedition's landing spot. */
+  get expeditionMode(): boolean {
+    return this.expeditionHarborId >= 0;
+  }
+
+  /** Enter target-select mode: the next map click launches from `harborId`. */
+  startExpeditionSelect(harborId: number): void {
+    this.roadStartFlagNode = -1;
+    this.clearPreview();
+    this.expeditionHarborId = harborId;
+    this.deps.onStatus('Expedition: click a coastal spot on another shore (Esc to cancel)');
+  }
+
+  private finishExpedition(node: number): void {
+    const harborId = this.expeditionHarborId;
+    this.expeditionHarborId = -1;
+    this.deps.onStatus('');
+    if (harborId < 0) return;
+    // The engine validates the target (free coastal land with a water route from
+    // the harbor dock); an invalid spot is simply a no-op.
+    this.deps.session().startExpedition(harborId, node);
   }
 
   // --- Road mode ------------------------------------------------------------
@@ -236,10 +294,10 @@ export class Interaction {
       }
       // Grouped build menu: one section per size class, listing every building
       // of that size the engine says can be placed here, with its cost.
-      for (const cat of BUILD_CATEGORIES) {
-        const buildable = BUILDINGS_BY_SIZE[cat.size].filter((t) => session.canBuild(node, t));
-        if (buildable.length === 0) continue;
-        items.push(this.categoryLabel(cat.label));
+      const addBuildable = (label: string, types: readonly BuildingType[]): void => {
+        const buildable = types.filter((t) => session.canBuild(node, t));
+        if (buildable.length === 0) return;
+        items.push(this.categoryLabel(label));
         for (const type of buildable) {
           const name = BUILDING_LABEL[type] ?? titleCase(type);
           items.push(
@@ -250,7 +308,10 @@ export class Interaction {
             ),
           );
         }
-      }
+      };
+      for (const cat of BUILD_CATEGORIES) addBuildable(cat.label, BUILDINGS_BY_SIZE[cat.size]);
+      // Coastal buildings (harbor + shipyard) only when the shore admits them.
+      addBuildable('Coastal', COASTAL_TYPES);
     }
 
     if (items.length === 0) items.push(this.label('Nothing to do here'));
@@ -300,6 +361,10 @@ export class Interaction {
     if (this.roadMode) {
       this.roadStartFlagNode = -1;
       this.clearPreview();
+      this.deps.onStatus('');
+    }
+    if (this.expeditionMode) {
+      this.expeditionHarborId = -1;
       this.deps.onStatus('');
     }
   }
