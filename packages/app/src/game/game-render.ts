@@ -576,12 +576,14 @@ export function garrisonDotSegments(
 }
 
 /**
- * Attention markers (an exclamation mark) above each of `player`'s buildings
- * whose flag has no road path back to a warehouse (HQ or storehouse). Such a
- * building can neither receive construction materials nor ship its output, so a
- * site placed there never builds — the marker surfaces that at a glance. Own
- * land is always visible, so no fog check is needed; warehouses (the supply
- * sources themselves) are never marked.
+ * Attention markers for `player`'s road-disconnected structures: an exclamation
+ * mark above each building whose flag has no road path back to a warehouse, plus
+ * a small diamond on every disconnected *flag* that is not a building's own flag.
+ * The flag markers matter because the gap is often not at the building itself but
+ * at a loose end of its road chain (e.g. a road that dead-ends two tiles short of
+ * the network) — highlighting those loose ends shows where a connecting road
+ * needs to go. Own land is always visible, so no fog check is needed; warehouses
+ * (the supply sources) are never marked.
  */
 export function disconnectedBuildingMarkers(world: World, player: number): RoadSegment[] {
   const isWarehouse = (b: Building): boolean => {
@@ -619,8 +621,11 @@ export function disconnectedBuildingMarkers(world: World, player: number): RoadS
     }
   }
   const out: RoadSegment[] = [];
+  const buildingFlags = new Set<number>();
   for (const b of world.buildings.items) {
-    if (!b || b.player !== player || isWarehouse(b) || reached.has(b.flagId)) continue;
+    if (!b || b.player !== player) continue;
+    buildingFlags.add(b.flagId);
+    if (isWarehouse(b) || reached.has(b.flagId)) continue;
     // A bright exclamation mark floating above the building: a vertical stem and
     // a dot below it (a tiny cross so a zero-length segment still renders).
     const a = nodeAnchor(world, b.node);
@@ -628,6 +633,17 @@ export function disconnectedBuildingMarkers(world: World, player: number): RoadS
     out.push({ x0: a.x, y0: top, x1: a.x, y1: top + 13 }); // stem
     out.push({ x0: a.x - 1, y0: top + 18, x1: a.x + 1, y1: top + 18 }); // dot
     out.push({ x0: a.x, y0: top + 17, x1: a.x, y1: top + 19 }); // dot
+  }
+  // A small diamond on each disconnected loose-end flag (skip building flags,
+  // already flagged by the "!" above their building).
+  for (const f of world.flags.items) {
+    if (!f || f.player !== player || reached.has(f.id) || buildingFlags.has(f.id)) continue;
+    const a = nodeAnchor(world, f.node);
+    const s = 4;
+    out.push({ x0: a.x, y0: a.y - s, x1: a.x + s, y1: a.y }); // NE edge
+    out.push({ x0: a.x + s, y0: a.y, x1: a.x, y1: a.y + s }); // SE edge
+    out.push({ x0: a.x, y0: a.y + s, x1: a.x - s, y1: a.y }); // SW edge
+    out.push({ x0: a.x - s, y0: a.y, x1: a.x, y1: a.y - s }); // NW edge
   }
   return out;
 }
