@@ -52,7 +52,7 @@ const SIGN_LABEL: Readonly<Record<number, string>> = {
   1: 'iron ore',
   2: 'gold',
   3: 'coal',
-  4: 'granite (build a granite mine for stone)',
+  4: 'granite',
 };
 
 const BUILDING_LABEL: Readonly<Record<string, string>> = {
