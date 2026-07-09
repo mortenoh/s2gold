@@ -94,6 +94,8 @@ export async function renderSetup(root: HTMLElement): Promise<void> {
   const previewTitle = el('div', { class: 'setup-preview-title', attrs: { 'data-testid': 'preview-title' } });
   const previewCanvasHost = el('div', { class: 'setup-preview-canvas', attrs: { 'data-testid': 'preview-canvas' } });
   const previewInfo = el('div', { class: 'setup-preview-info', attrs: { 'data-testid': 'preview-info' } });
+  // Per-slot player selectors (populated per map in select(); empty for 1p maps).
+  const slotsHost = el('div', { class: 'setup-slots', attrs: { 'data-testid': 'ai-slots' } });
   const startBtn = el('button', {
     class: 'menu-start-btn',
     type: 'button',
@@ -101,7 +103,7 @@ export async function renderSetup(root: HTMLElement): Promise<void> {
     attrs: { 'data-testid': 'start-game', disabled: 'true' },
   }) as HTMLButtonElement;
   startBtn.disabled = true;
-  previewWrap.append(previewTitle, previewCanvasHost, previewInfo, startBtn);
+  previewWrap.append(previewTitle, previewCanvasHost, previewInfo, slotsHost, startBtn);
 
   body.append(listWrap, previewWrap);
   panel.append(body);
@@ -109,6 +111,53 @@ export async function renderSetup(root: HTMLElement): Promise<void> {
 
   let selected: MapIndexEntry | null = null;
   let previewToken = 0;
+
+  /**
+   * (Re)build the per-slot player selectors for a map. Slot 0 is always the
+   * human (fixed label); slots 1..N-1 choose None or Computer, defaulting slot 1
+   * to Computer and the rest to None. Single-player maps get no selectors.
+   */
+  const buildSlots = (entry: MapIndexEntry): void => {
+    clear(slotsHost);
+    if (entry.players <= 1) return;
+    slotsHost.append(el('div', { class: 'setup-slots-title', text: 'Players' }));
+    slotsHost.append(
+      el(
+        'div',
+        { class: 'setup-slot', attrs: { 'data-testid': 'ai-slot-0' } },
+        el('span', { class: 'setup-slot-label', text: 'Player 1' }),
+        el('span', { class: 'setup-slot-fixed', text: 'Human (you)' }),
+      ),
+    );
+    for (let p = 1; p < entry.players; p++) {
+      const sel = el('select', {
+        class: 'setup-slot-select',
+        attrs: { 'data-testid': `ai-slot-${p}`, 'data-slot': String(p) },
+      }) as HTMLSelectElement;
+      sel.append(
+        el('option', { text: 'None', attrs: { value: 'none' } }),
+        el('option', { text: 'Computer', attrs: { value: 'ai' } }),
+      );
+      sel.value = p === 1 ? 'ai' : 'none';
+      slotsHost.append(
+        el(
+          'div',
+          { class: 'setup-slot' },
+          el('span', { class: 'setup-slot-label', text: `Player ${p + 1}` }),
+          sel,
+        ),
+      );
+    }
+  };
+
+  /** Comma-joined AI slot indices from the current selectors (empty when none). */
+  const collectAi = (): string => {
+    const ids: number[] = [];
+    for (const sel of Array.from(slotsHost.querySelectorAll<HTMLSelectElement>('select'))) {
+      if (sel.value === 'ai') ids.push(Number(sel.dataset.slot));
+    }
+    return ids.join(',');
+  };
 
   const select = async (entry: MapIndexEntry, item: HTMLElement): Promise<void> => {
     selected = entry;
@@ -118,6 +167,7 @@ export async function renderSetup(root: HTMLElement): Promise<void> {
 
     previewTitle.textContent = entry.title;
     previewInfo.textContent = `${entry.width} x ${entry.height}  -  ${entry.players} player${entry.players === 1 ? '' : 's'}  -  ${entry.terrain_name}`;
+    buildSlots(entry);
     startBtn.disabled = false;
     startBtn.dataset.map = entry.name;
 
@@ -167,6 +217,9 @@ export async function renderSetup(root: HTMLElement): Promise<void> {
   });
 
   startBtn.addEventListener('click', () => {
-    if (selected) window.location.assign(`/play/${selected.name}`);
+    if (!selected) return;
+    const ai = collectAi();
+    const query = ai ? `?ai=${ai}` : '';
+    window.location.assign(`/play/${selected.name}${query}`);
   });
 }

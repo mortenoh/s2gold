@@ -14,6 +14,7 @@ import {
   buildingDef,
   canPlaceBuilding,
   canPlaceFlag,
+  createAiState,
   createWorld,
   deserializeWorld,
   findWalkPath,
@@ -23,11 +24,13 @@ import {
   MILITARY_ATTACK,
   NUM_SOLDIER_RANKS,
   ownerAt,
+  runAi,
   serializeWorld,
   territoryOf,
   tickWorld,
   visibleNodes,
   worldGeometry,
+  type AiState,
   type Building,
   type BuildingType,
   type Flag,
@@ -55,6 +58,28 @@ function storeAllocLocal<T>(
 const GF_MS = 50;
 /** Cap catch-up steps per update so a stall cannot freeze the tab. */
 const MAX_STEPS_PER_UPDATE = 240;
+
+/** Ticks between statistics samples (cheap, tick-aligned; ~2.5s of GF at 1x). */
+export const STATS_INTERVAL = 50;
+/** Ring-buffer length per series (STATS_INTERVAL * this = ticks of history). */
+const STATS_MAX = 300;
+/** Deterministic base seed for AI RNG streams (mixed per player in the engine). */
+const AI_SEED = 0x5eed;
+
+/**
+ * Per-player statistics time series (parallel ring buffers). Sampled every
+ * {@link STATS_INTERVAL} ticks. Indices line up with {@link GameSession.statsTicks}.
+ */
+export interface StatsSeries {
+  /** Territory node count (owned land). */
+  land: number[];
+  /** Live building count (sites + working, HQ included). */
+  buildings: number[];
+  /** Total soldiers (warehouse reserve + garrisoned across all buildings). */
+  soldiers: number[];
+  /** Total wares held in the player's warehouses. */
+  goods: number[];
+}
 
 /** Debug/event counters exposed for tests and the HUD. */
 export interface GameCounters {
@@ -124,7 +149,7 @@ export class GameSession {
   /** Set when a tick changes map objects, so the renderer rebuilds statics. */
   staticsDirty = true;
 
-  /** The local (human) player index. Others render but are idle (no AI yet). */
+  /** The local (human) player index. Other players are AI-driven or idle. */
   readonly localPlayer = 0;
   /** True when fog of war modulates rendering (toggleable HUD debug button). */
   fogEnabled = true;
@@ -136,15 +161,39 @@ export class GameSession {
   /** Per-node fog state (0 unexplored, 1 explored, 2 visible). Persistent. */
   readonly visibility: Uint8Array;
 
+  /**
+   * Per-player AI decision state (one per computer player). Run once per tick
+   * just before `tickWorld`. Empty when no computer opponents are configured.
+   * Serialized into saves and restored on load (see {@link serialize}).
+   */
+  aiStates: AiState[] = [];
+
+  /** Sample ticks parallel to {@link statsSeries} entries (shared time axis). */
+  statsTicks: number[] = [];
+  /** Per-player statistics series (index = player). Rebuilt on world replace. */
+  statsSeries: StatsSeries[] = [];
+  private nextStatsTick = 0;
+
   private acc = 0;
   /** Sound cues emitted since the last drain (bounded to avoid unbounded growth). */
   private readonly soundCues: SoundCue[] = [];
 
-  constructor(map: MapJson, seed: number, players?: number) {
+  constructor(map: MapJson, seed: number, players?: number, aiPlayers?: readonly number[]) {
     this.world = createWorld(map, { seed, players });
     this.geom = worldGeometry(this.world);
     this.visibility = new Uint8Array(this.world.width * this.world.height);
     this.recomputeVisibility();
+    for (const id of aiPlayers ?? []) {
+      if (id >= 0 && id < this.world.players.length) {
+        this.aiStates.push(createAiState(id, { seed: AI_SEED }));
+      }
+    }
+    this.initStats();
+  }
+
+  /** Player indices currently driven by the computer opponent. */
+  get aiPlayers(): number[] {
+    return this.aiStates.map((s) => s.playerId);
   }
 
   /** Number of players seeded in this world. */
@@ -178,32 +227,143 @@ export class GameSession {
   }
 
   private step(): void {
+    // Statistics: tick-aligned sample of the state entering this tick (cheap
+    // counts only). Sampling here also captures the very first (tick 0) point.
+    if (this.world.tick >= this.nextStatsTick) {
+      this.recordStatsSample();
+      this.nextStatsTick = this.world.tick + STATS_INTERVAL;
+    }
+    // Computer opponents act just before the tick, through the command layer —
+    // identical to a human queueing commands (see engine ai/ notes).
+    for (const ai of this.aiStates) runAi(this.world, ai, this.rules);
     for (const e of tickWorld(this.world, this.rules)) this.record(e);
+  }
+
+  // --- Statistics (in-game stats screen) ------------------------------------
+
+  /** (Re)allocate empty per-player series sized to the current player count. */
+  private initStats(): void {
+    this.statsTicks = [];
+    this.statsSeries = [];
+    for (let p = 0; p < this.playerCount; p++) {
+      this.statsSeries.push({ land: [], buildings: [], soldiers: [], goods: [] });
+    }
+    this.nextStatsTick = 0;
+    // Seed one baseline sample so a freshly-opened panel is never empty.
+    this.recordStatsSample();
+    this.nextStatsTick = this.world.tick + STATS_INTERVAL;
+  }
+
+  /**
+   * Push one statistics sample for every player. All four metrics are derived
+   * cheaply from live state (no engine views added): a single pass over the
+   * owner plane for land, one over the building store for buildings/soldiers,
+   * and a warehouse-ware sum for goods. Ring-buffered to {@link STATS_MAX}.
+   */
+  private recordStatsSample(): void {
+    const w = this.world;
+    const n = this.playerCount;
+    const land = new Array<number>(n).fill(0);
+    const buildings = new Array<number>(n).fill(0);
+    const soldiers = new Array<number>(n).fill(0);
+    const goods = new Array<number>(n).fill(0);
+    // Land: one pass over the owner plane.
+    for (let node = 0; node < w.owner.length; node++) {
+      const p = ownerAt(w, node);
+      if (p >= 0 && p < n) land[p]++;
+    }
+    // Buildings + garrisoned soldiers: one pass over the building store.
+    for (const b of w.buildings.items) {
+      if (!b || b.player < 0 || b.player >= n) continue;
+      buildings[b.player]++;
+      for (const g of b.garrison) soldiers[b.player] += g;
+    }
+    // Reserve soldiers (warehouse) + total warehouse wares.
+    for (let p = 0; p < n; p++) {
+      const pl = w.players[p];
+      if (!pl) continue;
+      for (const s of pl.soldiers) soldiers[p] += s;
+      for (const count of Object.values(pl.wares)) goods[p] += count;
+    }
+    this.statsTicks.push(w.tick);
+    for (let p = 0; p < n; p++) {
+      const s = this.statsSeries[p];
+      if (!s) continue;
+      s.land.push(land[p] ?? 0);
+      s.buildings.push(buildings[p] ?? 0);
+      s.soldiers.push(soldiers[p] ?? 0);
+      s.goods.push(goods[p] ?? 0);
+    }
+    if (this.statsTicks.length > STATS_MAX) {
+      this.statsTicks.shift();
+      for (const s of this.statsSeries) {
+        s.land.shift();
+        s.buildings.shift();
+        s.soldiers.shift();
+        s.goods.shift();
+      }
+    }
+  }
+
+  /** Live building count for a player (HQ + sites + working). */
+  buildingsOf(player: number): number {
+    let n = 0;
+    for (const b of this.world.buildings.items) if (b && b.player === player) n++;
+    return n;
   }
 
   // --- Save / load ----------------------------------------------------------
 
-  /** Canonical, JSON-safe serialization of the current world (for a save). */
+  /**
+   * Canonical, JSON-safe save payload: `{ world, ai }` where `ai` maps each
+   * computer player's index to its serializable {@link AiState}. The AI map is
+   * omitted (absent, not empty) when there are no computer players, so a
+   * human-only save is byte-identical apart from the `world` wrapper.
+   *
+   * Backward compatibility: {@link loadWorld} still accepts a bare world object
+   * (the pre-AI save shape), in which case the running session's AI states are
+   * preserved rather than reset.
+   */
   serialize(): unknown {
-    return JSON.parse(serializeWorld(this.world)) as unknown;
+    const world = JSON.parse(serializeWorld(this.world)) as unknown;
+    if (this.aiStates.length === 0) return { world };
+    const ai: Record<number, AiState> = {};
+    for (const s of this.aiStates) ai[s.playerId] = s;
+    return { world, ai };
   }
 
   /**
    * Replace the live world from serialized save data (as produced by
-   * {@link serialize}). The tick loop keeps running against the new world;
+   * {@link serialize}). Accepts either the current `{ world, ai }` shape or a
+   * bare pre-AI world object. The tick loop keeps running against the new world;
    * geometry is rebuilt and statics are flagged dirty so the renderer refreshes.
-   * Throws if the data is not a compatible world version.
+   * Throws if the world data is not a compatible version.
    */
   loadWorld(data: unknown): void {
-    const next = deserializeWorld(JSON.stringify(data));
+    let worldData: unknown = data;
+    let aiData: Record<string, AiState> | undefined;
+    if (data && typeof data === 'object' && 'world' in data) {
+      const wrapped = data as { world: unknown; ai?: Record<string, AiState> };
+      worldData = wrapped.world;
+      aiData = wrapped.ai;
+    }
+    const next = deserializeWorld(JSON.stringify(worldData));
     this.world = next;
     this.geom = worldGeometry(next);
+    // Restore AI states from the save when present; otherwise (a pre-AI save)
+    // keep the session's existing AI states so a mid-game load stays consistent.
+    if (aiData) {
+      this.aiStates = Object.values(aiData).filter((s) => s.playerId < next.players.length);
+    } else {
+      this.aiStates = this.aiStates.filter((s) => s.playerId < next.players.length);
+    }
     this.acc = 0;
     this.staticsDirty = true;
     this.territoryDirty = true;
     this.soundCues.length = 0;
     this.visibility.fill(FOG.unexplored);
     this.recomputeVisibility();
+    this.initStats();
   }
 
   /**

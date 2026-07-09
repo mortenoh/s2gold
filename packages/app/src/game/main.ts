@@ -38,6 +38,7 @@ import {
 import { Interaction } from './interaction';
 import { MilitaryPanel } from './military-ui';
 import { SaveMenu } from './save-ui';
+import { StatsPanel } from './stats-ui';
 import { AudioEngine, positional } from './audio';
 
 /** World-px pan speed per second when holding an arrow key. */
@@ -90,6 +91,10 @@ interface S2Debug {
   hqNode: number;
   /** Number of players seeded in the current world. */
   players: number;
+  /** Number of players driven by the computer opponent. */
+  aiPlayers: number;
+  /** Live building count for a player (HQ + sites + working). */
+  buildingsOf(player: number): number;
   /** Toggle fog of war (default on for a new game). */
   setFog(on: boolean): void;
   /** Owning player of a node (-1 = neutral). */
@@ -181,6 +186,10 @@ async function boot(): Promise<void> {
   const fogButton = el('button', {
     text: 'Fog: on',
     attrs: { 'data-testid': 'fog-toggle', type: 'button', title: 'Toggle fog of war' },
+  });
+  const statsButton = el('button', {
+    text: 'Stats',
+    attrs: { 'data-testid': 'stats-toggle', type: 'button', title: 'In-game statistics' },
   });
   // Long, transient hints (road mode etc.) float in their own toast below the
   // bar so the top bar never has to wrap to make room for them.
@@ -291,6 +300,7 @@ async function boot(): Promise<void> {
       pauseButton,
       menuButton,
       fogButton,
+      statsButton,
       ...speedButtons,
       audioControls,
       resources,
@@ -353,7 +363,7 @@ async function boot(): Promise<void> {
     }
   }
 
-  async function switchMap(entry: MapIndexEntry): Promise<void> {
+  async function switchMap(entry: MapIndexEntry, aiPlayers: readonly number[] = []): Promise<void> {
     delete document.body.dataset.mapReady;
     const map = await loadMap(entry);
     const atlas = await loadTerrainImage(map.terrain);
@@ -368,7 +378,11 @@ async function boot(): Promise<void> {
     }
     objAtlasReady = sprites.hasAtlas(archive);
 
-    session = new GameSession(map.engineMap, GAME_SEED);
+    // Computer opponents: keep only slot indices this map can seat, then seed
+    // enough players to cover the highest AI slot (human is always slot 0).
+    const ai = aiPlayers.filter((n) => n > 0 && n < entry.players);
+    const playerCount = ai.length > 0 ? Math.max(...ai) + 1 : undefined;
+    session = new GameSession(map.engineMap, GAME_SEED, playerCount, ai);
     sprites.setMap(map.data.width, map.data.height, map.data.heightLayer);
     roads.setMap(map.data.width, map.data.height);
     rebuildStatics();
@@ -396,6 +410,9 @@ async function boot(): Promise<void> {
     document.title = `s2gold — ${map.title || entry.name}`;
     const url = new URL(window.location.href);
     url.searchParams.set('map', entry.name);
+    // Keep the URL honest about the active AI config (cleared on a plain switch).
+    if (ai.length > 0) url.searchParams.set('ai', ai.join(','));
+    else url.searchParams.delete('ai');
     window.history.replaceState(null, '', url);
     document.body.dataset.mapReady = entry.name;
   }
@@ -459,6 +476,8 @@ async function boot(): Promise<void> {
       setSpeed: (sp) => setSpeed(sp as Speed),
       setPaused: (p) => setPaused(p),
       players: s.playerCount,
+      aiPlayers: s.aiPlayers.length,
+      buildingsOf: (player) => s.buildingsOf(player),
       setFog: (on) => {
         s.setFog(on);
         applyFog();
@@ -647,6 +666,10 @@ async function boot(): Promise<void> {
     toast: saveToast,
   });
   menuButton.addEventListener('click', () => saveMenu.toggle());
+
+  // In-game statistics panel (per-player time-series charts).
+  const statsPanel = new StatsPanel({ root, session: () => session });
+  statsButton.addEventListener('click', () => statsPanel.toggle());
   window.addEventListener('keydown', (ev) => {
     if (ev.key === 'F5') {
       ev.preventDefault();
@@ -811,9 +834,18 @@ async function boot(): Promise<void> {
     }
   }
 
-  const query = new URLSearchParams(window.location.search).get('map');
+  const params = new URLSearchParams(window.location.search);
+  const query = params.get('map');
+  // ?ai=1,2 -> computer players in those slots (parsed once for the initial map).
+  const aiParam = params.get('ai');
+  const aiPlayers = aiParam
+    ? aiParam
+        .split(',')
+        .map((s) => Number.parseInt(s, 10))
+        .filter((n) => Number.isInteger(n) && n > 0)
+    : [];
   setSpeed(1);
-  await switchMap(pickMap(index, query));
+  await switchMap(pickMap(index, query), aiPlayers);
   requestAnimationFrame(frame);
 }
 

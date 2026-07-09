@@ -657,6 +657,50 @@ button.menu-entry:hover,
   min-height: 1.2em;
 }
 
+.setup-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.setup-slots:empty {
+  display: none;
+}
+
+.setup-slots-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-dim);
+}
+
+.setup-slot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--fg);
+}
+
+.setup-slot-label {
+  min-width: 70px;
+}
+
+.setup-slot-fixed {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.setup-slot-select {
+  background: #14141a;
+  color: #eee;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 7px;
+  font-size: 12px;
+}
+
 .menu-note {
   color: var(--fg-dim);
   border: 1px dashed var(--border);

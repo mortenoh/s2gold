@@ -30,6 +30,10 @@ const P4UI_DIR =
   '/private/tmp/claude-502/-Users-morteoh-dev-local-s2gold/' +
   'bb77c315-f7af-4a5f-a4d3-fe7955aadc74/scratchpad/p4ui';
 
+const P6UI_DIR =
+  '/private/tmp/claude-502/-Users-morteoh-dev-local-s2gold/' +
+  'bb77c315-f7af-4a5f-a4d3-fe7955aadc74/scratchpad/p6ui';
+
 async function readDebug(page: Page): Promise<S2Debug> {
   return page.evaluate(() => {
     const dbg = (window as unknown as { __s2debug?: S2Debug }).__s2debug;
@@ -723,6 +727,112 @@ test('P4: two-player battle — borders, garrison panel, attack, capture', async
   ).toBeGreaterThanOrEqual(1);
   expect(counters.territoryChanges, 'territory changed as buildings occupied').toBeGreaterThanOrEqual(1);
 
+  expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);
+});
+
+// --- P6 gate: computer opponent + statistics screen -------------------------
+
+/** The P6 debug slice: AI + per-player building counts. */
+interface S2Ai {
+  aiPlayers: number;
+  players: number;
+  buildingsOf(player: number): number;
+}
+
+/** Distinct RGB colors in a named 2D canvas (0 when absent/blank). */
+async function canvasDistinct(page: Page, testid: string): Promise<number> {
+  return page.evaluate((id) => {
+    const c = document.querySelector<HTMLCanvasElement>(`[data-testid="${id}"]`);
+    if (!c) return 0;
+    const ctx = c.getContext('2d');
+    if (!ctx) return 0;
+    const data = ctx.getImageData(0, 0, c.width, c.height).data;
+    const colors = new Set<number>();
+    for (let i = 0; i < data.length; i += 4) {
+      colors.add(((data[i] ?? 0) << 16) | ((data[i + 1] ?? 0) << 8) | (data[i + 2] ?? 0));
+    }
+    return colors.size;
+  }, testid);
+}
+
+test('P6: setup selects a computer opponent that seeds and expands', async ({ page }) => {
+  test.skip(!(await assetsPresent(page)), 'converted assets not installed');
+  test.setTimeout(120_000);
+  const errors = collectErrors(page);
+
+  // Real setup flow: pick a known 2-player map; slot 1 defaults to Computer.
+  await page.goto('/setup');
+  await expect(page.getByTestId('setup-panel')).toBeVisible();
+  await page.locator('[data-testid="map-item"][data-map="maps4_map02"]').click();
+  await expect(page.getByTestId('ai-slot-1')).toHaveValue('ai');
+
+  // Start -> lands on the game page for the chosen map with the AI query.
+  await page.getByTestId('start-game').click();
+  await expect(page).toHaveURL(/\/play\/maps4_map02\?ai=1$/);
+  await expect(page.locator('body[data-map-ready]')).toBeAttached({ timeout: 15_000 });
+  await expect(page.locator('body')).toHaveAttribute('data-map-ready', 'maps4_map02');
+
+  // The session created an AI state for the computer slot.
+  const aiCount = await page.evaluate(
+    () => (window as unknown as { __s2debug: S2Ai }).__s2debug.aiPlayers,
+  );
+  expect(aiCount, 'at least one AI player seeded').toBeGreaterThanOrEqual(1);
+
+  // Run fast and watch the computer player build beyond its starting HQ.
+  await disableFog(page);
+  await page.getByTestId('speed-10').click();
+  await expect(page.getByTestId('speed-10')).toHaveClass(/active/);
+  await page.waitForFunction(
+    () => (window as unknown as { __s2debug: S2Ai }).__s2debug.buildingsOf(1) >= 2,
+    undefined,
+    { timeout: 90_000 },
+  );
+
+  const aiBuildings = await page.evaluate(
+    () => (window as unknown as { __s2debug: S2Ai }).__s2debug.buildingsOf(1),
+  );
+  expect(aiBuildings, 'the AI built past its HQ').toBeGreaterThan(1);
+
+  await page.getByTestId('game-canvas').screenshot({ path: `${P6UI_DIR}/ai-territory.png` });
+  expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);
+});
+
+test('P6: statistics panel opens and charts per-player series', async ({ page }) => {
+  test.skip(!(await assetsPresent(page)), 'converted assets not installed');
+  test.setTimeout(90_000);
+  const errors = collectErrors(page);
+
+  await page.goto('/play/maps4_map02?ai=1');
+  await expect(page.locator('body[data-map-ready]')).toBeAttached({ timeout: 15_000 });
+  await disableFog(page);
+
+  // Let the economy (and the AI) run so the series accumulate and diverge.
+  await page.getByTestId('speed-10').click();
+  await page.waitForFunction(
+    () => (window as unknown as { __s2debug: S2Ai }).__s2debug.buildingsOf(1) >= 2,
+    undefined,
+    { timeout: 60_000 },
+  );
+
+  // Open the statistics panel from the HUD.
+  await page.getByTestId('stats-toggle').click();
+  await expect(page.getByTestId('stats-panel')).toBeVisible();
+
+  // The legend lists both players with their current numeric values, and the
+  // computer player is labelled as such (full stats for all players, faithful
+  // to the original — no fog restriction on the stats screen).
+  const legend = page.getByTestId('stats-legend');
+  await expect(legend).toContainText('Land');
+  await expect(legend).toContainText('Computer');
+
+  // Charts drew: each canvas has a background, axes and colored player lines, so
+  // it is far from blank (a single flat color would be ~1-2 distinct values).
+  for (const key of ['land', 'buildings', 'soldiers', 'goods']) {
+    const distinct = await canvasDistinct(page, `stats-canvas-${key}`);
+    expect(distinct, `stats chart ${key} is non-blank`).toBeGreaterThan(3);
+  }
+
+  await page.getByTestId('stats-panel').screenshot({ path: `${P6UI_DIR}/stats-panel.png` });
   expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);
 });
 
