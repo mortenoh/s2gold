@@ -66,8 +66,9 @@ describe('resource layer encoding (original S2 WLD ranges)', () => {
     expect(resourceAmount(0x4e)).toBe(6);
     expect(resourceType(0x54)).toBe(RESOURCE.gold); // 0x50-0x57 gold
     expect(resourceType(0x5d)).toBe(RESOURCE.granite); // 0x58-0x5F granite
-    expect(resourceType(0x21)).toBe(RESOURCE.fish); // 0x20-0x27 fish
-    expect(resourceType(0x87)).toBe(RESOURCE.water); // singleton
+    expect(resourceType(0x21)).toBe(RESOURCE.water); // 0x20-0x27 underground water
+    expect(resourceType(0x87)).toBe(RESOURCE.fish); // 0x80-0x87 fish (in water)
+    expect(resourceAmount(0x87)).toBe(7);
     expect(resourceType(0x00)).toBe(RESOURCE.none);
   });
 });

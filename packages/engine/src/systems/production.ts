@@ -20,6 +20,7 @@ import {
   OBJ_TYPE,
   OBJ_TYPE_CROP,
   OBJ_TYPE_SAPLING,
+  RESOURCE,
   resourceAmount,
   resourceType,
   SEA,
@@ -45,6 +46,17 @@ import {
 import { beginWalk, spawnSettler, stepWalk, walkDone } from './movement';
 import { ensureWorkerAvailable } from './recruit';
 import { playerHasDockedHarbor, spawnShip } from './seafaring';
+import { isWaterNode } from '../water';
+
+/** A water node adjacent to `node` that still holds fish, or -1. */
+function adjacentFish(world: World, geom: Geometry, node: number): number {
+  for (const n of geom.neighbours(node)) {
+    if (isWaterNode(world, n) && resourceType(world.resource[n]) === RESOURCE.fish && resourceAmount(world.resource[n]) > 0) {
+      return n;
+    }
+  }
+  return -1;
+}
 
 /**
  * Wares a producer never idles for: construction materials, tools, weapons and
@@ -554,13 +566,16 @@ function runHarvesterFor(
       );
       break;
     case BUILDING.fishery:
+      // Fish live in water (which the fisher can't walk into), so the fisher
+      // stands on reachable shore next to a fish-bearing water node and fishes it.
       runHarvester(
         world, geom, rules, b, worker,
-        () => nearestReachable(world, geom, rules, b.node, radius, (n) => resourceType(world.resource[n]) === (def.resource ?? 6) && resourceAmount(world.resource[n]) > 0),
+        () => nearestReachable(world, geom, rules, b.node, radius, (n) => adjacentFish(world, geom, n) >= 0),
         def.workTicks,
-        (node) => {
-          if (resourceAmount(world.resource[node]) <= 0) return false;
-          world.resource[node] = world.resource[node] - 1;
+        (standNode) => {
+          const fishNode = adjacentFish(world, geom, standNode);
+          if (fishNode < 0) return false;
+          world.resource[fishNode] = world.resource[fishNode] - 1;
           b.outputQueue.push(def.outputs[0]);
           return true;
         },
