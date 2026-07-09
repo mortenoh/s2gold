@@ -329,6 +329,38 @@ describe('P6 AI attack-target choice', () => {
     expect(pick!.soldiers).toBeGreaterThanOrEqual(1);
   });
 
+  it('falls back to the enemy HQ when no military targets remain', () => {
+    const map = makeFlatMap(30, 30, 6, 6);
+    const world = createWorld({ ...map, players: 2, hq_x: [6, 20, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff], hq_y: [6, 6, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff] }, { seed: 1, players: 2 });
+    const geom = worldGeometry(world);
+
+    // AI (player 1) fortress with a surplus; the enemy has no military
+    // buildings left, only its headquarters at (6,6).
+    const fort = spawnBuilding(world, geom, geom.index(12, 6), 'fortress', 1, true);
+    garrisonBuilding(fort, [5, 0, 0, 0, 0]);
+
+    const pick = pickAttackTarget(world, geom, GREENLAND_RULES, 1);
+    expect(pick).not.toBeNull();
+    expect(pick!.targetBuildingId).toBe(world.players[0].hqBuildingId);
+  });
+
+  it('prefers a military target over the enemy HQ', () => {
+    const map = makeFlatMap(30, 30, 6, 6);
+    const world = createWorld({ ...map, players: 2, hq_x: [6, 20, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff], hq_y: [6, 6, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff] }, { seed: 1, players: 2 });
+    const geom = worldGeometry(world);
+
+    const fort = spawnBuilding(world, geom, geom.index(12, 6), 'fortress', 1, true);
+    garrisonBuilding(fort, [5, 0, 0, 0, 0]);
+    // A garrisoned enemy barracks: strictly stronger than the strength-0 HQ,
+    // but still the preferred target.
+    const barracks = spawnBuilding(world, geom, geom.index(9, 6), 'barracks', 0, true);
+    garrisonBuilding(barracks, [2, 0, 0, 0, 0]);
+
+    const pick = pickAttackTarget(world, geom, GREENLAND_RULES, 1);
+    expect(pick).not.toBeNull();
+    expect(pick!.targetBuildingId).toBe(barracks.id);
+  });
+
   it('returns null when the AI has no soldier surplus', () => {
     const map = makeFlatMap(30, 30, 6, 6);
     const world = createWorld({ ...map, players: 2, hq_x: [6, 20, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff], hq_y: [6, 6, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff] }, { seed: 1, players: 2 });

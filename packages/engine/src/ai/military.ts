@@ -4,7 +4,8 @@
  * Attacks are honest and cautious: the AI only strikes when it has a real soldier
  * surplus (a building holding more than its lone garrison-keeper), and only at an
  * enemy military building it can actually reach on foot within the engine's
- * MAX_ATTACKING_RUN_DISTANCE. Among reachable targets it picks the weakest
+ * MAX_ATTACKING_RUN_DISTANCE. Enemy headquarters count as targets too — razing
+ * one eliminates the opponent. Among reachable targets it picks the weakest
  * (lowest total garrison strength), nearest, lowest-id — the cheapest capture —
  * mirroring the attack executor's own reachability maths so a returned target is
  * one the command layer will accept.
@@ -22,6 +23,12 @@ import type { AiState } from './types';
 /** True when a building projects territory / can be attacked (military kind). */
 function isMilitary(b: Building): boolean {
   return buildingDef(b.type)?.kind === 'military';
+}
+
+/** Buildings the attack executor accepts as targets: military buildings and HQs. */
+function isAttackable(b: Building): boolean {
+  const kind = buildingDef(b.type)?.kind;
+  return kind === 'military' || kind === 'hq';
 }
 
 /** Total garrison strength of a building: sum of (rank+1) x count. */
@@ -43,6 +50,8 @@ function attackSources(world: World, player: number): Building[] {
 /**
  * Choose the weakest reachable enemy military building to attack, and how many
  * soldiers to commit, or null when there is no worthwhile / reachable target.
+ * When no enemy military building is reachable, falls back to a reachable enemy
+ * headquarters — the finishing move that eliminates the opponent.
  */
 export function pickAttackTarget(
   world: World,
@@ -56,9 +65,14 @@ export function pickAttackTarget(
   let best = -1;
   let bestStrength = Infinity;
   let bestDist = Infinity;
+  let bestHq = -1;
+  let bestHqDist = Infinity;
   for (const t of storeLive(world.buildings)) {
-    if (t.player === player || !isMilitary(t) || !t.occupied) continue;
-    if (garrisonCount(t) <= 0) continue;
+    if (t.player === player || !isAttackable(t) || !t.occupied) continue;
+    const isHq = !isMilitary(t);
+    // HQ defenders live in the player's idle reserve, not the garrison, so an
+    // HQ is a valid target even with an empty garrison.
+    if (!isHq && garrisonCount(t) <= 0) continue;
     // Reachable if any surplus source has a foot path within the run limit.
     let dist = Infinity;
     for (const s of sources) {
@@ -68,6 +82,13 @@ export function pickAttackTarget(
       }
     }
     if (dist === Infinity) continue;
+    if (isHq) {
+      if (dist < bestHqDist || (dist === bestHqDist && (bestHq < 0 || t.id < bestHq))) {
+        bestHq = t.id;
+        bestHqDist = dist;
+      }
+      continue;
+    }
     const strength = garrisonStrength(t);
     if (
       strength < bestStrength ||
@@ -78,6 +99,7 @@ export function pickAttackTarget(
       bestDist = dist;
     }
   }
+  if (best < 0) best = bestHq;
   if (best < 0) return null;
 
   // Commit the total surplus (leave one keeper per source), at least one.
