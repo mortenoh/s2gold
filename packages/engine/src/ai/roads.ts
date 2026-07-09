@@ -76,6 +76,18 @@ export function planRoads(
   const player = state.playerId;
   const connected = flagsConnectedToHq(world, player);
   const stranded = unconnectedBuildings(world, player, connected);
+
+  // Reset the per-flag attempt counter for any flag that no longer needs a road:
+  // it has (re)connected to the HQ, or its stranded building is gone. Otherwise a
+  // maxed-out counter lingers on a reused door-flag id (execPlaceBuilding reuses
+  // an orphan door flag left by demolish) and demolishes the replacement before a
+  // single fresh attempt, and a building that reconnects then is later severed
+  // would re-enter already over budget.
+  const strandedFlags = new Set(stranded.map((b) => b.flagId));
+  for (const key of Object.keys(state.roadAttempts)) {
+    if (!strandedFlags.has(Number(key))) delete state.roadAttempts[Number(key)];
+  }
+
   if (stranded.length === 0) return [];
 
   // Connected flag nodes to aim roads at (sorted per-building by distance).
@@ -92,7 +104,9 @@ export function planRoads(
     const attempts = state.roadAttempts[b.flagId] ?? 0;
     if (attempts >= MAX_ROAD_ATTEMPTS) {
       // Stranded for good: demolish the stub so the plan can retry elsewhere.
+      // Clear the counter so a rebuild reusing this door flag id starts fresh.
       commands.push({ player, type: 'demolish', node: b.node });
+      delete state.roadAttempts[b.flagId];
       continue;
     }
     const targets = connectedNodes
@@ -101,7 +115,10 @@ export function planRoads(
     const target = targets[attempts % targets.length];
     state.roadAttempts[b.flagId] = attempts + 1;
     if (target === flag.node) continue;
-    const walk = findWalkPath(world, geom, rules, flag.node, target);
+    // blockFlags: route around interior flags so the planned road is one that
+    // execBuildRoad will accept (it rejects any road crossing another flag); the
+    // start and target flag nodes themselves stay valid path endpoints.
+    const walk = findWalkPath(world, geom, rules, flag.node, target, true);
     if (!walk || walk.length === 0) continue;
     commands.push({ player, type: 'buildRoad', path: [flag.node, ...walk] });
   }

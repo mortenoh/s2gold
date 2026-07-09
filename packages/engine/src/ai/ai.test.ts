@@ -24,10 +24,12 @@ import {
   type GameEvent,
   type MapJson,
 } from '../index';
-import { pickAttackTarget, pickBuildSite } from './index';
+import { flagsConnectedToHq, pickAttackTarget, pickBuildSite, planRoads } from './index';
+import { MAX_ROAD_ATTEMPTS } from './roads';
+import { applyCommand } from '../commands';
 import { encodeBase64, makeFlatMap } from '../harness';
-import { garrisonBuilding, spawnBuilding } from '../harness-economy';
-import { storeLive } from '../world';
+import { connectToHq, garrisonBuilding, spawnBuilding } from '../harness-economy';
+import { storeAlloc, storeLive } from '../world';
 
 /**
  * Flat all-meadow 2-player map with tree + granite clusters near the AI's HQ so
@@ -231,6 +233,74 @@ describe('P6 AI site selection', () => {
     expect(node).toBeGreaterThanOrEqual(0);
     // Chosen site is within a couple of steps of the HQ (nearest buildable ring).
     expect(geom.distance(hq, node)).toBeLessThanOrEqual(3);
+  });
+});
+
+describe('P6 AI road maintenance', () => {
+  const rules = GREENLAND_RULES;
+
+  it('resets a stale maxed attempt counter once the building is connected (finding 06)', () => {
+    const map = makeFlatMap(30, 30, 6, 6);
+    const world = createWorld(map, { seed: 1, players: 1 });
+    const geom = worldGeometry(world);
+    // A working building wired to the HQ by a road: it is not stranded.
+    const b = spawnBuilding(world, geom, geom.index(10, 6), 'woodcutter', 0, true);
+    connectToHq(world, geom, b.node, 0);
+    tickWorld(world); // queued buildRoad executes at tick start
+    expect(flagsConnectedToHq(world, 0).has(b.flagId)).toBe(true);
+
+    // A counter left maxed out from before the flag connected must not survive to
+    // demolish this now-connected building (nor the next one to reuse the flag id).
+    const ai = createAiState(0);
+    ai.roadAttempts[b.flagId] = MAX_ROAD_ATTEMPTS;
+    const cmds = planRoads(world, geom, rules, ai);
+    expect(cmds.some((c) => c.type === 'demolish')).toBe(false);
+    expect(ai.roadAttempts[b.flagId]).toBeUndefined();
+  });
+
+  it('clears the counter when it demolishes a permanently stranded building (finding 06)', () => {
+    const map = makeFlatMap(30, 30, 6, 6);
+    const world = createWorld(map, { seed: 1, players: 1 });
+    const geom = worldGeometry(world);
+    // A working building with no road home: stranded, at the attempt limit.
+    const b = spawnBuilding(world, geom, geom.index(20, 20), 'woodcutter', 0, true);
+    const ai = createAiState(0);
+    ai.roadAttempts[b.flagId] = MAX_ROAD_ATTEMPTS;
+    const cmds = planRoads(world, geom, rules, ai);
+    expect(cmds.some((c) => c.type === 'demolish' && c.node === b.node)).toBe(true);
+    // Cleared so a rebuild reusing this door-flag id starts with a fresh budget.
+    expect(ai.roadAttempts[b.flagId]).toBeUndefined();
+  });
+
+  it('routes a planned road around an interior flag so buildRoad accepts it (finding 07)', () => {
+    // HQ at (11,9) so its door flag lands at (12,10): the road target T.
+    const map = makeFlatMap(30, 30, 11, 9);
+    const world = createWorld(map, { seed: 1, players: 1 });
+    const geom = worldGeometry(world);
+    const T = geom.index(12, 10);
+    expect(world.flags.items[flagsConnectedToHq(world, 0).values().next().value!]!.node).toBe(T);
+
+    // Stranded building whose door flag S=(10,10) sits two steps west of T on the
+    // same even row: the unique 2-step route S->T runs through F=(11,10).
+    const b = spawnBuilding(world, geom, geom.index(9, 9), 'woodcutter', 0, true);
+    expect(world.flags.items[b.flagId]!.node).toBe(geom.index(10, 10));
+    // A junction flag squarely on that straight route (buildRoad rejects any road
+    // whose interior crosses a flag).
+    const F = geom.index(11, 10);
+    const fid = storeAlloc(world.flags, (id) => ({ id, node: F, player: 0, wares: [] }));
+    world.flagAtNode[F] = fid;
+
+    const ai = createAiState(0);
+    const cmds = planRoads(world, geom, rules, ai);
+    const road = cmds.find((c) => c.type === 'buildRoad');
+    expect(road).toBeDefined();
+    if (!road || road.type !== 'buildRoad') throw new Error('expected a buildRoad command');
+    // The planned road must not cross the interior flag F...
+    expect(road.path.slice(1, -1)).not.toContain(F);
+    // ...and applying it actually connects the building (execBuildRoad accepts it).
+    applyCommand(world, road);
+    tickWorld(world); // queued buildRoad executes at tick start
+    expect(flagsConnectedToHq(world, 0).has(b.flagId)).toBe(true);
   });
 });
 
