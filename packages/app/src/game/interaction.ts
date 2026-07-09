@@ -106,7 +106,6 @@ const BUILDINGS_BY_SIZE: Readonly<Record<BuildingSize, BuildingType[]>> = (() =>
   return groups;
 })();
 
-/** Board/stone cost rendered compactly, e.g. "2b 2s" or "4b". */
 /** Human-readable build cost, e.g. "2 boards" or "2 boards, 3 stone". */
 function costText(type: BuildingType): string {
   const cost = BUILD_COST[type];

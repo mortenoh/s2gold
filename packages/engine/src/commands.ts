@@ -551,6 +551,11 @@ function execDemolish(
     world.objectType[node] = OBJ_TYPE.none;
     world.buildings.items[bId] = null;
     world.buildings.free.push(bId);
+    // The door flag is deliberately left standing (matching the original: burning
+    // a building keeps its flag; the player removes it separately). With the
+    // building gone it is now an ordinary standalone flag — its roads and carriers
+    // keep working, and execDemolishFlag will remove it on a later demolish command
+    // since no building references its flagId anymore.
     events.emit({ type: 'BuildingDemolished', buildingId: bId, node, player });
     // Ownership is derived from buildings: a demolished HQ / harbor / occupied
     // military building stops projecting territory, so recompute (no-op and free
