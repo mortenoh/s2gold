@@ -33,7 +33,10 @@ describe('P2 economy scenario', () => {
       buildingsCompleted: 0,
     };
 
-    for (let i = 0; i < 2000; i++) {
+    // Budget sized for the researched (Normal-speed) timings: with 20 GF/edge
+    // walking and a 479 GF sawmill cycle the first sawmill-made plank lands
+    // around tick ~1400 on MISS200, so run comfortably past that.
+    for (let i = 0; i < 3000; i++) {
       const events: GameEvent[] = tickWorld(world);
       for (const e of events) {
         switch (e.type) {

@@ -75,7 +75,10 @@ describe('ware transport and carrier hand-off', () => {
     applyCommand(world, { tick: world.tick, player: 0, type: 'cheatSpawnWare', flag: flag.id, wareType: 'stone', count: 3 });
 
     let carrierSeen = false;
-    for (let i = 0; i < 300; i++) {
+    // A carrier now walks the realistic 20 GF/edge (CONSTANTS.md §4), so this
+    // 4-edge road shuttle needs a larger tick budget than the old placeholder
+    // (6 GF/edge) timing: first ware ~120 GF, each further ware ~160 GF.
+    for (let i = 0; i < 700; i++) {
       tickWorld(world);
       if (world.roads.items.some((r) => r && r.carrierId >= 0)) carrierSeen = true;
       if (world.players[0].wares.stone >= before + 3) break;
