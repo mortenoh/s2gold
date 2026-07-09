@@ -36,6 +36,7 @@ import { isCoastalLand } from './water';
 import {
   getFlag,
   storeAlloc,
+  storeFree,
   storeLive,
   type Building,
   type Flag,
@@ -418,19 +419,53 @@ function execPlaceBuilding(
 
 function execDemolish(world: World, events: EventSink, player: number, node: number): void {
   const bId = world.buildingAtNode[node];
-  if (bId < 0) return;
-  const b = world.buildings.items[bId] as Building;
-  if (b.player !== player || b.type === BUILDING.headquarters) return;
-  // Remove the bound worker settler, if any.
-  if (b.workerId >= 0 && world.settlers.items[b.workerId]) {
-    world.settlers.items[b.workerId] = null;
-    world.settlers.free.push(b.workerId);
+  if (bId >= 0) {
+    const b = world.buildings.items[bId] as Building;
+    if (b.player !== player || b.type === BUILDING.headquarters) return;
+    // Remove the bound worker settler, if any.
+    if (b.workerId >= 0 && world.settlers.items[b.workerId]) {
+      world.settlers.items[b.workerId] = null;
+      world.settlers.free.push(b.workerId);
+    }
+    world.buildingAtNode[node] = -1;
+    world.objectType[node] = OBJ_TYPE.none;
+    world.buildings.items[bId] = null;
+    world.buildings.free.push(bId);
+    events.emit({ type: 'BuildingDemolished', buildingId: bId, node, player });
+    return;
   }
-  world.buildingAtNode[node] = -1;
-  world.objectType[node] = OBJ_TYPE.none;
-  world.buildings.items[bId] = null;
-  world.buildings.free.push(bId);
-  events.emit({ type: 'BuildingDemolished', buildingId: bId, node, player });
+  // No building here: demolish a standalone flag and the roads it anchors.
+  execDemolishFlag(world, player, node);
+}
+
+/**
+ * Remove a player's flag and every road that ends at it (freeing each road's
+ * carrier and dropping any wares parked on the flag). A flag that a building
+ * depends on — its door flag — cannot be removed while the building stands; the
+ * building must be demolished instead, matching the original.
+ */
+function execDemolishFlag(world: World, player: number, node: number): void {
+  const flagId = world.flagAtNode[node];
+  if (flagId < 0) return;
+  const flag = world.flags.items[flagId];
+  if (!flag || flag.player !== player) return;
+  for (const b of storeLive(world.buildings)) {
+    if (b.flagId === flagId) return; // door flag of a standing building
+  }
+  // Roads anchored here: free their carriers, then the road itself.
+  for (const road of [...storeLive(world.roads)]) {
+    if (road.flagA !== flagId && road.flagB !== flagId) continue;
+    if (road.carrierId >= 0 && world.settlers.items[road.carrierId]) {
+      world.settlers.items[road.carrierId] = null;
+      world.settlers.free.push(road.carrierId);
+    }
+    storeFree(world.roads, road.id);
+  }
+  // Drop wares parked on the flag (in transit wares re-route next tick).
+  for (const wid of flag.wares) storeFree(world.wares, wid);
+  world.flagAtNode[node] = -1;
+  storeFree(world.flags, flagId);
+  // No event needed: roads/flags are re-derived from world state every frame.
 }
 
 function execCheatSpawnWare(
