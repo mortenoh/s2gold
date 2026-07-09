@@ -68,8 +68,12 @@ void main() {
   if (vMaskUv.x >= 0.0) {
     vec4 m = texture(uPmask, vMaskUv);
     if (m.a > 0.5) {
-      // R channel is the player-colour shade; replace pixel with tint * shade.
-      base = vec4(vTint * m.r, base.a);
+      // The atlas holds the player pixel in the default (blue) ramp at its
+      // shade; take the shade's brightness from the strongest channel (the blue
+      // ramp's hue, so a dark cap stays visible rather than crushing to black
+      // like luminance would) and re-tint it to this player's colour.
+      float shade = max(base.r, max(base.g, base.b));
+      base = vec4(vTint * shade, base.a);
     }
   } else {
     // Unmasked sprites (map objects, un-tinted units) modulate by the tint so
@@ -141,6 +145,26 @@ export interface SpriteDrawStats {
   readonly quads: number;
   /** GL draw calls issued (one per contiguous same-page run). */
   readonly drawCalls: number;
+}
+
+/**
+ * Redraw a mask image onto a transparent canvas of the atlas page's size,
+ * anchored top-left, so a pmask packed to smaller bounds samples 1:1 under the
+ * atlas uv. Only the alpha channel (player-colour membership) is relied upon, so
+ * canvas compositing of the tiny shade bytes is immaterial.
+ */
+function padToPage(mask: AtlasPage, width: number, height: number): TexImageSource {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return mask;
+  ctx.imageSmoothingEnabled = false; // 1:1 copy — keep the mask's hard edges
+  ctx.clearRect(0, 0, width, height);
+  // AtlasPage is a TexImageSource (loaded as an <img>); narrow to the drawable
+  // subset — ImageData, the one non-drawable member, is never used here.
+  ctx.drawImage(mask as Exclude<TexImageSource, ImageData>, 0, 0);
+  return canvas;
 }
 
 function compile(gl: WebGL2RenderingContext, type: number, source: string): WebGLShader {
@@ -275,7 +299,16 @@ export class SpriteRenderer {
         const mtex = gl.createTexture();
         if (!mtex) throw new Error('failed to allocate pmask texture');
         gl.bindTexture(gl.TEXTURE_2D, mtex);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, mask);
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+        // The pmask page is packed to its own (often smaller) bounds but shares
+        // the atlas's top-left origin. Masked quads sample it with the atlas uv,
+        // so pad it up to the atlas page size — otherwise the mask is stretched
+        // and lands on the wrong pixels (settlers go black facing away).
+        const src =
+          mask.width === page.width && mask.height === page.height
+            ? mask
+            : padToPage(mask, page.width, page.height);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
