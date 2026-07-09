@@ -115,7 +115,41 @@ function stepCarrier(world: World, carrier: Settler): void {
     if (!arrived) return;
     const dropFlagId = carrier.node === nodeA ? road.flagA : road.flagB;
     const flag = getFlag(world, dropFlagId);
-    if (flag.wares.length >= FLAG_WARE_CAPACITY) return; // wait for a slot
+    if (flag.wares.length >= FLAG_WARE_CAPACITY) {
+      // Full flag: swap with a waiting ware headed back across this road (S2
+      // carriers exchange wares at flags). The slot count stays constant, and
+      // it breaks the two-full-flags gridlock where every carrier waits for a
+      // slot only another waiting carrier could free. Deterministic pick:
+      // highest transport priority first, then queue order.
+      const backFlag = dropFlagId === road.flagA ? road.flagB : road.flagA;
+      const prio = world.players[road.player]?.transportPriority;
+      let swapIdx = -1;
+      let bestPrio = Infinity;
+      for (let i = 0; i < flag.wares.length; i++) {
+        const w = world.wares.items[flag.wares[i]];
+        if (!w || w.nextFlag !== backFlag) continue;
+        const p = prio ? (prio[w.type] ?? 999) : 999;
+        if (p < bestPrio) {
+          bestPrio = p;
+          swapIdx = i;
+        }
+      }
+      if (swapIdx < 0) return; // nothing to exchange: wait for a slot
+      const outWare = world.wares.items[flag.wares[swapIdx]];
+      const myWare = world.wares.items[carrier.carryingWareId];
+      if (!outWare || !myWare) return;
+      flag.wares[swapIdx] = carrier.carryingWareId; // ours takes its slot
+      myWare.loc = 'flag';
+      myWare.locId = dropFlagId;
+      myWare.nextFlag = -1; // dispatch recomputes from the new flag
+      outWare.loc = 'carried';
+      outWare.locId = carrier.id;
+      carrier.carryingWareId = outWare.id;
+      const backNode = dropFlagId === road.flagA ? nodeB : nodeA;
+      carrier.targetNode = backNode;
+      beginWalk(carrier, roadSubPath(road, carrier.node, backNode), TICKS.carrierPerEdge);
+      return;
+    }
     const wareId = carrier.carryingWareId;
     const ware = world.wares.items[wareId];
     if (ware) {

@@ -67,6 +67,12 @@ export { findWalkPath, findFlagRoute, buildFlagGraph, roadBetween } from './path
 export type { GameEvent } from './events';
 export * from './constants';
 
+// --- AI opponent (P6) ------------------------------------------------------
+// Enable a computer player by creating one AiState per AI-controlled player and
+// calling runAi(world, state) once per frame just before tickWorld. See ai/.
+export { createAiState, stepAi, runAi } from './ai';
+export type { AiOptions, AiState } from './ai';
+
 /** Geometry helper for a world (recreated on demand; cheap). */
 export function worldGeometry(world: World): Geometry {
   return new Geometry(world.width, world.height);
