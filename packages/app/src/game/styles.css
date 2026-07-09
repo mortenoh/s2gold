@@ -89,6 +89,63 @@ body {
   cursor: pointer;
 }
 
+/* Custom dropdown (native select popups use the OS font and ignore CSS). */
+.dropdown {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.dropdown-button {
+  min-width: 150px;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.dropdown-button::after {
+  content: ' \25BE';
+  color: #9aa;
+}
+
+.dropdown-list {
+  /* Fixed so the popup escapes the HUD bar's overflow: hidden clip box;
+     coordinates are set from the button rect when opening. */
+  position: fixed;
+  z-index: 30;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  min-width: 240px;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: rgba(24, 24, 30, 0.97);
+  border: 1px solid #4a4a55;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.dropdown-list [role='option'] {
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  color: #ddd;
+}
+
+.dropdown-list [role='option']:hover,
+.dropdown-list [role='option'].highlighted {
+  background: #3f6fb0;
+  color: #fff;
+}
+
+.dropdown-list [role='option'].selected {
+  color: #ffd479;
+}
+
 .hud-top .fps {
   margin-left: auto;
   font-variant-numeric: tabular-nums;
@@ -619,4 +676,117 @@ body {
   background: #14141a;
   padding: 2px 5px;
   border-radius: 4px;
+}
+
+/* --- Campaign: objectives panel + victory overlay ------------------------- */
+.campaign-obj-panel {
+  position: absolute;
+  top: 52px;
+  right: 8px;
+  z-index: 30;
+  width: 280px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 10px 12px;
+  background: rgba(20, 20, 24, 0.97);
+  border: 1px solid #c8a24a;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+  color: #ddd;
+  font-size: 13px;
+}
+
+.campaign-obj-panel[hidden] {
+  display: none;
+}
+
+.campaign-obj-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.campaign-obj-title {
+  font-weight: 700;
+  color: #f0c84a;
+  font-size: 14px;
+}
+
+.campaign-obj-head button {
+  background: transparent;
+  color: #aaa;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+}
+
+.campaign-obj-text {
+  color: #eee;
+  margin-bottom: 8px;
+}
+
+.campaign-obj-win {
+  color: #9aa;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.campaign-obj-progress {
+  color: #f0c84a;
+  font-weight: 700;
+}
+
+.campaign-victory {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.campaign-victory-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 44px;
+  background: rgba(20, 16, 8, 0.96);
+  border: 1px solid #f0c84a;
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  text-align: center;
+}
+
+.campaign-victory-title {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  color: #f0c84a;
+  text-shadow: 0 2px 0 #000;
+}
+
+.campaign-victory-sub {
+  color: #f4ecd0;
+  font-size: 16px;
+}
+
+.campaign-victory-note {
+  color: #9aa;
+  font-size: 12px;
+  max-width: 320px;
+}
+
+.campaign-victory-card .menu-start-btn {
+  display: inline-block;
+  margin-top: 8px;
+  background: #f0c84a;
+  color: #1a1204;
+  font-weight: 700;
+  padding: 8px 22px;
+  border-radius: 4px;
+  text-decoration: none;
 }

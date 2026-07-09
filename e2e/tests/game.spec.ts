@@ -170,15 +170,16 @@ test('switching maps keeps rendering', async ({ page }) => {
   await page.goto('/game.html');
   await expect(page.locator('body[data-map-ready]')).toBeAttached({ timeout: 15_000 });
 
-  // Pick a different map than the default campaign one.
-  const options = page.getByTestId('map-select').locator('option');
+  // Pick a different map than the default campaign one (custom dropdown).
+  await page.getByTestId('map-select').click();
+  const options = page.locator('.dropdown-list [role="option"]');
   const values = await options.evaluateAll((opts) =>
-    opts.map((o) => (o as HTMLOptionElement).value),
+    opts.map((o) => (o as HTMLElement).dataset.value ?? ''),
   );
-  const target = values.find((v) => v !== 'maps_miss200');
+  const target = values.find((v) => v && v !== 'maps_miss200');
   test.skip(!target, 'only one converted map available');
 
-  await page.getByTestId('map-select').selectOption(target ?? '');
+  await page.locator(`.dropdown-list [data-value="${target ?? ''}"]`).click();
   await expect(page.locator('body')).toHaveAttribute('data-map-ready', target ?? '', {
     timeout: 15_000,
   });

@@ -39,7 +39,10 @@ import { Interaction } from './interaction';
 import { MilitaryPanel } from './military-ui';
 import { SaveMenu } from './save-ui';
 import { StatsPanel } from './stats-ui';
+import { createDropdown } from '../ui/dropdown';
 import { AudioEngine, positional } from './audio';
+import { CampaignController } from './campaign-ui';
+import { chapterById } from '../menu/campaign-data';
 
 /** World-px pan speed per second when holding an arrow key. */
 const KEY_PAN_SPEED = 600;
@@ -166,7 +169,10 @@ async function boot(): Promise<void> {
 
   clear(root);
   const canvas = el('canvas', { class: 'game-canvas', attrs: { 'data-testid': 'game-canvas' } });
-  const mapSelect = el('select', { attrs: { 'data-testid': 'map-select' } });
+  const mapSelect = createDropdown([], '', (name) => {
+    const entry = index.find((m) => m.name === name);
+    if (entry) void switchMap(entry);
+  }, { 'data-testid': 'map-select' });
   const zoomButton = el('button', {
     text: 'Zoom 1x',
     attrs: { 'data-testid': 'zoom-toggle', type: 'button' },
@@ -279,34 +285,33 @@ async function boot(): Promise<void> {
   window.addEventListener('pointerdown', unlockAudio);
   window.addEventListener('keydown', unlockAudio);
 
-  for (const entry of index) {
-    mapSelect.append(
-      el('option', {
-        text: `${entry.title || entry.name} (${entry.width}x${entry.height}, ${entry.terrain_name})`,
-        attrs: { value: entry.name },
-      }),
-    );
-  }
+  mapSelect.setOptions(
+    index.map((entry) => ({
+      value: entry.name,
+      label: `${entry.title || entry.name} (${entry.width}x${entry.height}, ${entry.terrain_name})`,
+    })),
+  );
 
+  const hudTop = el(
+    'div',
+    { class: 'hud-top' },
+    el('a', { href: '/', text: 's2gold' }),
+    mapTitle,
+    mapSelect.element,
+    zoomButton,
+    pauseButton,
+    menuButton,
+    fogButton,
+    statsButton,
+    ...speedButtons,
+    audioControls,
+    resources,
+    tickLabel,
+    fps,
+  );
   root.append(
     canvas,
-    el(
-      'div',
-      { class: 'hud-top' },
-      el('a', { href: '/', text: 's2gold' }),
-      mapTitle,
-      mapSelect,
-      zoomButton,
-      pauseButton,
-      menuButton,
-      fogButton,
-      statsButton,
-      ...speedButtons,
-      audioControls,
-      resources,
-      tickLabel,
-      fps,
-    ),
+    hudTop,
     status, // transient hint toast, floats below the bar (see .status-toast)
     el('div', { class: 'minimap-box' }, minimapCanvas),
   );
@@ -405,7 +410,7 @@ async function boot(): Promise<void> {
     currentMap = entry.name;
     currentMapTitle = map.title || entry.name;
     mapTitle.textContent = map.title || entry.name;
-    mapSelect.value = entry.name;
+    mapSelect.setValue(entry.name);
     zoomButton.textContent = zoomLabel();
     document.title = `s2gold — ${map.title || entry.name}`;
     const url = new URL(window.location.href);
@@ -545,10 +550,7 @@ async function boot(): Promise<void> {
     applyFog();
   });
 
-  mapSelect.addEventListener('change', () => {
-    const entry = index.find((m) => m.name === mapSelect.value);
-    if (entry) void switchMap(entry);
-  });
+  // Map switching is handled by the dropdown's onChange callback.
 
   // --- Camera controls (wheel zoom, drag, arrows) ---------------------------
 
@@ -846,6 +848,18 @@ async function boot(): Promise<void> {
     : [];
   setSpeed(1);
   await switchMap(pickMap(index, query), aiPlayers);
+
+  // Campaign mode (/play/<map>?campaign=<id>): show the Objectives panel and
+  // check the chapter's win condition against the live session.
+  const campaignParam = params.get('campaign');
+  const chapter = campaignParam ? chapterById(Number.parseInt(campaignParam, 10)) : undefined;
+  if (chapter) {
+    document.title = `s2gold — ${chapter.title}`;
+    const campaign = new CampaignController({ root, session: () => session, chapter });
+    hudTop.append(campaign.button);
+    campaign.start();
+  }
+
   requestAnimationFrame(frame);
 }
 
