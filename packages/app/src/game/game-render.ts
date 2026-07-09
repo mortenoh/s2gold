@@ -19,6 +19,8 @@ import {
   BUILDING_DEFS,
   buildingDef,
   DIRECTIONS,
+  resourceAmount,
+  resourceType,
   TICKS,
   type Building,
   type BuildingType,
@@ -677,6 +679,53 @@ export function signMarkers(world: World, res: number): RoadSegment[] {
       out.push({ x0: a.x, y0: cy - s, x1: a.x, y1: cy + s });
       out.push({ x0: a.x - s, y0: cy, x1: a.x + s, y1: cy });
     }
+  }
+  return out;
+}
+
+/**
+ * Markers for `player`'s mines that have run dry: a working mine with no more of
+ * its resource left within reach can never produce again (the local deposit is
+ * exhausted), so flag it — drawn as a small red bar above the building — to hint
+ * the player to demolish and rebuild on a fresh deposit.
+ */
+/**
+ * True when the working mine at `node` has exhausted its reachable deposit — no
+ * more of its resource (with amount > 0) remains within its radius, so it can
+ * never produce again. False for non-mines and construction sites.
+ */
+export function mineDepletedAt(world: World, geom: Geometry, node: number): boolean {
+  const bId = world.buildingAtNode[node];
+  const b = bId >= 0 ? world.buildings.items[bId] : null;
+  if (!b || b.state !== 'working') return false;
+  const def = buildingDef(b.type);
+  if (!def || def.kind !== 'mine') return false;
+  const W = world.width;
+  const H = world.height;
+  const r = def.radius ?? 2;
+  const mx = b.node % W;
+  const my = Math.floor(b.node / W);
+  for (let dy = -r; dy <= r; dy++) {
+    for (let dx = -r; dx <= r; dx++) {
+      const n = ((my + dy + H) % H) * W + ((mx + dx + W) % W);
+      if (geom.distance(b.node, n) > r) continue;
+      if (resourceType(world.resource[n]) === def.resource && resourceAmount(world.resource[n]) > 0) {
+        return false; // ore still reachable
+      }
+    }
+  }
+  return true;
+}
+
+export function depletedMineMarkers(world: World, geom: Geometry, player: number): RoadSegment[] {
+  const out: RoadSegment[] = [];
+  for (const b of world.buildings.items) {
+    if (!b || b.player !== player || !mineDepletedAt(world, geom, b.node)) continue;
+    // Exhausted: a short red bar (with a slash) floating above the mine.
+    const a = nodeAnchor(world, b.node);
+    const top = a.y - 46;
+    out.push({ x0: a.x - 6, y0: top, x1: a.x + 6, y1: top });
+    out.push({ x0: a.x - 5, y0: top - 4, x1: a.x + 5, y1: top + 4 });
   }
   return out;
 }

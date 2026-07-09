@@ -15,7 +15,7 @@ import {
 } from '@s2gold/engine';
 import type { Camera } from '@s2gold/renderer';
 import { el } from '../lib/dom';
-import { nodeAtWorld } from './game-render';
+import { mineDepletedAt, nodeAtWorld } from './game-render';
 import type { GameSession } from './session';
 
 /**
@@ -321,7 +321,12 @@ export class Interaction {
       // Name the building so it's obvious what it is (the sprites can be hard to
       // tell apart), noting when it is still under construction.
       const name = BUILDING_LABEL[building.type] ?? titleCase(building.type);
-      const suffix = building.state === 'site' ? ' (building)' : '';
+      const suffix =
+        building.state === 'site'
+          ? ' (building)'
+          : mineDepletedAt(session.world, session.geom, node)
+            ? ' (depleted)'
+            : '';
       items.push(this.categoryLabel(`${name}${suffix}`));
       // Offer road-building straight from the building: its flag (SE of the
       // building node) is a small target that's easy to miss, and connecting a

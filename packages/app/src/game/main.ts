@@ -27,6 +27,7 @@ import { GameSession, SPEEDS, type Speed } from './session';
 import {
   buildDynamics,
   borderStoneSegments,
+  depletedMineMarkers,
   disconnectedBuildingMarkers,
   garrisonDotSegments,
   signMarkers,
@@ -940,6 +941,9 @@ async function boot(): Promise<void> {
       // receive materials, so a site there never builds). Bright orange "!".
       const disc = disconnectedBuildingMarkers(session.world, session.localPlayer);
       if (disc.length > 0) roads.render(camera, disc, [1.0, 0.55, 0.0, 0.95], false);
+      // Exhausted mines: a red bar so the player knows to rebuild on fresh ore.
+      const dry = depletedMineMarkers(session.world, session.geom, session.localPlayer);
+      if (dry.length > 0) roads.render(camera, dry, [1.0, 0.2, 0.2, 0.95], false);
       // Geologist survey signs, coloured by the ore found (or a faint X for none).
       // Drawn on-ground (depth-tested) so buildings and trees on the mountain
       // occlude them instead of the signs floating over everything.
