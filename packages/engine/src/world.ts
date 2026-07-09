@@ -315,6 +315,10 @@ export interface World {
   cropFields: Array<{ node: number; matureTick: number }>;
   /** Pending expeditions being assembled at harbors (P7). */
   expeditions: Expedition[];
+  /** Geologist survey signs: a mountain node and the resource kind found there
+   * (RESOURCE.*; 0 = nothing). Placed by geologists so the player can see where
+   * to build mines. */
+  signs: Array<{ node: number; res: number }>;
   // Command queue (pending, applied at their due tick).
   commands: Command[];
   seqCounter: number;
@@ -423,6 +427,7 @@ export function createWorld(map: MapJson, options: CreateWorldOptions): World {
     saplings: [],
     cropFields: [],
     expeditions: [],
+    signs: [],
     commands: [],
     seqCounter: 0,
   };

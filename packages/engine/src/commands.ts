@@ -16,6 +16,7 @@ import {
   isFieldObject,
   isTreeType,
   isGraniteType,
+  JOB,
   NUM_SOLDIER_RANKS,
   OBJ_TYPE,
   ownerPlayer,
@@ -24,6 +25,8 @@ import {
   type BuildingType,
   type WareType,
 } from './constants';
+import { findWalkPath } from './pathfinding';
+import { beginWalk, spawnSettler } from './systems/movement';
 import type { EventSink } from './events';
 import { Geometry } from './geometry';
 import {
@@ -118,6 +121,14 @@ export type Command =
       type: 'startExpedition';
       harborId: number;
       targetSpot: number;
+    }
+  | {
+      // Send a geologist from a flag to survey nearby mountains for ore.
+      tick: number;
+      player: number;
+      seq: number;
+      type: 'sendGeologist';
+      flagNode: number;
     };
 
 /** Distributive Omit that preserves discriminated-union members. */
@@ -212,6 +223,9 @@ function executeCommand(
       break;
     case 'startExpedition':
       execStartExpedition(world, geom, cmd.player, cmd.harborId, cmd.targetSpot);
+      break;
+    case 'sendGeologist':
+      execSendGeologist(world, geom, rules, events, cmd.player, cmd.flagNode);
       break;
   }
 }
@@ -396,6 +410,39 @@ function execBuildRoad(
     carrierId: -1,
   }));
   events.emit({ type: 'RoadBuilt', roadId: id, from: start, to: end, player });
+}
+
+/**
+ * Send a geologist from `flagNode` to survey nearby mountains. Costs one Helper
+ * (drawn from the pool); the geologist walks to the flag, surveys the ore under
+ * mountains within range, then returns (see systems/geologist.ts). A no-op if the
+ * flag isn't the player's or no Helper is free.
+ */
+function execSendGeologist(
+  world: World,
+  geom: Geometry,
+  rules: TerrainRules,
+  events: EventSink,
+  player: number,
+  flagNode: number,
+): void {
+  const flagId = world.flagAtNode[flagNode];
+  if (flagId < 0) return;
+  const flag = world.flags.items[flagId];
+  if (!flag || flag.player !== player) return;
+  const pl = world.players[player];
+  if (!pl || (pl.workers[JOB.carrier] ?? 0) <= 0) return; // need a Helper to send
+  const hq = pl.hqBuildingId >= 0 ? world.buildings.items[pl.hqBuildingId] : null;
+  const startNode = hq ? hq.node : flag.node;
+  const g = spawnSettler(world, JOB.geologist, player, startNode);
+  g.state = 'toWork';
+  g.targetNode = flag.node; // walk to the flag first; survey happens on arrival
+  g.homeBuildingId = hq ? hq.id : -1;
+  const path = findWalkPath(world, geom, rules, startNode, flag.node);
+  if (path) beginWalk(g, path, TICKS.walkPerEdge);
+  else g.node = flag.node;
+  pl.workers[JOB.carrier]--;
+  events.emit({ type: 'SettlerSpawned', settlerId: g.id, job: JOB.geologist, player });
 }
 
 function execPlaceBuilding(

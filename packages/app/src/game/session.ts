@@ -526,6 +526,11 @@ export class GameSession {
     applyCommand(this.world, { type: 'buildRoad', player: 0, path });
   }
 
+  /** Send a geologist from a flag to survey nearby mountains for ore. */
+  sendGeologist(flagNode: number): void {
+    applyCommand(this.world, { type: 'sendGeologist', player: 0, flagNode });
+  }
+
   demolish(node: number): void {
     applyCommand(this.world, { type: 'demolish', player: 0, node });
   }

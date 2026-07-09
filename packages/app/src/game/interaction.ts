@@ -322,6 +322,7 @@ export class Interaction {
       }
     } else if (flagId >= 0) {
       items.push(this.action('Build road', () => this.startRoad(node)));
+      items.push(this.action('Send geologist', () => session.sendGeologist(node)));
       items.push(this.action('Demolish flag', () => session.demolish(node)));
     } else {
       if (session.canFlag(node)) {

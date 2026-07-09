@@ -13,6 +13,7 @@ import { Geometry } from './geometry';
 import { GREENLAND_RULES, type TerrainRules } from './terrain';
 import { runCarriers } from './systems/carriers';
 import { runConstruction } from './systems/construction';
+import { runGeologists } from './systems/geologist';
 import { runPopulation } from './systems/recruit';
 import { runProduction } from './systems/production';
 import { runDispatch } from './systems/dispatch';
@@ -123,6 +124,7 @@ export function tickWorld(world: World, rules: TerrainRules = GREENLAND_RULES): 
   runMilitary(world, geom, rules, events); // 4. military (occupy/fight/promote/catapult)
   runDispatch(world, geom, events); // 5a. ware routing + delivery
   runCarriers(world, events); // 5b. carriers
+  runGeologists(world, geom, rules, events); // 5b'. geologist survey walks
   runSeafaring(world, geom, events); // 5c. ships, sea transport, expeditions (P7)
   world.tick++;
   return events.drain(); // 6. events

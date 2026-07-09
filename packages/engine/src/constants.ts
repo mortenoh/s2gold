@@ -139,6 +139,7 @@ export const JOB = {
   wellman: 'wellman', // Helper-staffed well/lookout spots
   scout: 'scout',
   shipwright: 'shipwright', // P7: builds ships at the shipyard (CONSTANTS.md §3 id 27)
+  geologist: 'geologist', // §6 Geologist: surveys mountains for ore (drawn from the Helper pool)
 } as const;
 export type JobType = string;
 
@@ -146,8 +147,13 @@ export const JOB_TYPES: readonly JobType[] = [
   JOB.carrier, JOB.builder, JOB.woodcutter, JOB.forester, JOB.sawmiller, JOB.stonemason,
   JOB.fisher, JOB.hunter, JOB.farmer, JOB.miller, JOB.baker, JOB.butcher, JOB.miner,
   JOB.brewer, JOB.pigbreeder, JOB.donkeybreeder, JOB.ironfounder, JOB.minter,
-  JOB.metalworker, JOB.armorer, JOB.wellman, JOB.scout, JOB.shipwright,
+  JOB.metalworker, JOB.armorer, JOB.wellman, JOB.scout, JOB.shipwright, JOB.geologist,
 ];
+
+/** How far from the sent flag a geologist surveys mountain nodes for ore. */
+export const GEOLOGIST_RADIUS = 6;
+/** Ticks a geologist spends surveying once it reaches the flag. */
+export const GEOLOGIST_SURVEY_TICKS = 60;
 
 /**
  * Tool ware required to recruit each civilian job from a Helper (CONSTANTS.md §3

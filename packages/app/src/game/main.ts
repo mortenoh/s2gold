@@ -29,6 +29,7 @@ import {
   borderStoneSegments,
   disconnectedBuildingMarkers,
   garrisonDotSegments,
+  signMarkers,
   nodeAnchor,
   nodeMarkerSegments,
   pathSegments,
@@ -60,6 +61,18 @@ const ANIM_FRAME_MS = 150;
 const WALK_FRAME_MS = 90;
 /** Fixed RNG seed so the economy is reproducible across runs. */
 const GAME_SEED = 0x5eed;
+
+/**
+ * Geologist survey-sign colours by resource kind (RESOURCE.*): coal 3, iron 1,
+ * gold 2, granite 4, nothing 0. Each is drawn in its own overlay pass.
+ */
+const SIGN_COLORS: readonly (readonly [number, readonly [number, number, number, number]])[] = [
+  [3, [0.12, 0.12, 0.14, 0.95]], // coal — near-black
+  [1, [0.9, 0.5, 0.25, 0.95]], // iron — orange
+  [2, [0.98, 0.85, 0.15, 0.95]], // gold — yellow
+  [4, [0.7, 0.7, 0.78, 0.95]], // granite — light grey
+  [0, [0.55, 0.55, 0.55, 0.8]], // nothing — faint X
+];
 
 /** BOB archive keys registered once for the settler layers. */
 const JOBS_ARCHIVE = 'jobs';
@@ -899,6 +912,11 @@ async function boot(): Promise<void> {
       // receive materials, so a site there never builds). Bright orange "!".
       const disc = disconnectedBuildingMarkers(session.world, session.localPlayer);
       if (disc.length > 0) roads.render(camera, disc, [1.0, 0.55, 0.0, 0.95], false);
+      // Geologist survey signs, coloured by the ore found (or a faint X for none).
+      for (const [res, color] of SIGN_COLORS) {
+        const marks = signMarkers(session.world, res);
+        if (marks.length > 0) roads.render(camera, marks, color, false);
+      }
       // Live road-build preview on top: translucent path + an end marker (green
       // when a road can be built to the hovered node, red when it cannot).
       const preview = interaction.roadPreview;

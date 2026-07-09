@@ -648,6 +648,36 @@ export function disconnectedBuildingMarkers(world: World, player: number): RoadS
   return out;
 }
 
+/**
+ * Geologist survey-sign markers for one resource kind: a small mark on every
+ * surveyed mountain node that holds that resource (`res` is a RESOURCE.* value;
+ * 0 = nothing). Ore signs are a filled diamond, "nothing" a small X, both in the
+ * caller's colour. Draw one call per resource kind (each has its own colour).
+ */
+export function signMarkers(world: World, res: number): RoadSegment[] {
+  const out: RoadSegment[] = [];
+  for (const sign of world.signs) {
+    if (sign.res !== res) continue;
+    const a = nodeAnchor(world, sign.node);
+    const cy = a.y - 6; // float just above the ground node
+    const s = 4;
+    if (res === 0) {
+      // Nothing here: a small X.
+      out.push({ x0: a.x - s, y0: cy - s, x1: a.x + s, y1: cy + s });
+      out.push({ x0: a.x - s, y0: cy + s, x1: a.x + s, y1: cy - s });
+    } else {
+      // A filled diamond (drawn as edges + an inner cross to read as solid).
+      out.push({ x0: a.x, y0: cy - s, x1: a.x + s, y1: cy });
+      out.push({ x0: a.x + s, y0: cy, x1: a.x, y1: cy + s });
+      out.push({ x0: a.x, y0: cy + s, x1: a.x - s, y1: cy });
+      out.push({ x0: a.x - s, y0: cy, x1: a.x, y1: cy - s });
+      out.push({ x0: a.x, y0: cy - s, x1: a.x, y1: cy + s });
+      out.push({ x0: a.x - s, y0: cy, x1: a.x + s, y1: cy });
+    }
+  }
+  return out;
+}
+
 /** Resolve the carrier overlay sprite key for a ware type + BOB direction. */
 function wareOverlay(carrier: BobAtlas, ware: WareType, dir: number, step = 0): number {
   const job = WARE_JOB[ware];

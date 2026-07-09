@@ -21,6 +21,7 @@ export function deserializeWorld(data: string): World {
   if (parsed.version !== WORLD_VERSION) {
     throw new Error(`unsupported world version ${parsed.version} (expected ${WORLD_VERSION})`);
   }
+  parsed.signs ??= []; // added after some saves were written
   return parsed;
 }
 
