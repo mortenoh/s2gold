@@ -220,6 +220,23 @@ async function boot(): Promise<void> {
     text: 'Fog: on',
     attrs: { 'data-testid': 'fog-toggle', type: 'button', title: 'Toggle fog of war' },
   });
+  // The fog toggle is a view preference, persisted like the audio prefs so it
+  // survives a reload or loading a save (the save file holds only game state).
+  const FOG_LS_KEY = 's2gold.view.fog';
+  const readFogPref = (): boolean => {
+    try {
+      return localStorage.getItem(FOG_LS_KEY) !== '0';
+    } catch {
+      return true;
+    }
+  };
+  const writeFogPref = (on: boolean): void => {
+    try {
+      localStorage.setItem(FOG_LS_KEY, on ? '1' : '0');
+    } catch {
+      /* storage may be unavailable (private mode) — ignore. */
+    }
+  };
   const statsButton = el('button', {
     text: 'Stats',
     attrs: { 'data-testid': 'stats-toggle', type: 'button', title: 'In-game statistics' },
@@ -418,6 +435,7 @@ async function boot(): Promise<void> {
     const ai = aiPlayers.filter((n) => n > 0 && n < entry.players);
     const playerCount = ai.length > 0 ? Math.max(...ai) + 1 : undefined;
     session = new GameSession(map.engineMap, GAME_SEED, playerCount, ai);
+    session.fogEnabled = readFogPref();
     sprites.setMap(map.data.width, map.data.height, map.data.heightLayer);
     roads.setMap(map.data.width, map.data.height);
     rebuildStatics();
@@ -517,6 +535,7 @@ async function boot(): Promise<void> {
       buildingsOf: (player) => s.buildingsOf(player),
       setFog: (on) => {
         s.setFog(on);
+        writeFogPref(on);
         applyFog();
       },
       ownerOf: (node) => s.ownerOf(node),
@@ -571,7 +590,9 @@ async function boot(): Promise<void> {
   /** Push the session's fog state to the terrain renderer + update the button. */
   function applyFog(): void {
     if (!session) return;
-    renderer.setFog(session.fogEnabled ? session.visibility : null);
+    const vis = session.fogEnabled ? session.visibility : null;
+    renderer.setFog(vis);
+    sprites.setFog(vis);
     session.fogDirty = false;
     fogButton.textContent = session.fogEnabled ? 'Fog: on' : 'Fog: off';
     fogButton.classList.toggle('active', session.fogEnabled);
@@ -592,6 +613,7 @@ async function boot(): Promise<void> {
   fogButton.addEventListener('click', () => {
     if (!session) return;
     session.setFog(!session.fogEnabled);
+    writeFogPref(session.fogEnabled);
     applyFog();
   });
 

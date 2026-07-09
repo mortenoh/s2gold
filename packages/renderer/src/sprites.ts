@@ -71,6 +71,10 @@ void main() {
       // R channel is the player-colour shade; replace pixel with tint * shade.
       base = vec4(vTint * m.r, base.a);
     }
+  } else {
+    // Unmasked sprites (map objects, un-tinted units) modulate by the tint so
+    // fog of war can darken them; NO_TINT (1,1,1) leaves them unchanged.
+    base = vec4(base.rgb * vTint, base.a);
   }
   if (base.a < 0.02) discard;
   outColor = base;
@@ -96,12 +100,22 @@ interface RegisteredAtlas {
   readonly pmaskTextures: readonly (WebGLTexture | null)[];
 }
 
-/** A static object with its base world anchor precomputed once. */
+/** A static object with its base world anchor + node index precomputed once. */
 interface PlacedStatic {
   readonly obj: StaticObject;
   readonly worldX: number;
   readonly worldY: number;
+  /** Row-major map-node index, for per-node fog lookup. */
+  readonly nodeIdx: number;
 }
+
+/**
+ * Brightness multiplier per fog-of-war state (index = the byte from
+ * {@link SpriteRenderer.setFog}): 0 unexplored (culled, not drawn), 1
+ * explored/not-seen (dimmed to match the terrain snapshot), 2 visible. Mirrors
+ * FOG_BRIGHTNESS in renderer.ts so map objects fade with the terrain under them.
+ */
+const FOG_SPRITE_BRIGHTNESS: readonly number[] = [0, 0.4, 1];
 
 /** One quad queued for a frame, keyed for depth sort and page grouping. */
 interface QuadItem {
@@ -160,6 +174,8 @@ export class SpriteRenderer {
   private width = 0;
   private elevation: Uint8Array = new Uint8Array(0);
   private scratch = new Float32Array(0);
+  /** Per-node fog state (see setFog); null = fog disabled, everything visible. */
+  private fog: Uint8Array | null = null;
 
   constructor(gl: WebGL2RenderingContext) {
     this.gl = gl;
@@ -299,10 +315,20 @@ export class SpriteRenderer {
     for (const obj of objects) {
       const idx = obj.node.y * this.width + obj.node.x;
       const pos = nodeWorldPos(obj.node, this.elevation[idx] ?? 0);
-      placed.push({ obj, worldX: pos.x, worldY: pos.y });
+      placed.push({ obj, worldX: pos.x, worldY: pos.y, nodeIdx: idx });
     }
     placed.sort((a, b) => a.worldY - b.worldY || a.worldX - b.worldX);
     this.statics = placed;
+  }
+
+  /**
+   * Apply (or clear) fog of war for the static object layer. `fog` is one byte
+   * per map node (0 unexplored, 1 explored, 2 visible); pass `null` to disable
+   * fog and draw every object at full brightness. Objects on unexplored nodes
+   * are culled, explored ones are dimmed to sit under the terrain snapshot.
+   */
+  setFog(fog: Uint8Array | null): void {
+    this.fog = fog;
   }
 
   /** Number of static objects currently loaded. */
@@ -392,6 +418,15 @@ export class SpriteRenderer {
       for (let i = i0; i <= i1; i++) {
         const ox = i * this.worldW - camera.x;
         for (const ps of this.statics) {
+          // Fog: cull objects on unexplored land; dim ones in explored-but-unseen
+          // land so trees/stones fade with the darkened terrain snapshot.
+          let tint = NO_TINT;
+          if (this.fog) {
+            const state = this.fog[ps.nodeIdx] ?? 2;
+            if (state === 0) continue;
+            const f = FOG_SPRITE_BRIGHTNESS[state] ?? 1;
+            if (f !== 1) tint = [f, f, f];
+          }
           const ax = ps.worldX + ox;
           const ay = ps.worldY + oy;
           const anim = ps.obj.animation;
@@ -399,7 +434,7 @@ export class SpriteRenderer {
             ? anim.baseIndex + ((tick + anim.phase) % anim.frameCount)
             : ps.obj.spriteIndex;
           if (ps.obj.shadowIndex !== undefined) {
-            this.pushQuad(items, ps.obj.archive, ps.obj.shadowIndex, ax, ay, viewW, viewH, ps.worldY - 0.5, NO_TINT); // prettier-ignore
+            this.pushQuad(items, ps.obj.archive, ps.obj.shadowIndex, ax, ay, viewW, viewH, ps.worldY - 0.5, tint); // prettier-ignore
           }
           this.pushQuad(
             items,
@@ -410,7 +445,7 @@ export class SpriteRenderer {
             viewW,
             viewH,
             ps.worldY,
-            NO_TINT,
+            tint,
           );
         }
         for (const d of dynamics) {
