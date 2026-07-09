@@ -74,6 +74,15 @@ const SIGN_COLORS: readonly (readonly [number, readonly [number, number, number,
   [0, [0.55, 0.55, 0.55, 0.8]], // nothing — faint X
 ];
 
+/** Legend rows for the geologist signs: [css colour, label], sign-colour order. */
+const SIGN_LEGEND: readonly (readonly [string, string])[] = [
+  ['rgb(31,31,36)', 'Coal'],
+  ['rgb(230,128,64)', 'Iron'],
+  ['rgb(250,217,38)', 'Gold'],
+  ['rgb(179,179,199)', 'Granite'],
+  ['rgb(140,140,140)', 'Nothing (X)'],
+];
+
 /** BOB archive keys registered once for the settler layers. */
 const JOBS_ARCHIVE = 'jobs';
 
@@ -373,10 +382,29 @@ async function boot(): Promise<void> {
     tickLabel,
     fps,
   );
+  // Legend for the geologist survey signs, shown only while any sign exists.
+  const signLegend = el('div', {
+    class: 'sign-legend',
+    attrs: { 'data-testid': 'sign-legend' },
+  });
+  signLegend.append(
+    el('div', { class: 'sign-legend-title', text: 'Ore signs' }),
+    ...SIGN_LEGEND.map(([color, label]) =>
+      el(
+        'div',
+        { class: 'sign-legend-row' },
+        el('span', { class: 'sign-legend-swatch', attrs: { style: `background:${color}` } }),
+        el('span', { text: label }),
+      ),
+    ),
+  );
+  signLegend.style.display = 'none';
+
   root.append(
     canvas,
     hudTop,
     status, // transient hint toast, floats below the bar (see .status-toast)
+    signLegend,
     el('div', { class: 'minimap-box' }, minimapCanvas),
   );
 
@@ -913,10 +941,12 @@ async function boot(): Promise<void> {
       const disc = disconnectedBuildingMarkers(session.world, session.localPlayer);
       if (disc.length > 0) roads.render(camera, disc, [1.0, 0.55, 0.0, 0.95], false);
       // Geologist survey signs, coloured by the ore found (or a faint X for none).
+      const hasSigns = session.world.signs.length > 0;
       for (const [res, color] of SIGN_COLORS) {
         const marks = signMarkers(session.world, res);
         if (marks.length > 0) roads.render(camera, marks, color, false);
       }
+      signLegend.style.display = hasSigns ? 'block' : 'none';
       // Live road-build preview on top: translucent path + an end marker (green
       // when a road can be built to the hovered node, red when it cannot).
       const preview = interaction.roadPreview;
