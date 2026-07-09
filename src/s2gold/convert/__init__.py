@@ -24,6 +24,7 @@ CONVERTERS = (
     "terrain",
     "graphics",
     "ui",
+    "bobs",
     "fonts",
     "maps",
     "texts",
