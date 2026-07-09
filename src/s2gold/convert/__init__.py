@@ -22,6 +22,7 @@ class Converter(Protocol):
 CONVERTERS = (
     "palettes",
     "terrain",
+    "pics",
     "graphics",
     "ui",
     "bobs",
