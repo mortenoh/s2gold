@@ -2,7 +2,7 @@
 # Asset pipeline is Python (uv); web app + tests are pnpm workspaces.
 
 .DEFAULT_GOAL := help
-.PHONY: help install doctor dev build test lint e2e e2e-install clean
+.PHONY: help install doctor dev serve build test lint e2e e2e-install clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -19,6 +19,10 @@ doctor: ## Check external tool dependencies for the asset pipeline
 
 dev: ## Start the Vite dev server for the web app
 	pnpm --filter app dev
+
+serve: ## Build the frontend and run the FastAPI server (app + assets + /api)
+	pnpm -r build
+	uv run uvicorn s2gold.server.app:app --host 127.0.0.1 --port 8000
 
 build: ## Build all workspace packages
 	pnpm -r build

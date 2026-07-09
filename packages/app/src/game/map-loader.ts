@@ -115,10 +115,13 @@ export async function loadTerrainImage(terrain: LandscapeSet): Promise<HTMLImage
   return img;
 }
 
-/** Pick the entry for ?map= (by name or file substring), else miss200, else first. */
+/** Pick the entry for /play/<map> or ?map= (by name or file substring), else miss200, else first. */
 export function pickMap(index: MapIndexEntry[], query: string | null): MapIndexEntry {
-  if (query) {
-    const wanted = index.find((m) => m.name === query || m.file.includes(query));
+  // Clean-URL route (/play/<map>) wins over the legacy ?map= query.
+  const routeMatch = /^\/play\/([a-z0-9_-]+)/.exec(window.location.pathname);
+  const wantedName = routeMatch?.[1] ?? query;
+  if (wantedName) {
+    const wanted = index.find((m) => m.name === wantedName || m.file.includes(wantedName));
     if (wanted) return wanted;
   }
   const campaign = index.find((m) => m.file.includes('miss200'));
