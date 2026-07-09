@@ -262,6 +262,11 @@ function foundHarbor(world: World, geom: Geometry, node: number, player: number)
   if (flagId < 0) {
     flagId = storeAlloc(world.flags, (id) => ({ id, node: flagNode, player, wares: [] }));
     world.flagAtNode[flagNode] = flagId;
+  } else {
+    // Reuse an existing own door flag; claim it for the colony as a defensive
+    // guard against a launch->land race (start-time validation rejects foreign).
+    const f = world.flags.items[flagId];
+    if (f) f.player = player;
   }
   const bId = storeAlloc(world.buildings, (id) => ({
     id,
@@ -506,6 +511,10 @@ export function execStartExpedition(
   if (targetDock < 0) return;
   const doorNode = geom.neighbour(targetSpot, 'SE');
   if (world.buildingAtNode[doorNode] >= 0) return;
+  // Don't launch toward a spot whose door flag belongs to another player — the
+  // colony's harbor would otherwise be served by a foreign flag.
+  const doorFlag = world.flagAtNode[doorNode];
+  if (doorFlag >= 0 && world.flags.items[doorFlag]?.player !== player) return;
 
   // Find an idle ship homed here with a water route to the target.
   const dockHome = harborDockNode(world, geom, harbor.node);

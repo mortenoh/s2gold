@@ -44,6 +44,7 @@ import {
 } from './world';
 import { execAttack } from './systems/military';
 import { execPrepareExpedition, execStartExpedition } from './systems/seafaring';
+import { recalcTerritory } from './systems/territory';
 
 /** A queued player command (discriminated on `type`). */
 export type Command =
@@ -176,7 +177,7 @@ function executeCommand(
       execPlaceBuilding(world, geom, rules, events, cmd.player, cmd.node, cmd.buildingType);
       break;
     case 'demolish':
-      execDemolish(world, events, cmd.player, cmd.node);
+      execDemolish(world, geom, events, cmd.player, cmd.node);
       break;
     case 'cheatSpawnWare':
       execCheatSpawnWare(world, cmd.player, cmd.flag, cmd.wareType, cmd.count);
@@ -306,6 +307,8 @@ export function canPlaceBuilding(
   const existing = world.flagAtNode[flagNode];
   if (existing >= 0) {
     // Reuse an existing flag only if it belongs to us and the door is free.
+    const flag = world.flags.items[existing];
+    if (player !== undefined && flag?.player !== player) return false;
     return world.buildingAtNode[flagNode] < 0;
   }
   return canPlaceFlag(world, geom, rules, flagNode);
@@ -368,6 +371,11 @@ function execBuildRoad(
   const flagA = world.flagAtNode[start];
   const flagB = world.flagAtNode[end];
   if (flagA < 0 || flagB < 0 || flagA === flagB) return;
+  // Both endpoints must be the commanding player's own flags — a road is never
+  // built across players, and its carrier (owned by `player`) must serve them.
+  if (world.flags.items[flagA]?.player !== player || world.flags.items[flagB]?.player !== player) {
+    return;
+  }
   // Interior nodes: adjacent, walkable, and not flags/buildings.
   for (let i = 1; i < path.length; i++) {
     if (!geom.neighbours(path[i - 1]).includes(path[i])) return;
@@ -443,7 +451,13 @@ function execPlaceBuilding(
   events.emit({ type: 'BuildingPlaced', buildingId: id, buildingType, node, player });
 }
 
-function execDemolish(world: World, events: EventSink, player: number, node: number): void {
+function execDemolish(
+  world: World,
+  geom: Geometry,
+  events: EventSink,
+  player: number,
+  node: number,
+): void {
   const bId = world.buildingAtNode[node];
   if (bId >= 0) {
     const b = world.buildings.items[bId] as Building;
@@ -458,6 +472,10 @@ function execDemolish(world: World, events: EventSink, player: number, node: num
     world.buildings.items[bId] = null;
     world.buildings.free.push(bId);
     events.emit({ type: 'BuildingDemolished', buildingId: bId, node, player });
+    // Ownership is derived from buildings: a demolished HQ / harbor / occupied
+    // military building stops projecting territory, so recompute (no-op and free
+    // of an event when the building claimed no land).
+    if (recalcTerritory(world, geom)) events.emit({ type: 'TerritoryChanged', player });
     return;
   }
   // No building here: demolish a standalone flag and the roads it anchors.
