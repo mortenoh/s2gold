@@ -339,6 +339,12 @@ export class Interaction {
       { class: 'ctx-menu ctx-menu-build', attrs: { 'data-testid': 'ctx-menu' } },
       ...items,
     );
+    // Hovering a plain root item (e.g. Flag) closes any open category flyout.
+    // The submenu is a separate element, so hovering it never triggers this.
+    menu.addEventListener('mouseover', (ev) => {
+      const target = ev.target as HTMLElement;
+      if (!target.closest('.ctx-cat-trigger')) this.closeSubmenu();
+    });
     this.deps.root.append(menu);
     this.placeFloating(menu, clientX + 2, clientY + 2, clientX, clientY);
     this.menu = menu;
@@ -433,10 +439,6 @@ export class Interaction {
       ev.stopPropagation();
       run();
       this.closeMenu();
-    });
-    // Moving onto a plain item closes any open category flyout.
-    btn.addEventListener('mouseenter', () => {
-      if (!btn.classList.contains('ctx-cat-trigger')) this.closeSubmenu();
     });
     return btn;
   }
