@@ -324,8 +324,34 @@ function execPlaceFlag(
   if (!canPlaceFlag(world, geom, rules, node)) return null;
   const id = storeAlloc(world.flags, (fid) => ({ id: fid, node, player, wares: [] }));
   world.flagAtNode[node] = id;
+  // A flag dropped onto an existing road taps into it: split the road at the
+  // flag so both halves connect through it (the S2 way to join a network). Also
+  // keeps roads valid — a road may never carry an interior flag.
+  splitRoadsAt(world, id, node);
   events.emit({ type: 'FlagPlaced', flagId: id, node, player });
   return getFlag(world, id);
+}
+
+/**
+ * Split every road whose interior passes through `node` into two roads meeting
+ * at the new flag `flagId`. The original road's carrier is released; the carrier
+ * system re-staffs both halves next tick.
+ */
+function splitRoadsAt(world: World, flagId: number, node: number): void {
+  for (const road of [...storeLive(world.roads)]) {
+    const idx = road.path.indexOf(node);
+    if (idx <= 0 || idx >= road.path.length - 1) continue; // endpoint or absent
+    const { player, flagA, flagB } = road;
+    const left = road.path.slice(0, idx + 1);
+    const right = road.path.slice(idx);
+    if (road.carrierId >= 0 && world.settlers.items[road.carrierId]) {
+      world.settlers.items[road.carrierId] = null;
+      world.settlers.free.push(road.carrierId);
+    }
+    storeFree(world.roads, road.id);
+    storeAlloc(world.roads, (rid) => ({ id: rid, player, path: left, flagA, flagB: flagId, carrierId: -1 }));
+    storeAlloc(world.roads, (rid) => ({ id: rid, player, path: right, flagA: flagId, flagB, carrierId: -1 }));
+  }
 }
 
 function execBuildRoad(
