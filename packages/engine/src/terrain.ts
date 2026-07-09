@@ -73,3 +73,8 @@ export function isBuildableTexture(textureByte: number, rules: TerrainRules): bo
 export function isWalkableTexture(textureByte: number, rules: TerrainRules): boolean {
   return !rules.impassable.has(terrainId(textureByte));
 }
+
+/** True when a texture byte is mountain family (mineable; only mines build here). */
+export function isMountainTexture(textureByte: number): boolean {
+  return MOUNTAIN_IDS.has(terrainId(textureByte));
+}

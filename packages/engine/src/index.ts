@@ -7,6 +7,7 @@
  */
 
 import { runDueCommands } from './commands';
+import { buildingDef, type BuildingType } from './constants';
 import { EventSink, type GameEvent } from './events';
 import { Geometry } from './geometry';
 import { GREENLAND_RULES, type TerrainRules } from './terrain';
@@ -36,7 +37,7 @@ export type {
   MapJson,
   CreateWorldOptions,
 } from './world';
-export { applyCommand, canPlaceFlag, canPlaceBuilding, terrainBuildable } from './commands';
+export { applyCommand, canPlaceFlag, canPlaceBuilding, terrainBuildable, terrainMineable } from './commands';
 export type { Command, CommandInput } from './commands';
 export { serializeWorld, deserializeWorld, hashWorld } from './serialize';
 export { fnv1a } from './hash';
@@ -48,9 +49,11 @@ export {
   GREENLAND_RULES,
   DEFAULT_IMPASSABLE,
   BUILDABLE_IDS,
+  MOUNTAIN_IDS,
   terrainId,
   isBuildableTexture,
   isWalkableTexture,
+  isMountainTexture,
 } from './terrain';
 export type { TerrainRules } from './terrain';
 export { findWalkPath, findFlagRoute, buildFlagGraph, roadBetween } from './pathfinding';
@@ -119,4 +122,86 @@ export function flagsOf(world: World, player: number): Flag[] {
   const out: Flag[] = [];
   for (const f of storeLive(world.flags)) if (f.player === player) out.push(f);
   return out;
+}
+
+// --- Economy view helpers (read-only; for the UI building panel + tests) ----
+
+/** An input slot view: which ware, how much is stocked, and the capacity. */
+export interface InputSlotView {
+  ware: string;
+  count: number;
+  cap: number;
+}
+
+/** Read-only snapshot of a building's production inventory and worker state. */
+export interface BuildingInventoryView {
+  buildingId: number;
+  type: BuildingType;
+  state: 'site' | 'working';
+  staffed: boolean;
+  workerId: number;
+  inputs: InputSlotView[];
+  outputQueue: string[];
+  workTimer: number;
+  /** Construction sites: material still owed (boards, stones). */
+  needBoards: number;
+  deliveredBoards: number;
+  needStones: number;
+  deliveredStones: number;
+}
+
+/** Inventory + worker snapshot of a single building (null when the id is dead). */
+export function buildingInventory(world: World, buildingId: number): BuildingInventoryView | null {
+  const b = world.buildings.items[buildingId];
+  if (!b) return null;
+  const def = buildingDef(b.type);
+  const inputs: InputSlotView[] = (def?.inputs ?? []).map((ware, i) => ({
+    ware,
+    count: b.inputStock[i] ?? 0,
+    cap: def?.inputCap ?? 0,
+  }));
+  return {
+    buildingId: b.id,
+    type: b.type,
+    state: b.state,
+    staffed: b.staffed,
+    workerId: b.workerId,
+    inputs,
+    outputQueue: b.outputQueue.slice(),
+    workTimer: b.workTimer,
+    needBoards: b.needBoards,
+    deliveredBoards: b.deliveredBoards,
+    needStones: b.needStones,
+    deliveredStones: b.deliveredStones,
+  };
+}
+
+/** Read-only snapshot of a player's warehouse inventory and worker/donkey pools. */
+export interface PlayerInventoryView {
+  wares: Record<string, number>;
+  workers: Record<string, number>;
+  donkeys: number;
+  toolPriority: string[];
+}
+
+/** Warehouse inventory + idle worker pools for a player (null for an invalid index). */
+export function playerInventory(world: World, player: number): PlayerInventoryView | null {
+  const p = world.players[player];
+  if (!p) return null;
+  return {
+    wares: { ...p.wares },
+    workers: { ...p.workers },
+    donkeys: p.donkeys,
+    toolPriority: p.toolPriority.slice(),
+  };
+}
+
+/** The player's current metalworks tool-production priority order. */
+export function getToolPriority(world: World, player: number): string[] {
+  return world.players[player]?.toolPriority.slice() ?? [];
+}
+
+/** The player's per-ware transport priority map (lower number = fetched first). */
+export function getTransportPriority(world: World, player: number): Record<string, number> {
+  return { ...(world.players[player]?.transportPriority ?? {}) };
 }

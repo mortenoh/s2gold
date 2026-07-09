@@ -85,6 +85,55 @@ export interface SettlerSpawned {
   player: number;
 }
 
+/**
+ * A worker began a work cycle. `kind` classifies the sound/animation
+ * (sawing, hammering, mining, chopping, planting, ...). Audible-effect signal.
+ */
+export interface WorkStarted {
+  type: 'WorkStarted';
+  kind: string;
+  buildingId: number;
+  node: number;
+  player: number;
+}
+
+/** A farmer sowed a grain field on a map node. */
+export interface CropPlanted {
+  type: 'CropPlanted';
+  node: number;
+  player: number;
+}
+
+/** A farmer harvested a mature grain field (yields 1 grain). */
+export interface CropHarvested {
+  type: 'CropHarvested';
+  node: number;
+  player: number;
+}
+
+/** A mine ran out of matching subsurface resource within its radius. */
+export interface MineDepleted {
+  type: 'MineDepleted';
+  buildingId: number;
+  node: number;
+  player: number;
+}
+
+/** A new civilian settler was recruited from a Helper (+ tool). CONSTANTS.md §7. */
+export interface SettlerRecruited {
+  type: 'SettlerRecruited';
+  job: JobType;
+  tool: WareType | null;
+  player: number;
+}
+
+/** A donkey breeder bred a pack donkey (road-capacity upgrade stub). */
+export interface DonkeyBred {
+  type: 'DonkeyBred';
+  buildingId: number;
+  player: number;
+}
+
 /** Discriminated union of every emitted event. */
 export type GameEvent =
   | FlagPlaced
@@ -97,7 +146,13 @@ export type GameEvent =
   | StoneMined
   | WareProduced
   | WareDelivered
-  | SettlerSpawned;
+  | SettlerSpawned
+  | WorkStarted
+  | CropPlanted
+  | CropHarvested
+  | MineDepleted
+  | SettlerRecruited
+  | DonkeyBred;
 
 /** Mutable per-tick event sink passed through the systems. */
 export class EventSink {

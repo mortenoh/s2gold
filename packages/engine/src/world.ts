@@ -11,10 +11,12 @@
 import type { Command } from './commands';
 import {
   BUILDING,
+  DEFAULT_TRANSPORT_PRIORITY,
   HQ_START_WARES,
   HQ_START_WORKERS,
   JOB_TYPES,
   OBJ_TYPE,
+  TOOL_WARES,
   WARE_TYPES,
   type BuildingType,
   type JobType,
@@ -82,12 +84,20 @@ export interface Building {
   workerId: number;
   /** True once the worker is present and the building can produce. */
   staffed: boolean;
-  /** Production input buffer (e.g. trunks in a sawmill). */
-  inputStock: number;
-  /** Finished wares produced but not yet placed on the building's flag. */
-  outputPending: number;
-  /** Production work timer (ticks into the current cycle). */
+  /**
+   * Per-input-type stock, aligned to the building def's `inputs` order (empty for
+   * buildings with no ware inputs). Sized when the building starts working.
+   */
+  inputStock: number[];
+  /**
+   * Finished wares produced but not yet placed on the building's flag (queue
+   * order preserved so alternating outputs — armory sword/shield — stay ordered).
+   */
+  outputQueue: WareType[];
+  /** Production work timer (ticks remaining in the current cycle; 0 = idle). */
   workTimer: number;
+  /** Alternating-output toggle (armory: 0 = sword, 1 = shield). */
+  altToggle: number;
 }
 
 /** A settler entity (workers and carriers). */
@@ -132,10 +142,20 @@ export type SettlerState =
 export interface Player {
   index: number;
   hqBuildingId: number;
-  /** Ware type -> count stored at HQ. */
+  /** Ware type -> count stored across the player's warehouses (HQ + storehouses). */
   wares: Record<WareType, number>;
-  /** Job type -> idle worker count available at HQ. */
+  /** Job type -> idle worker count available for dispatch/recruitment. */
   workers: Record<JobType, number>;
+  /** Bred pack donkeys (road-capacity upgrade; stubbed as a count). CONSTANTS.md §4. */
+  donkeys: number;
+  /**
+   * Ordered tool ware list the metalworks cycles through (player tool-priority,
+   * CONSTANTS.md §7; default = the 12 tools in enum order). `toolCycle` indexes it.
+   */
+  toolPriority: WareType[];
+  toolCycle: number;
+  /** Per-ware transport priority (lower = fetched first). CONSTANTS.md §4. */
+  transportPriority: Record<WareType, number>;
 }
 
 /** A generic dense store with a free list; ids are array indices. */
@@ -195,6 +215,8 @@ export interface World {
   players: Player[];
   /** Forester-planted saplings maturing into trees (node + maturation tick). */
   saplings: Array<{ node: number; matureTick: number }>;
+  /** Farmer-sown grain fields maturing into harvestable crops (node + mature tick). */
+  cropFields: Array<{ node: number; matureTick: number }>;
   // Command queue (pending, applied at their due tick).
   commands: Command[];
   seqCounter: number;
@@ -300,6 +322,7 @@ export function createWorld(map: MapJson, options: CreateWorldOptions): World {
     wares: makeStore<Ware>(),
     players: [],
     saplings: [],
+    cropFields: [],
     commands: [],
     seqCounter: 0,
   };
@@ -321,6 +344,10 @@ export function createWorld(map: MapJson, options: CreateWorldOptions): World {
       hqBuildingId: -1,
       wares: { ...zeroWares(), ...HQ_START_WARES },
       workers: { ...zeroWorkers(), ...HQ_START_WORKERS },
+      donkeys: 0,
+      toolPriority: [...TOOL_WARES],
+      toolCycle: 0,
+      transportPriority: { ...DEFAULT_TRANSPORT_PRIORITY },
     };
     world.players.push(player);
     if (hx === undefined || hy === undefined || hx === 0xffff || hy === 0xffff) continue;
@@ -352,9 +379,10 @@ function placeHeadquarters(world: World, geom: Geometry, node: number, player: n
     buildTicks: 0,
     workerId: -1,
     staffed: true,
-    inputStock: 0,
-    outputPending: 0,
+    inputStock: [],
+    outputQueue: [],
     workTimer: 0,
+    altToggle: 0,
   }));
   world.buildingAtNode[node] = bId;
   world.objectType[node] = OBJ_TYPE.hqMarker;

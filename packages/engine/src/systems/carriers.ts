@@ -76,10 +76,20 @@ function stepCarrier(world: World, carrier: Settler): void {
     const thisFlag = atA ? road.flagA : road.flagB;
     const otherFlag = atA ? road.flagB : road.flagA;
     const flag = getFlag(world, thisFlag);
-    const pickIdx = flag.wares.findIndex((wid) => {
-      const w = world.wares.items[wid];
-      return !!w && w.nextFlag === otherFlag;
-    });
+    // Pick the waiting ware bound across this road with the lowest transport
+    // priority number (highest priority); queue order breaks ties (CONSTANTS.md §4).
+    const prio = world.players[road.player]?.transportPriority;
+    let pickIdx = -1;
+    let bestPrio = Infinity;
+    for (let i = 0; i < flag.wares.length; i++) {
+      const w = world.wares.items[flag.wares[i]];
+      if (!w || w.nextFlag !== otherFlag) continue;
+      const p = prio ? (prio[w.type] ?? 999) : 999;
+      if (p < bestPrio) {
+        bestPrio = p;
+        pickIdx = i;
+      }
+    }
     if (pickIdx < 0) {
       carrier.state = 'carrierIdle';
       return;

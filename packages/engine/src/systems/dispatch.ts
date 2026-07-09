@@ -1,19 +1,20 @@
 /**
- * Ware dispatch and delivery.
+ * Ware dispatch and delivery (generalized for the full economy).
  *
- * Each tick this system (1) lets the HQ push stored material toward buildings
- * that still need it, (2) assigns every unrouted ware a target building and its
- * next flag hop over the road network, and (3) delivers wares that have reached
- * their target building's flag. Carriers (systems/carriers.ts) perform the
- * physical flag-to-flag movement in between.
+ * Each tick this system (1) lets every warehouse (HQ + storehouses) push stored
+ * wares toward buildings that still need them, (2) assigns each unrouted ware a
+ * target building and its next flag hop over the road network, and (3) delivers
+ * wares that have reached their target building's flag. Carriers
+ * (systems/carriers.ts) perform the physical flag-to-flag movement in between.
+ *
+ * Distribution fairness: when several buildings want the same ware type, the
+ * neediest (largest remaining demand net of wares already en route) wins, with a
+ * nearest-then-lowest-id tie-break — deterministic, and it round-robins evenly
+ * across equal consumers because each dispatched ware raises that building's
+ * en-route count for the next pick.
  */
 
-import {
-  BUILDING,
-  SAWMILL_INPUT_CAP,
-  WARE,
-  type WareType,
-} from '../constants';
+import { buildingDef, WARE, WARE_TYPES, type WareType } from '../constants';
 import type { EventSink } from '../events';
 import type { Geometry } from '../geometry';
 import { buildFlagGraph, findFlagRoute } from '../pathfinding';
@@ -27,6 +28,12 @@ import {
   type Flag,
   type World,
 } from '../world';
+
+/** True when a building acts as a warehouse (accepts + issues wares). */
+function isWarehouse(b: Building): boolean {
+  const def = buildingDef(b.type);
+  return !!def && (def.kind === 'hq' || def.kind === 'warehouse');
+}
 
 /** Count wares (waiting or carried) already heading to a building of a type. */
 function enRoute(world: World, buildingId: number, wareType: WareType): number {
@@ -44,13 +51,18 @@ function demand(b: Building, wareType: WareType): number {
     if (wareType === WARE.stone) return Math.max(0, b.needStones - b.deliveredStones);
     return 0;
   }
-  if (b.type === BUILDING.sawmill && wareType === WARE.trunk) {
-    return Math.max(0, SAWMILL_INPUT_CAP - b.inputStock);
-  }
-  return 0;
+  const def = buildingDef(b.type);
+  if (!def) return 0;
+  const idx = def.inputs.indexOf(wareType);
+  if (idx < 0) return 0;
+  return Math.max(0, def.inputCap - (b.inputStock[idx] ?? 0));
 }
 
-/** Find the nearest building of `player` still needing `wareType`. */
+/**
+ * Find the best building of `player` still needing `wareType`: the neediest
+ * (largest remaining demand net of en-route wares), tie-broken by nearest flag
+ * then lowest id. Returns -1 when nobody needs it.
+ */
 function findNeeder(
   world: World,
   geom: Geometry,
@@ -59,27 +71,48 @@ function findNeeder(
   fromNode: number,
 ): number {
   let best = -1;
+  let bestNeed = 0;
   let bestDist = Infinity;
   for (const b of storeLive(world.buildings)) {
     if (b.player !== player) continue;
     const need = demand(b, wareType) - enRoute(world, b.id, wareType);
     if (need <= 0) continue;
     const d = geom.distance(fromNode, getFlag(world, b.flagId).node);
-    if (d < bestDist || (d === bestDist && b.id < best)) {
-      bestDist = d;
+    if (
+      need > bestNeed ||
+      (need === bestNeed && (d < bestDist || (d === bestDist && (best < 0 || b.id < best))))
+    ) {
       best = b.id;
+      bestNeed = need;
+      bestDist = d;
     }
   }
   return best;
 }
 
-/** Assign a target building for a ware based on its type; HQ is the fallback. */
+/** Nearest warehouse (HQ or storehouse) of a player, by flag distance then id. */
+function nearestWarehouse(world: World, geom: Geometry, player: number, fromNode: number): number {
+  let best = -1;
+  let bestDist = Infinity;
+  for (const b of storeLive(world.buildings)) {
+    if (b.player !== player || b.state !== 'working' || !isWarehouse(b)) continue;
+    const d = geom.distance(fromNode, getFlag(world, b.flagId).node);
+    if (d < bestDist || (d === bestDist && (best < 0 || b.id < best))) {
+      best = b.id;
+      bestDist = d;
+    }
+  }
+  return best;
+}
+
+/** Assign a target building for a ware based on its type; a warehouse is the fallback. */
 function assignTarget(world: World, geom: Geometry, wareId: number): void {
   const w = world.wares.items[wareId];
   if (!w || w.loc !== 'flag') return;
   const flag = getFlag(world, w.locId);
   const player = flag.player;
   let target = findNeeder(world, geom, player, w.type, flag.node);
+  if (target < 0) target = nearestWarehouse(world, geom, player, flag.node);
   if (target < 0) target = world.players[player]?.hqBuildingId ?? -1;
   w.targetBuildingId = target;
 }
@@ -105,16 +138,21 @@ function tryDeliver(world: World, events: EventSink, flag: Flag, wareId: number)
       b.deliveredStones++;
       accepted = true;
     }
-  } else if (b.type === BUILDING.headquarters) {
+  } else if (isWarehouse(b)) {
     world.players[b.player].wares[w.type]++;
     accepted = true;
-  } else if (b.type === BUILDING.sawmill && w.type === WARE.trunk) {
-    b.inputStock++;
-    accepted = true;
+  } else {
+    const def = buildingDef(b.type);
+    const idx = def ? def.inputs.indexOf(w.type) : -1;
+    if (def && idx >= 0 && (b.inputStock[idx] ?? 0) < def.inputCap) {
+      while (b.inputStock.length <= idx) b.inputStock.push(0);
+      b.inputStock[idx]++;
+      accepted = true;
+    }
   }
 
   if (!accepted) {
-    // Wrong place now (already satisfied): re-route via HQ next tick.
+    // Wrong place now (already satisfied): re-route next tick.
     w.targetBuildingId = -1;
     return false;
   }
@@ -125,31 +163,34 @@ function tryDeliver(world: World, events: EventSink, flag: Flag, wareId: number)
   return true;
 }
 
-/** Emit HQ-stored material toward buildings that still need it. */
-function runHqSupply(world: World, geom: Geometry): void {
+/** Ware types in ascending transport-priority order for a player (lower = first). */
+function priorityOrder(world: World, player: number): WareType[] {
+  const prio = world.players[player]?.transportPriority ?? {};
+  return [...WARE_TYPES].sort((a, b) => (prio[a] ?? 999) - (prio[b] ?? 999) || (a < b ? -1 : 1));
+}
+
+/** Emit warehouse-stored wares toward buildings that still need them. */
+function runWarehouseSupply(world: World, geom: Geometry): void {
   for (const player of world.players) {
-    if (player.hqBuildingId < 0) continue;
-    const hq = getBuilding(world, player.hqBuildingId);
-    const hqFlag = getFlag(world, hq.flagId);
-    for (const wareType of [WARE.plank, WARE.stone, WARE.trunk] as WareType[]) {
-      let stock = player.wares[wareType];
-      if (stock <= 0) continue;
-      // Repeatedly satisfy the nearest needer while stock and flag slots remain.
-      for (;;) {
-        if (stock <= 0 || hqFlag.wares.length >= 8) break;
-        const target = findNeeder(world, geom, player.index, wareType, hqFlag.node);
-        if (target < 0) break;
-        const wid = storeAlloc(world.wares, (id) => ({
-          id,
-          type: wareType,
-          loc: 'flag' as const,
-          locId: hqFlag.id,
-          targetBuildingId: target,
-          nextFlag: -1,
-        }));
-        hqFlag.wares.push(wid);
-        player.wares[wareType]--;
-        stock--;
+    const order = priorityOrder(world, player.index);
+    for (const wh of storeLive(world.buildings)) {
+      if (wh.player !== player.index || wh.state !== 'working' || !isWarehouse(wh)) continue;
+      const whFlag = getFlag(world, wh.flagId);
+      for (const wareType of order) {
+        while (player.wares[wareType] > 0 && whFlag.wares.length < 8) {
+          const target = findNeeder(world, geom, player.index, wareType, whFlag.node);
+          if (target < 0) break;
+          const wid = storeAlloc(world.wares, (id) => ({
+            id,
+            type: wareType,
+            loc: 'flag' as const,
+            locId: whFlag.id,
+            targetBuildingId: target,
+            nextFlag: -1,
+          }));
+          whFlag.wares.push(wid);
+          player.wares[wareType]--;
+        }
       }
     }
   }
@@ -157,7 +198,7 @@ function runHqSupply(world: World, geom: Geometry): void {
 
 /** Run the full dispatch pass for one tick. */
 export function runDispatch(world: World, geom: Geometry, events: EventSink): void {
-  runHqSupply(world, geom);
+  runWarehouseSupply(world, geom);
 
   const graphs = new Map<number, ReturnType<typeof buildFlagGraph>>();
   const graphFor = (player: number): ReturnType<typeof buildFlagGraph> => {

@@ -11,7 +11,9 @@
 import {
   BUILD_COST,
   BUILDING,
+  buildingDef,
   FLAG_MIN_DISTANCE,
+  isFieldObject,
   isTreeType,
   isGraniteType,
   OBJ_TYPE,
@@ -22,7 +24,12 @@ import {
 } from './constants';
 import type { EventSink } from './events';
 import { Geometry } from './geometry';
-import { isBuildableTexture, isWalkableTexture, type TerrainRules } from './terrain';
+import {
+  isBuildableTexture,
+  isMountainTexture,
+  isWalkableTexture,
+  type TerrainRules,
+} from './terrain';
 import {
   getFlag,
   storeAlloc,
@@ -53,6 +60,21 @@ export type Command =
       flag: number;
       wareType: WareType;
       count: number;
+    }
+  | {
+      tick: number;
+      player: number;
+      seq: number;
+      type: 'setToolPriority';
+      tools: WareType[];
+    }
+  | {
+      tick: number;
+      player: number;
+      seq: number;
+      type: 'setTransportPriority';
+      wareType: WareType;
+      priority: number;
     };
 
 /** Distributive Omit that preserves discriminated-union members. */
@@ -117,6 +139,21 @@ function executeCommand(
     case 'cheatSpawnWare':
       execCheatSpawnWare(world, cmd.player, cmd.flag, cmd.wareType, cmd.count);
       break;
+    case 'setToolPriority': {
+      const pl = world.players[cmd.player];
+      if (pl && cmd.tools.length > 0) {
+        pl.toolPriority = cmd.tools.slice();
+        pl.toolCycle = 0;
+      }
+      break;
+    }
+    case 'setTransportPriority': {
+      const pl = world.players[cmd.player];
+      if (pl && cmd.wareType in pl.transportPriority) {
+        pl.transportPriority[cmd.wareType] = cmd.priority;
+      }
+      break;
+    }
   }
 }
 
@@ -136,8 +173,9 @@ export function canPlaceFlag(world: World, geom: Geometry, rules: TerrainRules, 
   if (world.flagAtNode[node] >= 0) return false;
   if (world.buildingAtNode[node] >= 0) return false;
   if (world.objectType[node] !== OBJ_TYPE.none) {
-    // A flag cannot sit on a tree or granite; other markers (HQ) are handled below.
-    if (isTreeType(world.objectType[node]) || isGraniteType(world.objectType[node])) return false;
+    // A flag cannot sit on a tree, granite, sapling, or crop field.
+    const ot = world.objectType[node];
+    if (isTreeType(ot) || isGraniteType(ot) || isFieldObject(ot)) return false;
   }
   if (!isWalkableTexture(world.terrain1[node], rules) || !isWalkableTexture(world.terrain2[node], rules)) {
     return false;
@@ -148,17 +186,29 @@ export function canPlaceFlag(world: World, geom: Geometry, rules: TerrainRules, 
   return true;
 }
 
+/** True when the node sits on mineable mountain terrain (for mine placement). */
+export function terrainMineable(world: World, node: number): boolean {
+  return isMountainTexture(world.terrain1[node]) && isMountainTexture(world.terrain2[node]);
+}
+
 /** True when `buildingType` may be placed at `node` for `player`. */
 export function canPlaceBuilding(
   world: World,
   geom: Geometry,
   rules: TerrainRules,
   node: number,
-  _buildingType: BuildingType,
+  buildingType: BuildingType,
 ): boolean {
   if (world.buildingAtNode[node] >= 0 || world.flagAtNode[node] >= 0) return false;
-  if (isTreeType(world.objectType[node]) || isGraniteType(world.objectType[node])) return false;
-  if (!terrainBuildable(world, geom, rules, node)) return false;
+  const ot = world.objectType[node];
+  if (isTreeType(ot) || isGraniteType(ot) || isFieldObject(ot)) return false;
+  // Mines require a mountain node; every other building requires buildable meadow.
+  const def = buildingDef(buildingType);
+  if (def?.size === 'mine') {
+    if (!terrainMineable(world, node)) return false;
+  } else if (!terrainBuildable(world, geom, rules, node)) {
+    return false;
+  }
   const flagNode = geom.neighbour(node, 'SE');
   const existing = world.flagAtNode[flagNode];
   if (existing >= 0) {
@@ -259,9 +309,10 @@ function execPlaceBuilding(
     buildTicks,
     workerId: -1,
     staffed: false,
-    inputStock: 0,
-    outputPending: 0,
+    inputStock: [],
+    outputQueue: [],
     workTimer: 0,
+    altToggle: 0,
   }));
   world.buildingAtNode[node] = id;
   events.emit({ type: 'BuildingPlaced', buildingId: id, buildingType, node, player });

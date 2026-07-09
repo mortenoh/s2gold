@@ -8,13 +8,14 @@
  * by the production system.
  */
 
-import { BUILDING, JOB, TICKS } from '../constants';
+import { BUILDING, buildingDef, JOB, TICKS } from '../constants';
 import type { EventSink } from '../events';
 import type { Geometry } from '../geometry';
 import { findWalkPath } from '../pathfinding';
 import type { TerrainRules } from '../terrain';
 import { getBuilding, getFlag, storeFree, storeLive, type World } from '../world';
 import { beginWalk, spawnSettler, stepWalk, walkDone } from './movement';
+import { ensureWorkerAvailable } from './recruit';
 
 /** Run construction for one tick. */
 export function runConstruction(
@@ -28,9 +29,10 @@ export function runConstruction(
     const player = world.players[b.player];
     if (!player) continue;
 
-    // Acquire a builder if none assigned.
+    // Acquire a builder if none assigned (recruiting one from a Helper + Hammer
+    // when the builder pool is empty, per CONSTANTS.md §7).
     if (b.workerId < 0) {
-      if (player.workers[JOB.builder] <= 0) continue;
+      if (!ensureWorkerAvailable(world, events, player, JOB.builder)) continue;
       const hq = player.hqBuildingId >= 0 ? getBuilding(world, player.hqBuildingId) : null;
       const startNode = hq ? hq.node : b.node;
       const builder = spawnSettler(world, JOB.builder, b.player, startNode);
@@ -78,6 +80,11 @@ function completeBuilding(world: World, events: EventSink, buildingId: number): 
   b.staffed = false;
   b.state = 'working';
   b.buildProgress = b.buildTicks;
+  // Size the input-stock buffer to the finished building's input count.
+  const def = buildingDef(b.type);
+  if (def) {
+    b.inputStock = new Array<number>(def.inputs.length).fill(0);
+  }
   // Ensure a serving flag lookup stays valid.
   getFlag(world, b.flagId);
   events.emit({
