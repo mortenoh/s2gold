@@ -352,6 +352,7 @@ export class SpriteRenderer {
     tint: readonly [number, number, number],
     scale = 1,
     clipBottom = 1,
+    shade: readonly [number, number, number] = NO_TINT,
   ): void {
     const reg = this.atlases.get(archive);
     const s = reg?.meta.sprites.get(index);
@@ -375,10 +376,14 @@ export class SpriteRenderer {
     }
     if (x1 <= 0 || x0 >= viewW || y1 <= 0 || y0 >= viewH) return;
     // Recolour only when this sprite ships a mask, the caller asked for a tint,
-    // and the archive actually uploaded a pmask page for this atlas.
+    // and the archive actually uploaded a pmask page for this atlas. A masked
+    // quad carries the player `tint` (applied through the mask); an unmasked one
+    // carries `shade` (a brightness multiplier for fog, NO_TINT by default) so a
+    // player tint never bleeds onto un-masked sprites like buildings.
     const masked =
       s.pmask === true && tint !== NO_TINT && reg.pmaskTextures[s.atlas] != null;
     out.push({
+      tint: masked ? tint : shade,
       archive,
       page: s.atlas,
       depth,
@@ -390,7 +395,6 @@ export class SpriteRenderer {
       v0,
       u1: (s.x + s.w) / tw,
       v1,
-      tint,
       masked,
     });
   }
@@ -419,13 +423,15 @@ export class SpriteRenderer {
         const ox = i * this.worldW - camera.x;
         for (const ps of this.statics) {
           // Fog: cull objects on unexplored land; dim ones in explored-but-unseen
-          // land so trees/stones fade with the darkened terrain snapshot.
-          let tint = NO_TINT;
+          // land so trees/stones fade with the darkened terrain snapshot. The
+          // dimming is a brightness `shade`, not a colour tint, so it applies to
+          // these un-masked map sprites without recolouring them.
+          let shade = NO_TINT;
           if (this.fog) {
             const state = this.fog[ps.nodeIdx] ?? 2;
             if (state === 0) continue;
             const f = FOG_SPRITE_BRIGHTNESS[state] ?? 1;
-            if (f !== 1) tint = [f, f, f];
+            if (f !== 1) shade = [f, f, f];
           }
           const ax = ps.worldX + ox;
           const ay = ps.worldY + oy;
@@ -434,7 +440,7 @@ export class SpriteRenderer {
             ? anim.baseIndex + ((tick + anim.phase) % anim.frameCount)
             : ps.obj.spriteIndex;
           if (ps.obj.shadowIndex !== undefined) {
-            this.pushQuad(items, ps.obj.archive, ps.obj.shadowIndex, ax, ay, viewW, viewH, ps.worldY - 0.5, tint); // prettier-ignore
+            this.pushQuad(items, ps.obj.archive, ps.obj.shadowIndex, ax, ay, viewW, viewH, ps.worldY - 0.5, NO_TINT, 1, 1, shade); // prettier-ignore
           }
           this.pushQuad(
             items,
@@ -445,7 +451,10 @@ export class SpriteRenderer {
             viewW,
             viewH,
             ps.worldY,
-            tint,
+            NO_TINT,
+            1,
+            1,
+            shade,
           );
         }
         for (const d of dynamics) {
