@@ -30,6 +30,25 @@ interface MapIndexEntry {
 
 const GOLD = '#f0c84a';
 
+/** Sentinel for "no player here" in a map's hq_x/hq_y arrays. */
+const NO_HQ = 0xffff;
+
+/**
+ * Non-human player slots (index >= 1) that own a real starting HQ. A map's
+ * `hq_x` lists a start position per slot with 0xffff meaning "no HQ"; many
+ * campaign maps declare more nominal players than real start positions, so only
+ * these slots can host a working opponent. Mirrors campaignAiSlots so free play
+ * derives opponents the same way the campaign path does.
+ */
+export function opponentSlots(hqX: number[] | undefined): number[] {
+  if (!Array.isArray(hqX)) return [];
+  const slots: number[] = [];
+  for (let p = 1; p < hqX.length; p++) {
+    if (hqX[p] !== undefined && hqX[p] !== NO_HQ) slots.push(p);
+  }
+  return slots;
+}
+
 async function loadMapIndex(): Promise<MapIndexEntry[] | null> {
   const raw = await fetchJson<{ maps?: MapIndexEntry[] }>(assetUrl('maps/index.json'));
   if (!raw || !Array.isArray(raw.maps) || raw.maps.length === 0) return null;
@@ -114,12 +133,15 @@ export async function renderSetup(root: HTMLElement): Promise<void> {
 
   /**
    * (Re)build the per-slot player selectors for a map. Slot 0 is always the
-   * human (fixed label); slots 1..N-1 choose None or Computer, defaulting slot 1
-   * to Computer and the rest to None. Single-player maps get no selectors.
+   * human (fixed label); `opponents` lists the non-human slots that own a real
+   * HQ (see {@link opponentSlots}), each choosing None or Computer, defaulting
+   * slot 1 to Computer and the rest to None. Maps with no opponent HQ (solo
+   * maps, or campaign maps whose extra player slots have no start position) get
+   * no selectors.
    */
-  const buildSlots = (entry: MapIndexEntry): void => {
+  const buildSlots = (opponents: number[]): void => {
     clear(slotsHost);
-    if (entry.players <= 1) return;
+    if (opponents.length === 0) return;
     slotsHost.append(el('div', { class: 'setup-slots-title', text: 'Players' }));
     slotsHost.append(
       el(
@@ -129,7 +151,7 @@ export async function renderSetup(root: HTMLElement): Promise<void> {
         el('span', { class: 'setup-slot-fixed', text: 'Human (you)' }),
       ),
     );
-    for (let p = 1; p < entry.players; p++) {
+    for (const p of opponents) {
       const sel = el('select', {
         class: 'setup-slot-select',
         attrs: { 'data-testid': `ai-slot-${p}`, 'data-slot': String(p) },
@@ -167,7 +189,8 @@ export async function renderSetup(root: HTMLElement): Promise<void> {
 
     previewTitle.textContent = entry.title;
     previewInfo.textContent = `${entry.width} x ${entry.height}  -  ${entry.players} player${entry.players === 1 ? '' : 's'}  -  ${entry.terrain_name}`;
-    buildSlots(entry);
+    // Clear stale selectors while the map JSON (which carries hq_x) loads.
+    buildSlots([]);
     startBtn.disabled = false;
     startBtn.dataset.map = entry.name;
 
@@ -175,6 +198,11 @@ export async function renderSetup(root: HTMLElement): Promise<void> {
     clear(previewCanvasHost);
     previewCanvasHost.classList.add('loading');
     try {
+      // Gate opponent selectors on real HQ presence: the nominal player count
+      // over-counts on maps whose extra slots have no start position (hq_x=0xffff).
+      const mapData = await fetchJson<{ hq_x?: number[] }>(assetUrl(entry.file));
+      if (token !== previewToken) return; // superseded by a newer selection
+      buildSlots(opponentSlots(mapData?.hq_x));
       const preview = await buildMapPreview(entry.file);
       if (token !== previewToken) return; // superseded by a newer selection
       preview.canvas.className = 'minimap-canvas';
