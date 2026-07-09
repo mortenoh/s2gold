@@ -283,10 +283,45 @@ body {
 
 /* The build menu can list many buildings across size classes: cap its height
    and scroll rather than overflowing the viewport. */
-.ctx-menu.ctx-menu-build {
-  max-height: 70vh;
+.ctx-menu.ctx-menu-build,
+.ctx-menu.ctx-submenu {
+  max-height: 80vh;
   overflow-y: auto;
   min-width: 170px;
+}
+
+/* A category flyout trigger: label on the left, arrow on the right. */
+.ctx-menu button.ctx-cat-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ctx-caret {
+  color: #9aa;
+  font-size: 10px;
+}
+
+.ctx-menu button.ctx-cat-trigger.active {
+  background: #3f6fb0;
+  border-color: #6f9fe0;
+}
+
+/* A slim, theme-matched scrollbar instead of the bulky OS default. */
+.ctx-menu {
+  scrollbar-width: thin;
+  scrollbar-color: #55555f transparent;
+}
+.ctx-menu::-webkit-scrollbar {
+  width: 8px;
+}
+.ctx-menu::-webkit-scrollbar-thumb {
+  background: #55555f;
+  border-radius: 4px;
+}
+.ctx-menu::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .ctx-menu .ctx-category {

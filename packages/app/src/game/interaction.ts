@@ -141,6 +141,8 @@ export interface RoadPreview {
 
 export class Interaction {
   private menu: HTMLElement | null = null;
+  /** Open build-category flyout (a child of `menu`), or null. */
+  private submenu: HTMLElement | null = null;
   private roadStartFlagNode = -1;
   /** Harbor id awaiting an expedition target click (-1 = not selecting). */
   private expeditionHarborId = -1;
@@ -254,12 +256,29 @@ export class Interaction {
     this.deps.onStatus('Road mode: click a destination flag or free node (Esc to cancel)');
   }
 
-  private finishRoad(destNode: number): void {
+  /**
+   * Resolve a road endpoint the player aimed at: clicking an own building (the
+   * common way to connect a stranded one) targets its flag — the small node SE
+   * of the building that a road actually attaches to — instead of the building
+   * body, which can never take a road and would just fail.
+   */
+  private roadTargetNode(node: number): number {
+    const session = this.deps.session();
+    const b = buildingAt(session.world, node);
+    if (b && b.player === 0) {
+      const flagNode = session.geom.neighbour(node, 'SE');
+      if (session.flagIdAt(flagNode) >= 0) return flagNode;
+    }
+    return node;
+  }
+
+  private finishRoad(rawDestNode: number): void {
     const session = this.deps.session();
     const start = this.roadStartFlagNode;
     this.roadStartFlagNode = -1;
     this.clearPreview();
     this.deps.onStatus('');
+    const destNode = this.roadTargetNode(rawDestNode);
     if (destNode === start) return;
 
     const destFlag = session.flagIdAt(destNode);
@@ -301,44 +320,16 @@ export class Interaction {
       if (session.canFlag(node)) {
         items.push(this.action('Flag', () => session.placeFlag(node)));
       }
-      // Grouped build menu: one section per size class, listing every building
-      // of that size the engine says can be placed here, with its cost.
-      const addBuildable = (label: string, types: readonly BuildingType[]): void => {
+      // One flyout per size class that has a buildable option here: the root
+      // menu stays short (a handful of categories) and each building list opens
+      // to the side on hover, rather than one long scroll of every building.
+      const addCategory = (label: string, types: readonly BuildingType[]): void => {
         const buildable = types.filter((t) => session.canBuild(node, t));
-        if (buildable.length === 0) return;
-        items.push(this.categoryLabel(label));
-        for (const type of buildable) {
-          const name = BUILDING_LABEL[type] ?? titleCase(type);
-          items.push(
-            this.action(
-              `${name} (${costText(type)})`,
-              () => {
-                session.placeBuilding(node, type);
-                // Like the original: drop straight into road mode from the new
-                // site's flag so the player connects it to the network. The
-                // command is queued, so poll a few frames for the flag to land;
-                // Escape/right-click (cancel) aborts the pending poll.
-                const flagNode = session.geom.neighbour(node, 'SE');
-                const generation = this.cancelGeneration;
-                const tryStart = (attempts: number): void => {
-                  if (this.cancelGeneration !== generation) return;
-                  const s = this.deps.session();
-                  if (s.flagIdAt(flagNode) >= 0) {
-                    if (!this.roadMode && !this.menu) this.startRoad(flagNode);
-                    return;
-                  }
-                  if (attempts > 0) requestAnimationFrame(() => tryStart(attempts - 1));
-                };
-                tryStart(120);
-              },
-              `ctx-${type}`,
-            ),
-          );
-        }
+        if (buildable.length > 0) items.push(this.categoryItem(label, node, buildable));
       };
-      for (const cat of BUILD_CATEGORIES) addBuildable(cat.label, BUILDINGS_BY_SIZE[cat.size]);
+      for (const cat of BUILD_CATEGORIES) addCategory(cat.label, BUILDINGS_BY_SIZE[cat.size]);
       // Coastal buildings (harbor + shipyard) only when the shore admits them.
-      addBuildable('Coastal', COASTAL_TYPES);
+      addCategory('Coastal', COASTAL_TYPES);
     }
 
     if (items.length === 0) items.push(this.label('Nothing to do here'));
@@ -348,23 +339,89 @@ export class Interaction {
       { class: 'ctx-menu ctx-menu-build', attrs: { 'data-testid': 'ctx-menu' } },
       ...items,
     );
-    // Position below-right of the cursor by default, but flip up / left (and
-    // clamp) when the menu would spill past the viewport edge — otherwise a
-    // menu opened near the bottom gets clipped. Measured after it is in the DOM.
-    menu.style.left = `${clientX + 2}px`;
-    menu.style.top = `${clientY + 2}px`;
     this.deps.root.append(menu);
-    const margin = 6;
-    const rect = menu.getBoundingClientRect();
-    let left = clientX + 2;
-    if (left + rect.width + margin > window.innerWidth) left = clientX - rect.width - 2;
-    left = Math.max(margin, Math.min(left, window.innerWidth - rect.width - margin));
-    let top = clientY + 2;
-    if (top + rect.height + margin > window.innerHeight) top = clientY - rect.height - 2;
-    top = Math.max(margin, Math.min(top, window.innerHeight - rect.height - margin));
-    menu.style.left = `${left}px`;
-    menu.style.top = `${top}px`;
+    this.placeFloating(menu, clientX + 2, clientY + 2, clientX, clientY);
     this.menu = menu;
+  }
+
+  /**
+   * Place a floating element at (`x`, `y`) but flip it back past `flipX`/`flipY`
+   * and clamp to the viewport so it never spills off-screen. `flipX`/`flipY` are
+   * the anchor the element flips around (the cursor for the root menu, the parent
+   * item's edge for a submenu); they default to `x`/`y`.
+   */
+  private placeFloating(el: HTMLElement, x: number, y: number, flipX = x, flipY = y): void {
+    const margin = 6;
+    const rect = el.getBoundingClientRect();
+    let left = x;
+    if (left + rect.width + margin > window.innerWidth) left = flipX - rect.width;
+    left = Math.max(margin, Math.min(left, window.innerWidth - rect.width - margin));
+    let top = y;
+    if (top + rect.height + margin > window.innerHeight) top = flipY - rect.height;
+    top = Math.max(margin, Math.min(top, window.innerHeight - rect.height - margin));
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+  }
+
+  /**
+   * A build-category flyout trigger. Hovering (or clicking, for no-hover input)
+   * opens a submenu listing that category's buildings; hovering it also replaces
+   * any other open submenu, so only one is visible at a time.
+   */
+  private categoryItem(label: string, node: number, types: readonly BuildingType[]): HTMLElement {
+    const btn = el('button', {
+      class: 'ctx-cat-trigger',
+      attrs: { type: 'button', 'data-testid': `ctx-cat-${slug(label)}` },
+    });
+    btn.append(el('span', { text: label }), el('span', { class: 'ctx-caret', text: '▸' }));
+    const open = (): void => this.openSubmenu(btn, node, types);
+    btn.addEventListener('mouseenter', open);
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      open();
+    });
+    return btn;
+  }
+
+  /** Open (replacing any current) the building-list submenu for a category. */
+  private openSubmenu(trigger: HTMLElement, node: number, types: readonly BuildingType[]): void {
+    this.closeSubmenu();
+    const items = types.map((type) =>
+      this.action(
+        `${BUILDING_LABEL[type] ?? titleCase(type)} (${costText(type)})`,
+        () => this.placeBuildingAndConnect(node, type),
+        `ctx-${type}`,
+      ),
+    );
+    const sub = el('div', { class: 'ctx-menu ctx-submenu', attrs: { 'data-testid': 'ctx-submenu' } }, ...items);
+    trigger.classList.add('active');
+    this.deps.root.append(sub);
+    const tr = trigger.getBoundingClientRect();
+    // Open to the right of the trigger, flipping to its left edge if cramped.
+    this.placeFloating(sub, tr.right - 2, tr.top, tr.left + 2, tr.bottom);
+    this.submenu = sub;
+  }
+
+  /**
+   * Place a building, then drop straight into road mode from its new flag (as in
+   * the original) so the player connects it to the network. The command is
+   * queued, so poll a few frames for the flag to land; cancel aborts the poll.
+   */
+  private placeBuildingAndConnect(node: number, type: BuildingType): void {
+    const session = this.deps.session();
+    session.placeBuilding(node, type);
+    const flagNode = session.geom.neighbour(node, 'SE');
+    const generation = this.cancelGeneration;
+    const tryStart = (attempts: number): void => {
+      if (this.cancelGeneration !== generation) return;
+      const s = this.deps.session();
+      if (s.flagIdAt(flagNode) >= 0) {
+        if (!this.roadMode && !this.menu) this.startRoad(flagNode);
+        return;
+      }
+      if (attempts > 0) requestAnimationFrame(() => tryStart(attempts - 1));
+    };
+    tryStart(120);
   }
 
   private action(text: string, run: () => void, testid?: string): HTMLElement {
@@ -377,6 +434,10 @@ export class Interaction {
       run();
       this.closeMenu();
     });
+    // Moving onto a plain item closes any open category flyout.
+    btn.addEventListener('mouseenter', () => {
+      if (!btn.classList.contains('ctx-cat-trigger')) this.closeSubmenu();
+    });
     return btn;
   }
 
@@ -384,12 +445,16 @@ export class Interaction {
     return el('div', { class: 'ctx-label', text });
   }
 
-  /** A size-class section header inside the build menu. */
-  private categoryLabel(text: string): HTMLElement {
-    return el('div', { class: 'ctx-label ctx-category', text });
+  private closeSubmenu(): void {
+    if (this.submenu) {
+      this.submenu.remove();
+      this.submenu = null;
+    }
+    this.menu?.querySelector('.ctx-cat-trigger.active')?.classList.remove('active');
   }
 
   private closeMenu(): void {
+    this.closeSubmenu();
     if (this.menu) {
       this.menu.remove();
       this.menu = null;
@@ -433,7 +498,9 @@ export class Interaction {
   /** Recompute the previewed path + validity for the current hovered node. */
   private recomputePreview(): void {
     const start = this.roadStartFlagNode;
-    const node = this.hoverNode;
+    // Aiming at an own building previews a road to its flag (see roadTargetNode),
+    // matching what a click there will actually build.
+    const node = this.roadTargetNode(this.hoverNode);
     if (node < 0 || node === start) {
       this.previewPath = null;
       this.previewValid = false;

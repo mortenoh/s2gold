@@ -548,7 +548,9 @@ export class GameSession {
    */
   suggestRoad(startNode: number, endNode: number): number[] | null {
     if (startNode === endNode) return null;
-    const rest = findWalkPath(this.world, this.geom, this.rules, startNode, endNode);
+    // blockFlags: a road can't cross another flag, so plan around interior flags
+    // — otherwise the path previews as valid but buildRoad silently rejects it.
+    const rest = findWalkPath(this.world, this.geom, this.rules, startNode, endNode, true);
     if (!rest || rest.length === 0) return null;
     return [startNode, ...rest];
   }

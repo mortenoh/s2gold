@@ -93,7 +93,9 @@ function rebuild(cameFrom: Map<number, number>, goal: number): number[] {
  *
  * Returns the node sequence EXCLUDING `start` and INCLUDING `goal`, or null if
  * unreachable. Building nodes block movement (except the goal itself); flags and
- * roads are walkable.
+ * roads are walkable. Pass `blockFlags` to also route around interior flags —
+ * used to plan a *road* (which cannot pass through another flag), so the planned
+ * path is one the buildRoad command will actually accept.
  */
 export function findWalkPath(
   world: World,
@@ -101,11 +103,13 @@ export function findWalkPath(
   rules: TerrainRules,
   start: number,
   goal: number,
+  blockFlags = false,
 ): number[] | null {
   if (start === goal) return [];
 
   const walkable = (n: number): boolean => {
     if (n !== goal && world.buildingAtNode[n] >= 0) return false;
+    if (blockFlags && n !== goal && world.flagAtNode[n] >= 0) return false;
     return isWalkableTexture(world.terrain1[n], rules) && isWalkableTexture(world.terrain2[n], rules);
   };
   if (!walkable(goal)) return null;
