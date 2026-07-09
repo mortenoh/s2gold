@@ -282,9 +282,16 @@ export class Interaction {
     const flagId = session.flagIdAt(node);
 
     if (building && building.player === 0) {
+      // Offer road-building straight from the building: its flag (SE of the
+      // building node) is a small target that's easy to miss, and connecting a
+      // stranded building to the network is the common thing you want here.
+      const buildingFlagNode = session.geom.neighbour(node, 'SE');
+      if (session.flagIdAt(buildingFlagNode) >= 0) {
+        items.push(this.action('Build road', () => this.startRoad(buildingFlagNode)));
+      }
       if (building.type !== 'headquarters') {
         items.push(this.action('Demolish', () => session.demolish(node)));
-      } else {
+      } else if (items.length === 0) {
         items.push(this.label('Headquarters'));
       }
     } else if (flagId >= 0) {
