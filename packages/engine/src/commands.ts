@@ -13,6 +13,7 @@ import {
   BUILDING,
   buildingDef,
   FLAG_MIN_DISTANCE,
+  FLAG_WARE_CAPACITY,
   isFieldObject,
   isTreeType,
   isGraniteType,
@@ -350,6 +351,37 @@ function execPlaceFlag(
 }
 
 /**
+ * Release a road's serving carrier back to the free list. A carrier caught
+ * mid-carry still holds a live ware token (loc==='carried', locId===carrierId);
+ * re-home it onto the first of `dropFlags` with a free slot so dispatch re-routes
+ * it, or free the token when every candidate flag is full. Otherwise the token
+ * leaks and its targetBuildingId permanently inflates dispatch's en-route count.
+ */
+function freeCarrier(world: World, carrierId: number, dropFlags: number[]): void {
+  const carrier = world.settlers.items[carrierId];
+  if (!carrier) return;
+  if (carrier.carryingWareId >= 0) {
+    const ware = world.wares.items[carrier.carryingWareId];
+    if (ware) {
+      const flag = dropFlags
+        .map((fid) => (fid >= 0 ? world.flags.items[fid] : null))
+        .find((f) => f && f.wares.length < FLAG_WARE_CAPACITY);
+      if (flag) {
+        ware.loc = 'flag';
+        ware.locId = flag.id;
+        ware.nextFlag = -1; // dispatch recomputes from the new flag
+        flag.wares.push(ware.id);
+      } else {
+        storeFree(world.wares, carrier.carryingWareId);
+      }
+    }
+    carrier.carryingWareId = -1;
+  }
+  world.settlers.items[carrierId] = null;
+  world.settlers.free.push(carrierId);
+}
+
+/**
  * Split every road whose interior passes through `node` into two roads meeting
  * at the new flag `flagId`. The original road's carrier is released; the carrier
  * system re-staffs both halves next tick.
@@ -361,9 +393,10 @@ function splitRoadsAt(world: World, flagId: number, node: number): void {
     const { player, flagA, flagB } = road;
     const left = road.path.slice(0, idx + 1);
     const right = road.path.slice(idx);
-    if (road.carrierId >= 0 && world.settlers.items[road.carrierId]) {
-      world.settlers.items[road.carrierId] = null;
-      world.settlers.free.push(road.carrierId);
+    if (road.carrierId >= 0) {
+      // Both halves stay connected through the new middle flag, so any carried
+      // ware can drop on either endpoint or the new flag and re-route.
+      freeCarrier(world, road.carrierId, [flagId, flagA, flagB]);
     }
     storeFree(world.roads, road.id);
     storeAlloc(world.roads, (rid) => ({ id: rid, player, path: left, flagA, flagB: flagId, carrierId: -1 }));
@@ -543,12 +576,14 @@ function execDemolishFlag(world: World, player: number, node: number): void {
   for (const b of storeLive(world.buildings)) {
     if (b.flagId === flagId) return; // door flag of a standing building
   }
-  // Roads anchored here: free their carriers, then the road itself.
+  // Roads anchored here: free their carriers, then the road itself. This flag is
+  // going away (its parked wares are dropped below), so a mid-carry ware re-homes
+  // onto the road's surviving far flag.
   for (const road of [...storeLive(world.roads)]) {
     if (road.flagA !== flagId && road.flagB !== flagId) continue;
-    if (road.carrierId >= 0 && world.settlers.items[road.carrierId]) {
-      world.settlers.items[road.carrierId] = null;
-      world.settlers.free.push(road.carrierId);
+    if (road.carrierId >= 0) {
+      const farFlag = road.flagA === flagId ? road.flagB : road.flagA;
+      freeCarrier(world, road.carrierId, [farFlag]);
     }
     storeFree(world.roads, road.id);
   }
