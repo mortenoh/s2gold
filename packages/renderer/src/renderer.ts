@@ -172,6 +172,15 @@ export class TerrainRenderer {
   }
 
   /**
+   * The WebGL2 context backing this renderer's canvas. The sprite layer shares
+   * it so both draw into the same drawing buffer. Additive; the terrain API is
+   * otherwise unchanged.
+   */
+  get glContext(): WebGL2RenderingContext {
+    return this.gl;
+  }
+
+  /**
    * Match the canvas backing-store size to its CSS size * devicePixelRatio.
    * Returns true when the size changed.
    */

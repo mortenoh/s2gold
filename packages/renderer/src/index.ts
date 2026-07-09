@@ -50,3 +50,17 @@ export { Camera, wrap, type ZoomLevel } from './camera';
 export { TerrainRenderer, type TerrainRendererOptions } from './renderer';
 
 export { buildMinimapPixels, heightBrightness } from './minimap';
+
+export {
+  PLAYER_COLORS,
+  unpackColor,
+  type AtlasSprite,
+  type DynamicSprite,
+  type NodeRef,
+  type RenderScene,
+  type SpriteAnimation,
+  type SpriteAtlasMeta,
+  type StaticObject,
+} from './scene';
+
+export { SpriteRenderer, type AtlasPage, type SpriteDrawStats } from './sprites';

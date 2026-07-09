@@ -30,6 +30,10 @@ export interface LoadedMap {
   readonly hqX: readonly number[];
   readonly hqY: readonly number[];
   readonly data: TerrainMapData;
+  /** Object classification plane (row-major width*height). */
+  readonly objectType: Uint8Array;
+  /** Object variant/state plane (row-major width*height). */
+  readonly objectIndex: Uint8Array;
 }
 
 interface MapJson {
@@ -84,6 +88,8 @@ export async function loadMap(entry: MapIndexEntry): Promise<LoadedMap> {
     terrain,
     hqX: raw.hq_x ?? [],
     hqY: raw.hq_y ?? [],
+    objectType: layer('object_type'),
+    objectIndex: layer('object_index'),
     data: {
       width: raw.width,
       height: raw.height,

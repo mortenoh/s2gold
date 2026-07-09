@@ -6,8 +6,13 @@
 
 import { mapPixelHeight, mapPixelWidth } from './geometry';
 
-/** Integer zoom factors supported by the renderer. */
-export type ZoomLevel = 1 | 2;
+/** Kept for API compatibility; zoom is now continuous within [ZOOM_MIN, ZOOM_MAX]. */
+export type ZoomLevel = number;
+
+/** Zoom bounds and the multiplicative step used per mouse-wheel notch. */
+export const ZOOM_MIN = 0.5;
+export const ZOOM_MAX = 4;
+export const ZOOM_STEP = 1.2;
 
 /** Camera state consumed by the renderer each frame. */
 export class Camera {
@@ -47,12 +52,32 @@ export class Camera {
     this.y = wrap(worldY - viewportH / this.zoom / 2, this.worldH);
   }
 
-  /** Toggle between the supported zoom levels, keeping the view center. */
+  /** Toggle between 1x and 2x, keeping the view center (button / key path). */
   toggleZoom(viewportW: number, viewportH: number): void {
     const cx = this.x + viewportW / this.zoom / 2;
     const cy = this.y + viewportH / this.zoom / 2;
-    this.zoom = this.zoom === 1 ? 2 : 1;
+    this.zoom = this.zoom < 2 ? 2 : 1;
     this.centerOn(cx, cy, viewportW, viewportH);
+  }
+
+  /**
+   * Set an absolute zoom, keeping the world point under the given screen
+   * position fixed (mouse-wheel zoom anchor). The zoom is clamped to
+   * [ZOOM_MIN, ZOOM_MAX].
+   */
+  zoomAt(zoom: number, screenX: number, screenY: number): void {
+    const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom));
+    if (next === this.zoom) return;
+    const wx = this.x + screenX / this.zoom;
+    const wy = this.y + screenY / this.zoom;
+    this.zoom = next;
+    this.x = wrap(wx - screenX / this.zoom, this.worldW);
+    this.y = wrap(wy - screenY / this.zoom, this.worldH);
+  }
+
+  /** Step the zoom by one wheel notch (positive = zoom in) anchored at a screen point. */
+  zoomStep(direction: 1 | -1, screenX: number, screenY: number): void {
+    this.zoomAt(this.zoom * (direction > 0 ? ZOOM_STEP : 1 / ZOOM_STEP), screenX, screenY);
   }
 }
 

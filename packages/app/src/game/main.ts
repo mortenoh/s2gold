@@ -5,13 +5,39 @@
  */
 
 import './styles.css';
-import { Camera, TerrainRenderer, TR_H, TR_W } from '@s2gold/renderer';
+import { Camera, SpriteRenderer, TerrainRenderer, TR_H, TR_W } from '@s2gold/renderer';
 import { clear, el } from '../lib/dom';
 import { loadMap, loadMapIndex, loadTerrainImage, pickMap, type MapIndexEntry } from './map-loader';
+import { buildStaticObjects, objectAtlasForLandscape } from './map-objects';
+import { loadAtlas } from './sprite-atlas';
 import { MinimapView } from './minimap-view';
 
 /** World-px pan speed per second when holding an arrow key. */
 const KEY_PAN_SPEED = 600;
+
+/**
+ * Milliseconds per tree-wave animation frame. The original advances the wind
+ * animation roughly every 4-5 game frames; at the original's ~28 fps game clock
+ * that is about 150 ms, giving an ~1.2 s eight-frame cycle.
+ */
+const ANIM_FRAME_MS = 150;
+
+/** Debug counters exposed on window for e2e assertions. */
+interface S2Debug {
+  staticObjects: number;
+  trees: number;
+  granite: number;
+  decorations: number;
+  skipped: number;
+  spriteQuads: number;
+  spriteDrawCalls: number;
+}
+
+declare global {
+  interface Window {
+    __s2debug?: S2Debug;
+  }
+}
 
 function showMessage(root: HTMLElement, testid: string, html: string): void {
   clear(root);
@@ -68,8 +94,10 @@ async function boot(): Promise<void> {
   );
 
   let renderer: TerrainRenderer;
+  let sprites: SpriteRenderer;
   try {
     renderer = new TerrainRenderer(canvas);
+    sprites = new SpriteRenderer(renderer.glContext);
   } catch (err) {
     showMessage(root, 'game-no-webgl', `WebGL2 unavailable: ${String(err)}`);
     return;
@@ -87,6 +115,32 @@ async function boot(): Promise<void> {
     renderer.resize();
     renderer.load(map.data, atlas);
 
+    // Build the object layer: register the landscape's object atlas (once) and
+    // translate the map's object planes into static sprites.
+    const archive = objectAtlasForLandscape(map.terrain);
+    if (!sprites.hasAtlas(archive)) {
+      const loaded = await loadAtlas(archive);
+      if (loaded) sprites.registerAtlas(loaded.meta, loaded.pages);
+    }
+    const built = buildStaticObjects(
+      map.data.width,
+      map.data.height,
+      map.objectType,
+      map.objectIndex,
+      map.terrain,
+    );
+    sprites.setMap(map.data.width, map.data.height, map.data.heightLayer);
+    sprites.setStaticObjects(sprites.hasAtlas(archive) ? built.objects : []);
+    window.__s2debug = {
+      staticObjects: sprites.hasAtlas(archive) ? built.objects.length : 0,
+      trees: built.counts.trees,
+      granite: built.counts.granite,
+      decorations: built.counts.decorations,
+      skipped: built.counts.skipped,
+      spriteQuads: 0,
+      spriteDrawCalls: 0,
+    };
+
     camera = new Camera(map.data.width, map.data.height);
     minimap.setMap(map.data, camera.worldSize.w, camera.worldSize.h);
 
@@ -101,7 +155,7 @@ async function boot(): Promise<void> {
 
     mapTitle.textContent = map.title || entry.name;
     mapSelect.value = entry.name;
-    zoomButton.textContent = `Zoom ${camera.zoom}x`;
+    zoomButton.textContent = zoomLabel();
     document.title = `s2gold — ${map.title || entry.name}`;
     const url = new URL(window.location.href);
     url.searchParams.set('map', entry.name);
@@ -114,10 +168,29 @@ async function boot(): Promise<void> {
     if (entry) void switchMap(entry);
   });
 
+  const zoomLabel = (): string => `Zoom ${camera.zoom.toFixed(camera.zoom % 1 === 0 ? 0 : 2)}x`;
   zoomButton.addEventListener('click', () => {
     camera.toggleZoom(canvas.width, canvas.height);
-    zoomButton.textContent = `Zoom ${camera.zoom}x`;
+    zoomButton.textContent = zoomLabel();
   });
+
+  // Mouse-wheel zoom anchored at the cursor. Scale by the actual scroll delta so
+  // trackpads (many small events) zoom gently while a full wheel notch (~100px)
+  // gives a moderate step; deltaMode 1 means lines, normalize to ~16px each.
+  canvas.addEventListener(
+    'wheel',
+    (ev) => {
+      ev.preventDefault();
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      const sx = (ev.clientX - rect.left) * dpr;
+      const sy = (ev.clientY - rect.top) * dpr;
+      const deltaPx = ev.deltaMode === 1 ? ev.deltaY * 16 : ev.deltaY;
+      camera.zoomAt(camera.zoom * Math.exp(-deltaPx * 0.001), sx, sy);
+      zoomButton.textContent = zoomLabel();
+    },
+    { passive: false },
+  );
 
   // Drag-to-scroll on the main canvas.
   let dragging = false;
@@ -152,7 +225,7 @@ async function boot(): Promise<void> {
       ev.preventDefault();
     } else if (ev.key === 'z' || ev.key === 'Z') {
       camera.toggleZoom(canvas.width, canvas.height);
-      zoomButton.textContent = `Zoom ${camera.zoom}x`;
+      zoomButton.textContent = zoomLabel();
     }
   });
   window.addEventListener('keyup', (ev) => held.delete(ev.key));
@@ -179,6 +252,12 @@ async function boot(): Promise<void> {
 
     renderer.resize();
     renderer.render(camera);
+    const tick = Math.floor(now / ANIM_FRAME_MS);
+    const stats = sprites.render(camera, tick);
+    if (window.__s2debug) {
+      window.__s2debug.spriteQuads = stats.quads;
+      window.__s2debug.spriteDrawCalls = stats.drawCalls;
+    }
     minimap.draw(camera, canvas.width, canvas.height);
 
     frames++;
