@@ -301,6 +301,11 @@ export class Interaction {
     const flagId = session.flagIdAt(node);
 
     if (building && building.player === 0) {
+      // Name the building so it's obvious what it is (the sprites can be hard to
+      // tell apart), noting when it is still under construction.
+      const name = BUILDING_LABEL[building.type] ?? titleCase(building.type);
+      const suffix = building.state === 'site' ? ' (building)' : '';
+      items.push(this.categoryLabel(`${name}${suffix}`));
       // Offer road-building straight from the building: its flag (SE of the
       // building node) is a small target that's easy to miss, and connecting a
       // stranded building to the network is the common thing you want here.
@@ -310,8 +315,6 @@ export class Interaction {
       }
       if (building.type !== 'headquarters') {
         items.push(this.action('Demolish', () => session.demolish(node)));
-      } else if (items.length === 0) {
-        items.push(this.label('Headquarters'));
       }
     } else if (flagId >= 0) {
       items.push(this.action('Build road', () => this.startRoad(node)));
@@ -445,6 +448,11 @@ export class Interaction {
 
   private label(text: string): HTMLElement {
     return el('div', { class: 'ctx-label', text });
+  }
+
+  /** A highlighted header row (building name / section title). */
+  private categoryLabel(text: string): HTMLElement {
+    return el('div', { class: 'ctx-label ctx-category', text });
   }
 
   private closeSubmenu(): void {
