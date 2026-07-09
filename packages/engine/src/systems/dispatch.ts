@@ -17,7 +17,7 @@
 import { buildingDef, WARE, WARE_TYPES, type WareType } from '../constants';
 import type { EventSink } from '../events';
 import type { Geometry } from '../geometry';
-import { buildFlagGraph, findFlagRoute } from '../pathfinding';
+import { buildSeaContext, chooseWareRoute } from './seafaring';
 import {
   getBuilding,
   getFlag,
@@ -205,15 +205,8 @@ function runWarehouseSupply(world: World, geom: Geometry): void {
 export function runDispatch(world: World, geom: Geometry, events: EventSink): void {
   runWarehouseSupply(world, geom);
 
-  const graphs = new Map<number, ReturnType<typeof buildFlagGraph>>();
-  const graphFor = (player: number): ReturnType<typeof buildFlagGraph> => {
-    let g = graphs.get(player);
-    if (!g) {
-      g = buildFlagGraph(world, player);
-      graphs.set(player, g);
-    }
-    return g;
-  };
+  // Shared land-vs-sea routing context (harbors + road graphs + water links).
+  const seaCtx = buildSeaContext(world, geom);
 
   for (const flag of storeLive(world.flags)) {
     // Iterate over a copy: delivery mutates flag.wares.
@@ -231,9 +224,8 @@ export function runDispatch(world: World, geom: Geometry, events: EventSink): vo
       if (target.flagId === flag.id) {
         if (tryDeliver(world, events, flag, wareId)) continue;
       }
-      // Compute the next flag hop toward the target's flag.
-      const route = findFlagRoute(world, geom, graphFor(flag.player), flag.id, target.flagId);
-      w.nextFlag = route && route.length >= 2 ? route[1] : -1;
+      // Next hop toward the target, choosing land or a sea leg via harbors.
+      w.nextFlag = chooseWareRoute(seaCtx, flag.id, w.targetBuildingId).nextFlag;
     }
   }
 }

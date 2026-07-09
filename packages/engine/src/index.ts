@@ -16,13 +16,24 @@ import { runConstruction } from './systems/construction';
 import { runProduction } from './systems/production';
 import { runDispatch } from './systems/dispatch';
 import { runMilitary, garrisonCount } from './systems/military';
+import { runSeafaring } from './systems/seafaring';
 import {
   HQ_RADIUS,
+  SEA,
   VISUALRANGE_LOOKOUTTOWER,
   VISUALRANGE_MILITARY,
   ownerPlayer,
 } from './constants';
-import { storeLive, type Building, type Flag, type Road, type Settler, type World } from './world';
+import {
+  storeLive,
+  type Building,
+  type Flag,
+  type Road,
+  type Settler,
+  type Ship,
+  type ShipState,
+  type World,
+} from './world';
 
 export const ENGINE_VERSION = '0.1.0';
 
@@ -40,11 +51,22 @@ export type {
   Building,
   Settler,
   Ware,
+  Ship,
+  ShipState,
+  Expedition,
   Player,
   MapJson,
   CreateWorldOptions,
 } from './world';
-export { applyCommand, canPlaceFlag, canPlaceBuilding, terrainBuildable, terrainMineable } from './commands';
+export {
+  applyCommand,
+  canPlaceFlag,
+  canPlaceBuilding,
+  canPlaceHarbor,
+  requiresCoast,
+  terrainBuildable,
+  terrainMineable,
+} from './commands';
 export type { Command, CommandInput } from './commands';
 export { serializeWorld, deserializeWorld, hashWorld } from './serialize';
 export { fnv1a } from './hash';
@@ -57,13 +79,24 @@ export {
   DEFAULT_IMPASSABLE,
   BUILDABLE_IDS,
   MOUNTAIN_IDS,
+  NAVIGABLE_WATER_IDS,
+  HARBOR_TEXTURE_FLAG,
   terrainId,
   isBuildableTexture,
   isWalkableTexture,
   isMountainTexture,
+  isWaterTexture,
+  hasHarborFlag,
 } from './terrain';
 export type { TerrainRules } from './terrain';
-export { findWalkPath, findFlagRoute, buildFlagGraph, roadBetween } from './pathfinding';
+export {
+  isWaterNode,
+  isCoastalLand,
+  harborDockNode,
+  waterNeighbours,
+  waterNeighbourCount,
+} from './water';
+export { findWalkPath, findWaterPath, findFlagRoute, buildFlagGraph, roadBetween } from './pathfinding';
 export type { GameEvent } from './events';
 export * from './constants';
 
@@ -88,6 +121,7 @@ export function tickWorld(world: World, rules: TerrainRules = GREENLAND_RULES): 
   runMilitary(world, geom, rules, events); // 4. military (occupy/fight/promote/catapult)
   runDispatch(world, geom, events); // 5a. ware routing + delivery
   runCarriers(world, events); // 5b. carriers
+  runSeafaring(world, geom, events); // 5c. ships, sea transport, expeditions (P7)
   world.tick++;
   return events.drain(); // 6. events
 }
@@ -303,6 +337,82 @@ export interface MilitaryView {
   maxGold: number;
   coinsEnabled: boolean;
   militaryRadius: number;
+}
+
+// --- Seafaring view helpers (read-only; for the app UI wave) --------------
+
+/** Live ships of a player (id order). */
+export function shipsOf(world: World, player: number): Ship[] {
+  const out: Ship[] = [];
+  for (const s of storeLive(world.ships)) if (s.player === player) out.push(s);
+  return out;
+}
+
+/** Working harbor buildings of a player (id order). */
+export function harborsOf(world: World, player: number): Building[] {
+  const out: Building[] = [];
+  for (const b of storeLive(world.buildings)) {
+    if (b.player === player && b.type === 'harbor' && b.state === 'working') out.push(b);
+  }
+  return out;
+}
+
+/** Read-only snapshot of a ship's position, home, state, and cargo. */
+export interface ShipView {
+  shipId: number;
+  player: number;
+  node: number;
+  state: ShipState;
+  homeHarborId: number;
+  destHarborId: number;
+  cargoCount: number;
+  cargoCapacity: number;
+  onExpedition: boolean;
+}
+
+/** Snapshot of a single ship (null when the id is dead). */
+export function shipView(world: World, shipId: number): ShipView | null {
+  const s = world.ships.items[shipId];
+  if (!s) return null;
+  return {
+    shipId: s.id,
+    player: s.player,
+    node: s.node,
+    state: s.state,
+    homeHarborId: s.homeHarborId,
+    destHarborId: s.destHarborId,
+    cargoCount: s.cargo.length,
+    cargoCapacity: SEA.cargoCapacity,
+    onExpedition: s.expeditionTargetSpot >= 0,
+  };
+}
+
+/** Read-only snapshot of an expedition being assembled at a harbor. */
+export interface ExpeditionView {
+  harborId: number;
+  player: number;
+  boards: number;
+  stones: number;
+  neededBoards: number;
+  neededStones: number;
+  hasBuilder: boolean;
+  ready: boolean;
+}
+
+/** The pending expedition at a harbor, or null if none is being prepared. */
+export function expeditionStatus(world: World, harborId: number): ExpeditionView | null {
+  const e = world.expeditions.find((x) => x.harborId === harborId);
+  if (!e) return null;
+  return {
+    harborId: e.harborId,
+    player: e.player,
+    boards: e.boards,
+    stones: e.stones,
+    neededBoards: SEA.expeditionBoards,
+    neededStones: SEA.expeditionStones,
+    hasBuilder: e.hasBuilder,
+    ready: e.ready,
+  };
 }
 
 /** Garrison/coin snapshot of a military building (null when not military/dead). */

@@ -13,6 +13,7 @@
 
 import type { Geometry } from './geometry';
 import { isWalkableTexture, type TerrainRules } from './terrain';
+import { isWaterNode } from './water';
 import { getFlag, getRoad, storeLive, type World } from './world';
 
 /** A binary min-heap of (id) ordered by (priority, id) for deterministic pops. */
@@ -124,6 +125,51 @@ export function findWalkPath(
     const curG = gScore.get(cur) as number;
     for (const nb of geom.neighbours(cur)) {
       if (closed.has(nb) || !walkable(nb)) continue;
+      const tentative = curG + 1;
+      const known = gScore.get(nb);
+      if (known === undefined || tentative < known) {
+        gScore.set(nb, tentative);
+        cameFrom.set(nb, cur);
+        open.push(nb, tentative + geom.distance(nb, goal));
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Deterministic A* over navigable-water nodes for ships (P7).
+ *
+ * Returns the water-node sequence EXCLUDING `start` and INCLUDING `goal`, or
+ * null when no all-water route exists. Both endpoints must be water nodes.
+ * Tie-breaking is by ascending node id (via the shared min-heap), so ship routes
+ * are identical across runs and platforms, and wrap across the torus like the
+ * land walk A*.
+ */
+export function findWaterPath(
+  world: World,
+  geom: Geometry,
+  start: number,
+  goal: number,
+): number[] | null {
+  if (!isWaterNode(world, start) || !isWaterNode(world, goal)) return null;
+  if (start === goal) return [];
+
+  const open = new MinHeap();
+  const gScore = new Map<number, number>();
+  const cameFrom = new Map<number, number>();
+  gScore.set(start, 0);
+  open.push(start, geom.distance(start, goal));
+
+  const closed = new Set<number>();
+  while (open.size > 0) {
+    const cur = open.pop();
+    if (cur === goal) return rebuild(cameFrom, goal).slice(1);
+    if (closed.has(cur)) continue;
+    closed.add(cur);
+    const curG = gScore.get(cur) as number;
+    for (const nb of geom.neighbours(cur)) {
+      if (closed.has(nb) || !isWaterNode(world, nb)) continue;
       const tentative = curG + 1;
       const known = gScore.get(nb);
       if (known === undefined || tentative < known) {

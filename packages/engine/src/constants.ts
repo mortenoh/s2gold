@@ -138,6 +138,7 @@ export const JOB = {
   armorer: 'armorer',
   wellman: 'wellman', // Helper-staffed well/lookout spots
   scout: 'scout',
+  shipwright: 'shipwright', // P7: builds ships at the shipyard (CONSTANTS.md §3 id 27)
 } as const;
 export type JobType = string;
 
@@ -145,7 +146,7 @@ export const JOB_TYPES: readonly JobType[] = [
   JOB.carrier, JOB.builder, JOB.woodcutter, JOB.forester, JOB.sawmiller, JOB.stonemason,
   JOB.fisher, JOB.hunter, JOB.farmer, JOB.miller, JOB.baker, JOB.butcher, JOB.miner,
   JOB.brewer, JOB.pigbreeder, JOB.donkeybreeder, JOB.ironfounder, JOB.minter,
-  JOB.metalworker, JOB.armorer, JOB.wellman, JOB.scout,
+  JOB.metalworker, JOB.armorer, JOB.wellman, JOB.scout, JOB.shipwright,
 ];
 
 /**
@@ -176,6 +177,7 @@ export const JOB_TOOL: Readonly<Record<JobType, WareType | null>> = {
   armorer: WARE.hammer,
   wellman: null,
   scout: WARE.bow,
+  shipwright: WARE.hammer, // CONSTANTS.md §3 Shipwright recruit tool = Hammer
 };
 
 // --- Building types -------------------------------------------------------
@@ -206,6 +208,10 @@ export const BUILDING = {
   donkeybreeder: 'donkeybreeder',
   storehouse: 'storehouse',
   lookout: 'lookout',
+  // Seafaring buildings (P7). Shipyard = coastal workshop building ships;
+  // harbor = coastal warehouse that anchors territory and launches expeditions.
+  shipyard: 'shipyard',
+  harbor: 'harbor',
   // Military buildings (MILITARY.md §2). Order matches NUM_MILITARY_BLDS.
   barracks: 'barracks',
   guardhouse: 'guardhouse',
@@ -216,7 +222,7 @@ export const BUILDING = {
 export type BuildingType = string;
 
 /** Build-quality class a building needs (CONSTANTS.md §2 BuildingQuality). */
-export type BuildingSize = 'hut' | 'house' | 'castle' | 'mine';
+export type BuildingSize = 'hut' | 'house' | 'castle' | 'mine' | 'harbor';
 
 /**
  * How a building turns work into wares:
@@ -230,6 +236,7 @@ export type BuildingSize = 'hut' | 'house' | 'castle' | 'mine';
  * - `military`: garrisons soldiers, projects territory, can attack/defend
  *   (MILITARY.md §2-6).
  * - `catapult`: throws stones at nearby enemy military buildings (MILITARY.md §7).
+ * - `shipyard`: coastal workshop; consumes planks and builds ship entities (P7).
  */
 export type BuildingKind =
   | 'hq'
@@ -241,7 +248,8 @@ export type BuildingKind =
   | 'mine'
   | 'special'
   | 'military'
-  | 'catapult';
+  | 'catapult'
+  | 'shipyard';
 
 /** A single data-driven building definition. All timings in GF/ticks. */
 export interface BuildingDef {
@@ -332,6 +340,13 @@ export const BUILDING_DEFS: Readonly<Record<string, BuildingDef>> = {
   // Warehouse + vision.
   storehouse: { id: 29, cost: { boards: 4, stones: 3 }, size: 'house', kind: 'warehouse', worker: null, inputs: [], inputCap: CAP, useOneEach: true, outputs: [], workTicks: 0 },
   lookout: { id: 14, cost: { boards: 4, stones: 0 }, size: 'hut', kind: 'special', worker: JOB.scout, inputs: [], inputCap: CAP, useOneEach: true, outputs: [], workTicks: 0 }, // §2 Lookout tower: vision only (stub)
+
+  // Seafaring (P7). Shipyard: House-class coastal workshop; Shipwright turns
+  // Boards into ship entities (§2 id 36, §3 Shipwright work_length=1250). Harbor:
+  // Harbor-class coastal warehouse; anchors territory (HARBOR_RADIUS=8) and hosts
+  // ships/expeditions (§2 id 39). No producer worker (acts like the HQ/storehouse).
+  shipyard: { id: 36, cost: { boards: 2, stones: 3 }, size: 'house', kind: 'shipyard', worker: JOB.shipwright, inputs: [WARE.plank], inputCap: CAP, useOneEach: true, outputs: [], workTicks: 1250 }, // §5 Shipwright Boards->Ship, work=1250
+  harbor: { id: 39, cost: { boards: 4, stones: 6 }, size: 'harbor', kind: 'warehouse', worker: null, inputs: [], inputCap: CAP, useOneEach: true, outputs: [], workTicks: 0, militaryRadius: 8 }, // §2 Harbor building: warehouse + HARBOR_RADIUS territory anchor
 
   // Military buildings (MILITARY.md §2). Costs from CONSTANTS.md §2. No worker
   // job (soldiers occupy via the military system, not the recruit-a-worker path);
@@ -608,6 +623,34 @@ export function ownerPlayer(ownerByte: number): number {
 export function ownerByteFor(player: number): number {
   return player + 1;
 }
+
+// --- Seafaring (P7) -------------------------------------------------------
+/**
+ * Ship + sea-transport + expedition tunables. Ships are entities (like settlers
+ * but on water); harbors are coastal warehouses. All timings in GF/ticks.
+ *
+ * Original references (CONSTANTS.md): a ship holds up to 40 cargo units; boat
+ * carriers move 1 node / 20 GF (§3/§4 — ships reuse the same base speed, no
+ * source constant makes them faster); the shipyard's Shipwright takes 1250 GF
+ * (§5). Expedition material amounts are an ENGINE model (the original founds a
+ * colony from an on-board building kit; we fix it to a harbor's own cost so the
+ * kit matches what it raises). The sea-leg penalty is an ENGINE routing weight
+ * that biases wares onto land whenever a comparable land route exists.
+ */
+export const SEA = {
+  /** Max ware tokens a transport ship carries (CONSTANTS.md: ship holds ~40). */
+  cargoCapacity: 40,
+  /** Ticks a ship takes to cross one water-lattice edge (§3/§4 base 20 GF/node). */
+  ticksPerEdge: 20,
+  /** Extra hop-cost added to a sea-assisted ware route vs. a pure land route (ENGINE). */
+  legPenalty: 15,
+  /** Boards a shipyard consumes to build one ship (ENGINE: ships are entities, not wares). */
+  shipPlankCost: 6,
+  /** Boards an expedition loads before it can found a harbor (ENGINE = harbor cost). */
+  expeditionBoards: 4,
+  /** Stones an expedition loads before it can found a harbor (ENGINE = harbor cost). */
+  expeditionStones: 6,
+} as const;
 
 // --- Map object encoding (FACT: settlers2.net objects doc + on-disk data) --
 export const OBJ_TYPE = {

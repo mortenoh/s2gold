@@ -13,7 +13,7 @@
  * (see the view helpers in index.ts), so nothing else needs storing.
  */
 
-import { buildingDef, HQ_RADIUS, OWNER_NONE, ownerByteFor } from '../constants';
+import { BUILDING, buildingDef, HARBOR_RADIUS, HQ_RADIUS, OWNER_NONE, ownerByteFor } from '../constants';
 import type { Geometry } from '../geometry';
 import { storeLive, type World } from './../world';
 
@@ -33,6 +33,10 @@ function collectPoints(world: World): MilitaryPoint[] {
     if (!def) continue;
     if (def.kind === 'hq') {
       points.push({ node: b.node, player: b.player, radius: HQ_RADIUS, buildingId: b.id });
+    } else if (b.type === BUILDING.harbor && b.state === 'working') {
+      // A harbor anchors territory like an HQ-lite (MILITARY.md §2 HARBOR_RADIUS),
+      // which is what lets an expedition establish a foothold on a new island (P7).
+      points.push({ node: b.node, player: b.player, radius: HARBOR_RADIUS, buildingId: b.id });
     } else if (def.kind === 'military' && b.occupied) {
       points.push({
         node: b.node,

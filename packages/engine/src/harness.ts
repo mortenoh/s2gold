@@ -63,6 +63,73 @@ export function makeFlatMap(width: number, height: number, hqX = 1, hqY = 1): Ma
   };
 }
 
+/**
+ * Two-island fixture for the P7 seafaring suite: a single connected body of
+ * navigable water (terrain id 0x05) with two rectangular meadow islands, so a
+ * ship can sail all the way around either island and between them. Harbors sit on
+ * the WEST coast of each island (water to the west, land to the SE) so the door
+ * flag — always the SE neighbour — lands on buildable ground.
+ *
+ * Layout (24x14): island A cols 4..8, island B cols 15..19, both rows 4..9;
+ * everything else water. HQ on island A at (6,6). Coordinates the tests use are
+ * exported as {@link TWO_ISLAND}.
+ */
+export const TWO_ISLAND = {
+  width: 24,
+  height: 14,
+  hq: { x: 6, y: 6 },
+  /** West-coast harbor spot on island A (water at (3,6), land SE door (4,7)). */
+  harborA: { x: 4, y: 6 },
+  /** West-coast harbor spot on island B (water at (14,6), land SE door (15,7)). */
+  harborB: { x: 15, y: 6 },
+  /** A second island-A coastal building spot for the shipyard. */
+  shipyardA: { x: 4, y: 8 },
+  /** An island-B land node for a road-connected consumer/storehouse. */
+  consumerB: { x: 17, y: 6 },
+} as const;
+
+/** Build the {@link TWO_ISLAND} map (all water, two meadow islands, one HQ). */
+export function makeTwoIslandMap(): MapJson {
+  const { width, height } = TWO_ISLAND;
+  const size = width * height;
+  const WATER = 0x05;
+  const MEADOW = 0x08;
+  const t1 = new Array<number>(size).fill(WATER);
+  const t2 = new Array<number>(size).fill(WATER);
+  const zero = new Array<number>(size).fill(0);
+  const setLand = (x0: number, x1: number, y0: number, y1: number): void => {
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        const i = y * width + x;
+        t1[i] = MEADOW;
+        t2[i] = MEADOW;
+      }
+    }
+  };
+  setLand(4, 8, 4, 9); // island A
+  setLand(15, 19, 4, 9); // island B
+  const layers: Record<string, string> = {
+    texture1: encodeBase64(t1),
+    texture2: encodeBase64(t2),
+    height: encodeBase64(zero),
+    object_type: encodeBase64(zero),
+    object_index: encodeBase64(zero),
+    resources: encodeBase64(zero),
+    owner: encodeBase64(zero),
+  };
+  return {
+    title: 'two-island',
+    width,
+    height,
+    terrain: 0,
+    players: 1,
+    hq_x: [TWO_ISLAND.hq.x, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff],
+    hq_y: [TWO_ISLAND.hq.y, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff],
+    encoding: 'base64',
+    layers,
+  };
+}
+
 /** Nodes chosen for the demo buildings. */
 export interface DemoLayout {
   hqNode: number;

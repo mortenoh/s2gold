@@ -78,3 +78,34 @@ export function isWalkableTexture(textureByte: number, rules: TerrainRules): boo
 export function isMountainTexture(textureByte: number): boolean {
   return MOUNTAIN_IDS.has(terrainId(textureByte));
 }
+
+// --- Water / seafaring classification (P7) --------------------------------
+
+/**
+ * Navigable water terrain ids (greenland): open water (0x05) and shallow water
+ * (0x06). Reef (0x13) and lava are impassable to ships and stay out of the set.
+ * Ships path over nodes whose surrounding texture is navigable water; harbors
+ * are land nodes adjacent to it.
+ */
+export const NAVIGABLE_WATER_IDS: ReadonlySet<number> = new Set([
+  0x05, // water
+  0x06, // shallow water
+]);
+
+/**
+ * High-bit flag some WLD texture bytes carry to mark an explicit harbor spot
+ * (bit 0x40, above the 6-bit terrain id). When present the map author placed a
+ * harbor point there; when absent we fall back to a coast heuristic. This bit is
+ * outside {@link TERRAIN_ID_MASK}, so it never affects terrain-id classification.
+ */
+export const HARBOR_TEXTURE_FLAG = 0x40;
+
+/** True when a texture byte is navigable water (open or shallow). */
+export function isWaterTexture(textureByte: number): boolean {
+  return NAVIGABLE_WATER_IDS.has(terrainId(textureByte));
+}
+
+/** True when a texture byte carries the explicit harbor-spot flag (bit 0x40). */
+export function hasHarborFlag(textureByte: number): boolean {
+  return (textureByte & HARBOR_TEXTURE_FLAG) !== 0;
+}

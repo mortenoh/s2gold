@@ -35,9 +35,9 @@ export const WORLD_VERSION = 1;
 export interface Ware {
   id: number;
   type: WareType;
-  /** 'flag' | 'carried' | 'building'. */
-  loc: 'flag' | 'carried' | 'building';
-  /** flagId when loc==='flag', settlerId when carried, buildingId when in building. */
+  /** 'flag' | 'carried' | 'building' | 'ship' (P7 sea cargo). */
+  loc: 'flag' | 'carried' | 'building' | 'ship';
+  /** flagId when loc==='flag', settlerId carried, buildingId in building, shipId on a ship. */
   locId: number;
   /** Destination building this ware is routed to (-1 = none/at rest). */
   targetBuildingId: number;
@@ -158,6 +158,60 @@ export interface Settler {
   fightTurn: number;
 }
 
+/**
+ * A ship entity (P7): a transport/expedition vessel that moves over water nodes,
+ * shuttling ware cargo between a player's harbors and carrying expeditions to new
+ * coastal harbor spots. Ships home to a harbor and idle at its dock.
+ */
+export interface Ship {
+  id: number;
+  player: number;
+  /** Current water node. */
+  node: number;
+  state: ShipState;
+  /** Home harbor building id the ship docks at when idle. */
+  homeHarborId: number;
+  /** Destination harbor building id while shuttling cargo (-1 = none). */
+  destHarborId: number;
+  /** Remaining water-node sequence to sail through (excludes current node). */
+  path: number[];
+  pathIndex: number;
+  edgeProgress: number;
+  ticksPerEdge: number;
+  /** Ware ids loaded as cargo (queue order preserved). */
+  cargo: number[];
+  /**
+   * When carrying an expedition, the founding kit + target: land node to found a
+   * harbor on, and the materials/builder aboard. `targetSpot` = -1 when the ship
+   * is not on an expedition.
+   */
+  expeditionTargetSpot: number;
+  expeditionBoards: number;
+  expeditionStones: number;
+  expeditionBuilder: boolean;
+}
+
+export type ShipState =
+  | 'idle' // docked at home harbor, available
+  | 'shuttleOut' // sailing to a destination harbor with cargo
+  | 'shuttleBack' // sailing home after delivering cargo
+  | 'expedition'; // sailing to a target harbor spot to found a colony
+
+/**
+ * A pending expedition being assembled at a harbor (P7): the harbor draws boards,
+ * stones and a builder from the player pool until the kit is complete, then a
+ * ship can carry it to a new coastal spot. One entry per preparing harbor.
+ */
+export interface Expedition {
+  harborId: number;
+  player: number;
+  boards: number;
+  stones: number;
+  hasBuilder: boolean;
+  /** True once boards/stones/builder are all assembled (ExpeditionReady fired). */
+  ready: boolean;
+}
+
 export type SettlerState =
   | 'idle'
   | 'toBuilding' // new worker walking to its workplace
@@ -252,11 +306,15 @@ export interface World {
   buildings: Store<Building>;
   settlers: Store<Settler>;
   wares: Store<Ware>;
+  /** Ship entities (P7 seafaring). */
+  ships: Store<Ship>;
   players: Player[];
   /** Forester-planted saplings maturing into trees (node + maturation tick). */
   saplings: Array<{ node: number; matureTick: number }>;
   /** Farmer-sown grain fields maturing into harvestable crops (node + mature tick). */
   cropFields: Array<{ node: number; matureTick: number }>;
+  /** Pending expeditions being assembled at harbors (P7). */
+  expeditions: Expedition[];
   // Command queue (pending, applied at their due tick).
   commands: Command[];
   seqCounter: number;
@@ -360,9 +418,11 @@ export function createWorld(map: MapJson, options: CreateWorldOptions): World {
     buildings: makeStore<Building>(),
     settlers: makeStore<Settler>(),
     wares: makeStore<Ware>(),
+    ships: makeStore<Ship>(),
     players: [],
     saplings: [],
     cropFields: [],
+    expeditions: [],
     commands: [],
     seqCounter: 0,
   };
@@ -465,4 +525,9 @@ export function getWare(world: World, id: number): Ware {
   const w = world.wares.items[id];
   if (!w) throw new Error(`no ware ${id}`);
   return w;
+}
+export function getShip(world: World, id: number): Ship {
+  const s = world.ships.items[id];
+  if (!s) throw new Error(`no ship ${id}`);
+  return s;
 }

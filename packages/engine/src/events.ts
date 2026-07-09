@@ -203,6 +203,41 @@ export interface CatapultFired {
   hit: boolean;
 }
 
+// --- Seafaring (P7) --------------------------------------------------------
+
+/** A shipyard finished building a ship; it now docks at `homeHarborId`. */
+export interface ShipBuilt {
+  type: 'ShipBuilt';
+  shipId: number;
+  buildingId: number;
+  homeHarborId: number;
+  player: number;
+}
+
+/** A harbor finished assembling an expedition kit (boards + stones + builder). */
+export interface ExpeditionReady {
+  type: 'ExpeditionReady';
+  harborId: number;
+  player: number;
+}
+
+/** An expedition ship reached its target spot and founded a new harbor. */
+export interface ExpeditionLanded {
+  type: 'ExpeditionLanded';
+  shipId: number;
+  harborId: number;
+  node: number;
+  player: number;
+}
+
+/** A ship arrived at a harbor dock (delivered cargo / returned home / landed). */
+export interface ShipArrived {
+  type: 'ShipArrived';
+  shipId: number;
+  harborId: number;
+  player: number;
+}
+
 /** Discriminated union of every emitted event. */
 export type GameEvent =
   | FlagPlaced
@@ -229,7 +264,11 @@ export type GameEvent =
   | SoldierDied
   | BuildingCaptured
   | SoldierPromoted
-  | CatapultFired;
+  | CatapultFired
+  | ShipBuilt
+  | ExpeditionReady
+  | ExpeditionLanded
+  | ShipArrived;
 
 /** Mutable per-tick event sink passed through the systems. */
 export class EventSink {

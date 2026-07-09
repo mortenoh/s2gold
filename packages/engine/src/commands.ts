@@ -32,6 +32,7 @@ import {
   isWalkableTexture,
   type TerrainRules,
 } from './terrain';
+import { isCoastalLand } from './water';
 import {
   getFlag,
   storeAlloc,
@@ -41,6 +42,7 @@ import {
   type World,
 } from './world';
 import { execAttack } from './systems/military';
+import { execPrepareExpedition, execStartExpedition } from './systems/seafaring';
 
 /** A queued player command (discriminated on `type`). */
 export type Command =
@@ -97,6 +99,23 @@ export type Command =
       type: 'toggleCoins';
       buildingId: number;
       enabled: boolean;
+    }
+  | {
+      // Begin assembling an expedition kit at a harbor (P7).
+      tick: number;
+      player: number;
+      seq: number;
+      type: 'prepareExpedition';
+      harborId: number;
+    }
+  | {
+      // Launch a ready expedition from a harbor toward a coastal target spot (P7).
+      tick: number;
+      player: number;
+      seq: number;
+      type: 'startExpedition';
+      harborId: number;
+      targetSpot: number;
     };
 
 /** Distributive Omit that preserves discriminated-union members. */
@@ -186,6 +205,12 @@ function executeCommand(
       }
       break;
     }
+    case 'prepareExpedition':
+      execPrepareExpedition(world, cmd.player, cmd.harborId);
+      break;
+    case 'startExpedition':
+      execStartExpedition(world, geom, cmd.player, cmd.harborId, cmd.targetSpot);
+      break;
   }
 }
 
@@ -223,6 +248,22 @@ export function terrainMineable(world: World, node: number): boolean {
   return isMountainTexture(world.terrain1[node]) && isMountainTexture(world.terrain2[node]);
 }
 
+/** True when a building type must be placed on the coast (harbor / shipyard). P7. */
+export function requiresCoast(buildingType: BuildingType): boolean {
+  return buildingType === BUILDING.harbor || buildingType === BUILDING.shipyard;
+}
+
+/** True when a harbor may be founded at `node`: buildable coastal land with a free door. */
+export function canPlaceHarbor(
+  world: World,
+  geom: Geometry,
+  rules: TerrainRules,
+  node: number,
+  player?: number,
+): boolean {
+  return canPlaceBuilding(world, geom, rules, node, BUILDING.harbor, player);
+}
+
 /** True when `buildingType` may be placed at `node` for `player`. */
 export function canPlaceBuilding(
   world: World,
@@ -245,10 +286,18 @@ export function canPlaceBuilding(
     const owner = ownerPlayer(world.owner[node]);
     if (owner >= 0 && owner !== player) return false;
   }
-  // Mines require a mountain node; every other building requires buildable meadow.
+  // Mines require a mountain node; coastal buildings (harbor/shipyard) require a
+  // land node on the shore; every other building requires buildable meadow.
   const def = buildingDef(buildingType);
   if (def?.size === 'mine') {
     if (!terrainMineable(world, node)) return false;
+  } else if (requiresCoast(buildingType)) {
+    // The shore relaxes the full meadow BQ: the node's own two texture layers
+    // must be buildable land, and it must touch navigable water (P7).
+    if (!isBuildableTexture(world.terrain1[node], rules) || !isBuildableTexture(world.terrain2[node], rules)) {
+      return false;
+    }
+    if (!isCoastalLand(world, geom, node)) return false;
   } else if (!terrainBuildable(world, geom, rules, node)) {
     return false;
   }

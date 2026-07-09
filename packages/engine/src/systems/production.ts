@@ -22,6 +22,7 @@ import {
   OBJ_TYPE_SAPLING,
   resourceAmount,
   resourceType,
+  SEA,
   TICKS,
   type BuildingDef,
   type WareType,
@@ -42,6 +43,7 @@ import {
 } from '../world';
 import { beginWalk, spawnSettler, stepWalk, walkDone } from './movement';
 import { ensureWorkerAvailable } from './recruit';
+import { playerHasDockedHarbor, spawnShip } from './seafaring';
 
 /** Mature any saplings and crop fields whose growth timer has elapsed. */
 function runGrowth(world: World): void {
@@ -413,6 +415,30 @@ function runMine(world: World, geom: Geometry, events: EventSink, b: Building, d
   events.emit({ type: 'WorkStarted', kind: 'mining', buildingId: b.id, node: b.node, player: b.player });
 }
 
+/**
+ * Shipyard: accumulate boards, then spend a work cycle building a ship entity,
+ * which docks at the player's nearest harbor. The cycle only starts when a harbor
+ * exists to receive the ship, so boards are never consumed with nowhere to dock.
+ */
+function runShipyard(
+  world: World,
+  geom: Geometry,
+  events: EventSink,
+  b: Building,
+  def: BuildingDef,
+): void {
+  if (b.workTimer > 0) {
+    b.workTimer--;
+    if (b.workTimer === 0) spawnShip(world, geom, events, b);
+    return;
+  }
+  if ((b.inputStock[0] ?? 0) < SEA.shipPlankCost) return;
+  if (!playerHasDockedHarbor(world, geom, b.player)) return;
+  b.inputStock[0] -= SEA.shipPlankCost;
+  b.workTimer = def.workTicks;
+  events.emit({ type: 'WorkStarted', kind: 'shipbuilding', buildingId: b.id, node: b.node, player: b.player });
+}
+
 /** Dispatch a harvester building to the right find/harvest behaviour by type. */
 function runHarvesterFor(
   world: World,
@@ -525,6 +551,9 @@ export function runProduction(
         break;
       case 'mine':
         runMine(world, geom, events, b, def);
+        break;
+      case 'shipyard':
+        runShipyard(world, geom, events, b, def);
         break;
       case 'special':
         // Lookout tower: staffed for vision only; no production (stub).
