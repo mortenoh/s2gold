@@ -16,7 +16,9 @@ import {
   isFieldObject,
   isTreeType,
   isGraniteType,
+  NUM_SOLDIER_RANKS,
   OBJ_TYPE,
+  ownerPlayer,
   TICKS,
   WARE,
   type BuildingType,
@@ -38,6 +40,7 @@ import {
   type Flag,
   type World,
 } from './world';
+import { execAttack } from './systems/military';
 
 /** A queued player command (discriminated on `type`). */
 export type Command =
@@ -75,6 +78,25 @@ export type Command =
       type: 'setTransportPriority';
       wareType: WareType;
       priority: number;
+    }
+  | {
+      // Attack an enemy military building with up to `soldiers` attackers
+      // gathered from the player's in-range military buildings (MILITARY.md §4).
+      tick: number;
+      player: number;
+      seq: number;
+      type: 'attack';
+      targetBuildingId: number;
+      soldiers: number;
+    }
+  | {
+      // Toggle gold-coin delivery to a military building (MILITARY.md §3).
+      tick: number;
+      player: number;
+      seq: number;
+      type: 'toggleCoins';
+      buildingId: number;
+      enabled: boolean;
     };
 
 /** Distributive Omit that preserves discriminated-union members. */
@@ -154,6 +176,16 @@ function executeCommand(
       }
       break;
     }
+    case 'attack':
+      execAttack(world, geom, rules, events, cmd.player, cmd.targetBuildingId, cmd.soldiers);
+      break;
+    case 'toggleCoins': {
+      const b = world.buildings.items[cmd.buildingId];
+      if (b && b.player === cmd.player && buildingDef(b.type)?.kind === 'military') {
+        b.coinsEnabled = cmd.enabled;
+      }
+      break;
+    }
   }
 }
 
@@ -198,10 +230,21 @@ export function canPlaceBuilding(
   rules: TerrainRules,
   node: number,
   buildingType: BuildingType,
+  player?: number,
 ): boolean {
   if (world.buildingAtNode[node] >= 0 || world.flagAtNode[node] >= 0) return false;
   const ot = world.objectType[node];
   if (isTreeType(ot) || isGraniteType(ot) || isFieldObject(ot)) return false;
+  // Ownership (MILITARY.md §3): cannot build on land owned by another player.
+  // Neutral (unclaimed) and own land are allowed — full S2 restricts to your own
+  // territory, but we relax to neutral so the economy sandbox stays buildable
+  // and military buildings can expand the frontier (SIMPLIFICATION, documented).
+  // The `player` argument is optional so existing callers (and the app's build
+  // preview) keep working; ownership is only enforced when a player is given.
+  if (player !== undefined) {
+    const owner = ownerPlayer(world.owner[node]);
+    if (owner >= 0 && owner !== player) return false;
+  }
   // Mines require a mountain node; every other building requires buildable meadow.
   const def = buildingDef(buildingType);
   if (def?.size === 'mine') {
@@ -281,7 +324,7 @@ function execPlaceBuilding(
   buildingType: BuildingType,
 ): void {
   if (buildingType === BUILDING.headquarters) return;
-  if (!canPlaceBuilding(world, geom, rules, node, buildingType)) return;
+  if (!canPlaceBuilding(world, geom, rules, node, buildingType, player)) return;
   const flagNode = geom.neighbour(node, 'SE');
   let flagId = world.flagAtNode[flagNode];
   if (flagId < 0) {
@@ -289,6 +332,7 @@ function execPlaceBuilding(
     if (!created) return;
     flagId = created.id;
   }
+  const def = buildingDef(buildingType);
   const cost = BUILD_COST[buildingType];
   const buildTicks = Math.max(
     TICKS.buildMinTicks,
@@ -313,6 +357,11 @@ function execPlaceBuilding(
     outputQueue: [],
     workTimer: 0,
     altToggle: 0,
+    garrison: def?.kind === 'military' ? new Array<number>(NUM_SOLDIER_RANKS).fill(0) : [],
+    occupied: false,
+    coinsEnabled: true,
+    incoming: 0,
+    promotionTimer: -1,
   }));
   world.buildingAtNode[node] = id;
   events.emit({ type: 'BuildingPlaced', buildingId: id, buildingType, node, player });

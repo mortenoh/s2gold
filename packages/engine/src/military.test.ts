@@ -1,0 +1,263 @@
+/**
+ * Military system tests (P4 wave 1). Rules cited to docs/gameplay-notes/MILITARY.md.
+ * Covers: recruitment, occupation + territory expansion, deterministic combat
+ * between two players, catapult attrition, and gold-coin promotion.
+ */
+
+import { describe, expect, it } from 'vitest';
+import {
+  BUILDING_DEFS,
+  createWorld,
+  hashWorld,
+  militaryView,
+  ownerAt,
+  tickWorld,
+  worldGeometry,
+  applyCommand,
+  type GameEvent,
+  type MapJson,
+} from './index';
+import { makeFlatMap } from './harness';
+import { garrisonBuilding, spawnBuilding } from './harness-economy';
+
+/** Run `n` ticks, collecting every emitted event. */
+function runTicks(world: ReturnType<typeof createWorld>, n: number): GameEvent[] {
+  const all: GameEvent[] = [];
+  for (let i = 0; i < n; i++) all.push(...tickWorld(world));
+  return all;
+}
+
+/** A flat all-meadow map with two headquarters (players 0 and 1). */
+function makeFlatMap2(
+  width: number,
+  height: number,
+  hq0: [number, number],
+  hq1: [number, number],
+): MapJson {
+  const base = makeFlatMap(width, height, hq0[0], hq0[1]);
+  return {
+    ...base,
+    players: 2,
+    hq_x: [hq0[0], hq1[0], 0xffff, 0xffff, 0xffff, 0xffff, 0xffff],
+    hq_y: [hq0[1], hq1[1], 0xffff, 0xffff, 0xffff, 0xffff, 0xffff],
+  };
+}
+
+describe('military building definitions (MILITARY.md §2)', () => {
+  it('encodes troop capacity, gold, armor and territory radius', () => {
+    const expected = {
+      barracks: { maxTroops: 2, maxGold: 1, armorCap: 1, militaryRadius: 8 },
+      guardhouse: { maxTroops: 3, maxGold: 2, armorCap: 2, militaryRadius: 9 },
+      watchtower: { maxTroops: 6, maxGold: 4, armorCap: 4, militaryRadius: 10 },
+      fortress: { maxTroops: 9, maxGold: 6, armorCap: 6, militaryRadius: 11 },
+    } as const;
+    for (const [name, want] of Object.entries(expected)) {
+      const def = BUILDING_DEFS[name];
+      expect(def.kind).toBe('military');
+      expect(def.maxTroops).toBe(want.maxTroops);
+      expect(def.maxGold).toBe(want.maxGold);
+      expect(def.armorCap).toBe(want.armorCap);
+      expect(def.militaryRadius).toBe(want.militaryRadius);
+    }
+    expect(BUILDING_DEFS.catapult.kind).toBe('catapult');
+  });
+});
+
+describe('soldier recruitment (MILITARY.md §6 / CONSTANTS.md §7)', () => {
+  it('recruits a private from beer+sword+shield+helper when a garrison wants troops', () => {
+    const world = createWorld(makeFlatMap(30, 30, 4, 4), { seed: 3, players: 1 });
+    const geom = worldGeometry(world);
+    const p = world.players[0];
+    // Drain the starting soldier pool so demand forces a recruit.
+    p.soldiers = [0, 0, 0, 0, 0];
+    const beforeBeer = p.wares.beer;
+    const beforeHelpers = p.workers.carrier;
+
+    // A working guardhouse creates demand for 3 soldiers.
+    spawnBuilding(world, geom, geom.index(15, 15), 'guardhouse', 0, false);
+    const events = runTicks(world, 500);
+
+    const recruited = events.filter((e) => e.type === 'SoldierRecruited');
+    expect(recruited.length).toBeGreaterThanOrEqual(1);
+    // The new soldier is a private (rank 0) — either still pooled or already
+    // ordered out to the guardhouse.
+    expect(p.wares.beer).toBeLessThan(beforeBeer); // beer consumed
+    expect(p.workers.carrier).toBeLessThan(beforeHelpers); // a Helper became a soldier
+  });
+});
+
+describe('occupation + territory expansion (MILITARY.md §3)', () => {
+  it('walks soldiers into a new guardhouse and expands owned territory', () => {
+    const world = createWorld(makeFlatMap(40, 40, 4, 4), { seed: 1, players: 1 });
+    const geom = worldGeometry(world);
+    const ghNode = geom.index(24, 24); // far from the HQ (radius 9) -> neutral land
+    expect(ownerAt(world, ghNode)).toBe(-1); // neutral before occupation
+
+    const gh = spawnBuilding(world, geom, ghNode, 'guardhouse', 0, false);
+    expect(gh.occupied).toBe(false);
+
+    const events = runTicks(world, 1200);
+
+    // The guardhouse filled to capacity and activated its territory.
+    const view = militaryView(world, gh.id);
+    expect(view?.occupied).toBe(true);
+    expect(view?.troops).toBe(3); // maxTroops for a guardhouse
+    expect(events.some((e) => e.type === 'MilitaryOccupied' && e.firstOccupant)).toBe(true);
+    expect(events.some((e) => e.type === 'TerritoryChanged')).toBe(true);
+
+    // Ownership expanded: the guardhouse node and its neighbours are now ours.
+    expect(ownerAt(world, ghNode)).toBe(0);
+    for (const n of geom.neighbours(ghNode)) expect(ownerAt(world, n)).toBe(0);
+  });
+});
+
+describe('deterministic combat between two players (MILITARY.md §4-5)', () => {
+  /** Build a scripted battle world: p0 fortress attacks p1 guardhouse. */
+  function battleWorld(seed: number): ReturnType<typeof createWorld> {
+    const world = createWorld(makeFlatMap2(60, 20, [5, 10], [50, 10]), { seed });
+    const geom = worldGeometry(world);
+    // Drain both idle soldier pools so garrisons aren't auto-refilled mid-battle
+    // (keeps the scripted fight self-contained).
+    world.players[0].soldiers = [0, 0, 0, 0, 0];
+    world.players[1].soldiers = [0, 0, 0, 0, 0];
+    const fort = spawnBuilding(world, geom, geom.index(20, 10), 'fortress', 0, false);
+    garrisonBuilding(fort, [3, 3, 3, 0, 0]); // 9 soldiers, mixed ranks
+    const gh = spawnBuilding(world, geom, geom.index(26, 10), 'guardhouse', 1, false);
+    garrisonBuilding(gh, [3, 0, 0, 0, 0]); // 3 defending privates
+    // p0 sends 6 attackers (strongest first) at the guardhouse.
+    applyCommand(world, { player: 0, type: 'attack', targetBuildingId: gh.id, soldiers: 6 });
+    return world;
+  }
+
+  /** A compact signature of the fight outcome (deaths in order + captures). */
+  function battleSignature(world: ReturnType<typeof createWorld>, ticks: number): string {
+    const parts: string[] = [];
+    for (let i = 0; i < ticks; i++) {
+      for (const e of tickWorld(world)) {
+        if (e.type === 'SoldierDied') parts.push(`d${e.player}:${e.rank}`);
+        if (e.type === 'BuildingCaptured') parts.push(`cap${e.toPlayer}`);
+      }
+    }
+    return parts.join('|');
+  }
+
+  it('same seed -> identical outcome and identical state hash', () => {
+    const a = battleWorld(4242);
+    const b = battleWorld(4242);
+    const sigA = battleSignature(a, 800);
+    const sigB = battleSignature(b, 800);
+    expect(sigA).toBe(sigB);
+    expect(hashWorld(a)).toBe(hashWorld(b));
+    // A real battle happened (soldiers died) and the guardhouse fell.
+    expect(sigA).toContain('d');
+    expect(sigA).toContain('cap0');
+  });
+
+  /** An evenly matched skirmish whose outcome depends on the RNG. */
+  function skirmishWorld(seed: number): ReturnType<typeof createWorld> {
+    const world = createWorld(makeFlatMap2(60, 20, [5, 10], [50, 10]), { seed });
+    const geom = worldGeometry(world);
+    world.players[0].soldiers = [0, 0, 0, 0, 0];
+    world.players[1].soldiers = [0, 0, 0, 0, 0];
+    const fort = spawnBuilding(world, geom, geom.index(20, 10), 'fortress', 0, false);
+    garrisonBuilding(fort, [0, 0, 4, 0, 0]); // 4 sergeants
+    const gh = spawnBuilding(world, geom, geom.index(26, 10), 'guardhouse', 1, false);
+    garrisonBuilding(gh, [0, 0, 3, 0, 0]); // 3 sergeants (evenly matched)
+    applyCommand(world, { player: 0, type: 'attack', targetBuildingId: gh.id, soldiers: 3 });
+    return world;
+  }
+
+  it('different seeds can produce different fight sequences', () => {
+    const sigs = new Set<string>();
+    for (const seed of [1, 2, 3, 7, 99]) {
+      sigs.add(battleSignature(skirmishWorld(seed), 1200));
+    }
+    expect(sigs.size).toBeGreaterThan(1);
+  });
+
+  it('captures the guardhouse and flips its territory to the attacker', () => {
+    const world = battleWorld(4242);
+    const geom = worldGeometry(world);
+    const ghNode = geom.index(26, 10);
+    runTicks(world, 800);
+    const b = world.buildings.items.find((x) => x && x.node === ghNode);
+    expect(b?.player).toBe(0); // captured by player 0
+    expect(ownerAt(world, ghNode)).toBe(0); // territory flipped
+  });
+});
+
+describe('catapult attrition (MILITARY.md §7)', () => {
+  it('throws stones that kill soldiers in a nearby enemy building', () => {
+    const world = createWorld(makeFlatMap2(40, 20, [4, 10], [36, 10]), { seed: 5 });
+    const geom = worldGeometry(world);
+    world.players[1].soldiers = [0, 0, 0, 0, 0]; // no reinforcement for the target
+    const cat = spawnBuilding(world, geom, geom.index(16, 10), 'catapult', 0, false);
+    cat.inputStock = [4]; // 4 stones -> up to 4 shots
+    const gh = spawnBuilding(world, geom, geom.index(22, 10), 'guardhouse', 1, false);
+    garrisonBuilding(gh, [3, 0, 0, 0, 0]); // distance 6 < 14 -> in range
+
+    const before = militaryView(world, gh.id)?.troops ?? 0;
+    const events = runTicks(world, 1400); // ~4 shots at 310 GF spacing
+
+    expect(events.some((e) => e.type === 'CatapultFired')).toBe(true);
+    const after = militaryView(world, gh.id)?.troops ?? 0;
+    expect(after).toBeLessThan(before); // at least one shot killed a soldier
+  });
+});
+
+describe('gold-coin promotion (MILITARY.md §6)', () => {
+  it('consumes coins to raise soldiers one rank at a time', () => {
+    const world = createWorld(makeFlatMap(30, 30, 4, 4), { seed: 8, players: 1 });
+    const geom = worldGeometry(world);
+    world.players[0].soldiers = [0, 0, 0, 0, 0]; // no occupation top-up
+    const gh = spawnBuilding(world, geom, geom.index(15, 15), 'guardhouse', 0, false);
+    garrisonBuilding(gh, [3, 0, 0, 0, 0]); // full garrison (3 privates), occupied
+    gh.inputStock = [2]; // 2 gold coins in the coin store
+    const coinsBefore = gh.inputStock[0];
+
+    const events = runTicks(world, 1500);
+
+    const promotions = events.filter((e) => e.type === 'SoldierPromoted');
+    expect(promotions.length).toBeGreaterThanOrEqual(1);
+    // Coins were consumed (1 per promotion event).
+    expect(gh.inputStock[0]).toBeLessThan(coinsBefore);
+    // Ranks rose: a soldier above private now exists.
+    const view = militaryView(world, gh.id);
+    const higherRanks = (view?.garrison ?? []).slice(1).reduce((a, c) => a + c, 0);
+    expect(higherRanks).toBeGreaterThanOrEqual(1);
+    // Garrison size is conserved (promotion moves soldiers up, never removes them).
+    expect(view?.troops).toBe(3);
+  });
+});
+
+describe('determinism with military activity', () => {
+  it('two identical military worlds stay hash-identical over a long run', () => {
+    const build = (): ReturnType<typeof createWorld> => {
+      const world = createWorld(makeFlatMap2(50, 24, [5, 12], [44, 12]), { seed: 2024 });
+      const geom = worldGeometry(world);
+      // p0 fortress vs p1 guardhouse, plus a p0 catapult in range of p1.
+      const fort = spawnBuilding(world, geom, geom.index(18, 12), 'fortress', 0, false);
+      garrisonBuilding(fort, [2, 2, 2, 2, 1]);
+      const cat = spawnBuilding(world, geom, geom.index(20, 14), 'catapult', 0, false);
+      cat.inputStock = [4];
+      const gh = spawnBuilding(world, geom, geom.index(26, 12), 'guardhouse', 1, false);
+      garrisonBuilding(gh, [3, 0, 0, 0, 0]);
+      applyCommand(world, { player: 0, type: 'attack', targetBuildingId: gh.id, soldiers: 4 });
+      return world;
+    };
+    const a = build();
+    const b = build();
+    const hashesA: string[] = [];
+    const hashesB: string[] = [];
+    for (let i = 1; i <= 1500; i++) {
+      tickWorld(a);
+      tickWorld(b);
+      if (i % 300 === 0) {
+        hashesA.push(hashWorld(a));
+        hashesB.push(hashWorld(b));
+      }
+    }
+    expect(hashesA).toEqual(hashesB);
+    expect(new Set(hashesA).size).toBeGreaterThan(1); // state actually evolved
+  });
+});

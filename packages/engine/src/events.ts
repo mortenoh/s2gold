@@ -134,6 +134,75 @@ export interface DonkeyBred {
   player: number;
 }
 
+/** A new Private was recruited from beer+sword+shield+helper (MILITARY.md §6). */
+export interface SoldierRecruited {
+  type: 'SoldierRecruited';
+  player: number;
+}
+
+/** A soldier occupied a military building for the first/next time (MILITARY.md §3). */
+export interface MilitaryOccupied {
+  type: 'MilitaryOccupied';
+  buildingId: number;
+  rank: number;
+  player: number;
+  /** True when this was the building's first occupant (territory activates). */
+  firstOccupant: boolean;
+}
+
+/** Ownership/borders changed after a RecalcTerritory (MILITARY.md §3). */
+export interface TerritoryChanged {
+  type: 'TerritoryChanged';
+  player: number;
+}
+
+/** A one-on-one duel began at a building flag (MILITARY.md §5). */
+export interface FightStarted {
+  type: 'FightStarted';
+  node: number;
+  attackerPlayer: number;
+  attackerRank: number;
+  defenderPlayer: number;
+  defenderRank: number;
+}
+
+/** A soldier lost all hitpoints and died (MILITARY.md §5). */
+export interface SoldierDied {
+  type: 'SoldierDied';
+  node: number;
+  player: number;
+  rank: number;
+}
+
+/** A military building changed hands (MILITARY.md §4). `burned` = HQ razed. */
+export interface BuildingCaptured {
+  type: 'BuildingCaptured';
+  buildingId: number;
+  buildingType: BuildingType;
+  node: number;
+  fromPlayer: number;
+  toPlayer: number;
+  burned: boolean;
+}
+
+/** A gold coin promoted soldiers in a building (MILITARY.md §6). */
+export interface SoldierPromoted {
+  type: 'SoldierPromoted';
+  buildingId: number;
+  player: number;
+  /** Number of soldiers raised one rank in this wave. */
+  count: number;
+}
+
+/** A catapult threw a stone at an enemy military building (MILITARY.md §7). */
+export interface CatapultFired {
+  type: 'CatapultFired';
+  buildingId: number;
+  targetBuildingId: number;
+  player: number;
+  hit: boolean;
+}
+
 /** Discriminated union of every emitted event. */
 export type GameEvent =
   | FlagPlaced
@@ -152,7 +221,15 @@ export type GameEvent =
   | CropHarvested
   | MineDepleted
   | SettlerRecruited
-  | DonkeyBred;
+  | DonkeyBred
+  | SoldierRecruited
+  | MilitaryOccupied
+  | TerritoryChanged
+  | FightStarted
+  | SoldierDied
+  | BuildingCaptured
+  | SoldierPromoted
+  | CatapultFired;
 
 /** Mutable per-tick event sink passed through the systems. */
 export class EventSink {

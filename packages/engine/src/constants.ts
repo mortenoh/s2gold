@@ -206,6 +206,12 @@ export const BUILDING = {
   donkeybreeder: 'donkeybreeder',
   storehouse: 'storehouse',
   lookout: 'lookout',
+  // Military buildings (MILITARY.md §2). Order matches NUM_MILITARY_BLDS.
+  barracks: 'barracks',
+  guardhouse: 'guardhouse',
+  watchtower: 'watchtower',
+  fortress: 'fortress',
+  catapult: 'catapult',
 } as const;
 export type BuildingType = string;
 
@@ -221,6 +227,9 @@ export type BuildingSize = 'hut' | 'house' | 'castle' | 'mine';
  * - `workshop`: in-building; consumes input wares then produces an output.
  * - `mine`: in-building; consumes 1 food + decrements a subsurface resource.
  * - `special`: staffed but no production (lookout tower = vision stub).
+ * - `military`: garrisons soldiers, projects territory, can attack/defend
+ *   (MILITARY.md §2-6).
+ * - `catapult`: throws stones at nearby enemy military buildings (MILITARY.md §7).
  */
 export type BuildingKind =
   | 'hq'
@@ -230,7 +239,9 @@ export type BuildingKind =
   | 'generator'
   | 'workshop'
   | 'mine'
-  | 'special';
+  | 'special'
+  | 'military'
+  | 'catapult';
 
 /** A single data-driven building definition. All timings in GF/ticks. */
 export interface BuildingDef {
@@ -265,6 +276,14 @@ export interface BuildingDef {
   producesTool?: boolean;
   /** Donkey breeder: cycle breeds a PackDonkey (stubbed as a player-pool count). */
   breedsDonkey?: boolean;
+  /** Military: max garrisoned soldiers (MILITARY.md §2 NUM_TROOPS). */
+  maxTroops?: number;
+  /** Military: max stored gold coins (MILITARY.md §2 NUM_GOLDS). */
+  maxGold?: number;
+  /** Military: armor slots (MILITARY.md §2 NUM_ARMOR). */
+  armorCap?: number;
+  /** Military/HQ: owned-territory radius in nodes (MILITARY.md §2 MILITARY_RADIUS). */
+  militaryRadius?: number;
 }
 
 const CAP = 6; // default numSpacesPerWare (CONSTANTS.md §2)
@@ -313,6 +332,17 @@ export const BUILDING_DEFS: Readonly<Record<string, BuildingDef>> = {
   // Warehouse + vision.
   storehouse: { id: 29, cost: { boards: 4, stones: 3 }, size: 'house', kind: 'warehouse', worker: null, inputs: [], inputCap: CAP, useOneEach: true, outputs: [], workTicks: 0 },
   lookout: { id: 14, cost: { boards: 4, stones: 0 }, size: 'hut', kind: 'special', worker: JOB.scout, inputs: [], inputCap: CAP, useOneEach: true, outputs: [], workTicks: 0 }, // §2 Lookout tower: vision only (stub)
+
+  // Military buildings (MILITARY.md §2). Costs from CONSTANTS.md §2. No worker
+  // job (soldiers occupy via the military system, not the recruit-a-worker path);
+  // coins are delivered as the `coins` input for promotion (MILITARY.md §6).
+  barracks: { id: 1, cost: { boards: 2, stones: 0 }, size: 'hut', kind: 'military', worker: null, inputs: [WARE.coins], inputCap: 1, useOneEach: false, outputs: [], workTicks: 0, maxTroops: 2, maxGold: 1, armorCap: 1, militaryRadius: 8 }, // §2 Barracks: troops 2, gold 1, radius 8
+  guardhouse: { id: 2, cost: { boards: 2, stones: 3 }, size: 'hut', kind: 'military', worker: null, inputs: [WARE.coins], inputCap: 2, useOneEach: false, outputs: [], workTicks: 0, maxTroops: 3, maxGold: 2, armorCap: 2, militaryRadius: 9 }, // §2 Guardhouse: troops 3, gold 2, radius 9
+  watchtower: { id: 4, cost: { boards: 3, stones: 5 }, size: 'house', kind: 'military', worker: null, inputs: [WARE.coins], inputCap: 4, useOneEach: false, outputs: [], workTicks: 0, maxTroops: 6, maxGold: 4, armorCap: 4, militaryRadius: 10 }, // §2 Watchtower: troops 6, gold 4, radius 10
+  fortress: { id: 9, cost: { boards: 4, stones: 7 }, size: 'castle', kind: 'military', worker: null, inputs: [WARE.coins], inputCap: 6, useOneEach: false, outputs: [], workTicks: 0, maxTroops: 9, maxGold: 6, armorCap: 6, militaryRadius: 11 }, // §2 Fortress: troops 9, gold 6, radius 11
+
+  // Catapult (MILITARY.md §7). Consumes 1 Stones per shot (store of 4).
+  catapult: { id: 16, cost: { boards: 4, stones: 2 }, size: 'house', kind: 'catapult', worker: null, inputs: [WARE.stone], inputCap: 4, useOneEach: true, outputs: [], workTicks: 0 }, // §7 Catapult: 4-stone store, throws at enemy military buildings
 };
 
 /** Look up a building's definition (undefined for unknown types). */
@@ -460,6 +490,124 @@ export const HQ_START_WORKERS: Readonly<Record<JobType, number>> = {
   armorer: 4, // §6 Armorer (Normal)
   scout: 2, // §6 Scout (Normal)
 };
+/**
+ * Starting idle soldiers by rank 0..4 (CONSTANTS.md §6 "Private (soldier)",
+ * Normal column = 46). Only privates start; higher ranks are earned via
+ * promotion (MILITARY.md §6).
+ */
+export const HQ_START_SOLDIERS: readonly number[] = [46, 0, 0, 0, 0];
+
+// --- Military (MILITARY.md) -----------------------------------------------
+
+/** Soldier rank ids 0..4 (MILITARY.md §1). rank = Job - Private. */
+export const SOLDIER_RANK = {
+  private: 0,
+  privateFirstClass: 1,
+  sergeant: 2,
+  officer: 3,
+  general: 4,
+} as const;
+
+/** Number of soldier ranks (MILITARY.md §1 NUM_SOLDIER_RANKS). */
+export const NUM_SOLDIER_RANKS = 5;
+/** Highest rank a soldier can reach (MILITARY.md §1 MAX_MILITARY_RANK). */
+export const MAX_MILITARY_RANK = 4;
+
+/** English rank names, indexed by rank 0..4 (MILITARY.md §1). */
+export const SOLDIER_RANK_NAMES: readonly string[] = [
+  'private',
+  'private_first_class',
+  'sergeant',
+  'officer',
+  'general',
+];
+
+/** Hitpoints per rank (MILITARY.md §1 HITPOINTS): higher rank survives more hits. */
+export const SOLDIER_HITPOINTS: readonly number[] = [3, 4, 5, 6, 7];
+
+/** Territory radius of the headquarters/warehouse (MILITARY.md §2 HQ_RADIUS). */
+export const HQ_RADIUS = 9;
+/** Territory radius of a harbor building (MILITARY.md §2 HARBOR_RADIUS). */
+export const HARBOR_RADIUS = 8;
+
+/** Extra sight range added on top of a military building's territory reach (§3). */
+export const VISUALRANGE_MILITARY = 3;
+/** Absolute sight range of a lookout tower (MILITARY.md §3). */
+export const VISUALRANGE_LOOKOUTTOWER = 20;
+/** Sight range of a walking scout / soldier (MILITARY.md §3). */
+export const VISUALRANGE_SCOUT = 3;
+export const VISUALRANGE_SOLDIER = 2;
+
+/**
+ * Attack mechanics constants (MILITARY.md §4). Straight-line node distances.
+ */
+export const MILITARY_ATTACK = {
+  /** A building can attack targets this far without losing attackers (§4.2). */
+  baseDistance: 21, // BASE_ATTACKING_DISTANCE
+  /** Longest on-foot path attackers will walk to reach the target (§4.3). */
+  maxRunDistance: 40, // MAX_ATTACKING_RUN_DISTANCE
+  /** Opponents within this distance move together and start a fight (§4). */
+  meetDistance: 5, // MEET_FOR_FIGHT_DISTANCE
+  /** Idle friendly attackers this close may join a capture (§4). */
+  farAwayCapture: 15, // MAX_FAR_AWAY_CAPTURING_DISTANCE
+} as const;
+
+/**
+ * `ADJUST_MILITARY_STRENGTH` game setting (MILITARY.md §5). 0 = max (rank+6),
+ * 1 = medium/DEFAULT (rank+10), 2 = min (10, rank-independent). We use the
+ * default. Roll = RANDOM_RAND(bound) in [0, bound-1].
+ */
+export const ADJUST_MILITARY_STRENGTH: number = 1;
+
+/** Strength-roll bound for a rank under the current strength setting (§5). */
+export function strengthRollBound(rank: number): number {
+  if (ADJUST_MILITARY_STRENGTH === 0) return rank + 6;
+  if (ADJUST_MILITARY_STRENGTH === 2) return 10;
+  return rank + 10; // default (medium)
+}
+
+/** Fight timings in GF (MILITARY.md §5). */
+export const FIGHT_ROUND_GF = 15; // each attack/defense round
+export const FIGHT_DEATH_GF = 30; // death sequence
+
+/** Promotion timings in GF (MILITARY.md §6). schedule = 100 + rand(300). */
+export const UPGRADE_TIME = 100;
+export const UPGRADE_TIME_RANDOM = 300;
+
+/** Recruitment timings in GF (MILITARY.md §6 / CONSTANTS.md §7). 200 + rand(200). */
+export const RECRUITE_GF = 200;
+export const RECRUITE_RANDOM_GF = 200;
+
+/** Catapult behaviour (MILITARY.md §7). */
+export const CATAPULT = {
+  /** Enemy military buildings strictly nearer than this are candidates (§7). */
+  range: 14, // distance < 14
+  /** Percent hit chance: RANDOM_RAND(99) < 70 (§7). */
+  hitPercent: 70,
+  /**
+   * Between-shot wait in GF. MILITARY.md §7 notes RttR inflated this to 1300 to
+   * slow ware use; the original S2 value is 310. We deliberately use the ORIGINAL
+   * 310 for a faithful pace (documented choice).
+   */
+  wait: 310, // CATAPULT_WAIT1_LENGTH (original S2, not RttR's 1300)
+  /** Stone store capacity (§7 / CONSTANTS.md §2). */
+  stoneStore: 4,
+} as const;
+
+/**
+ * Owner-layer encoding. `owner[node]` = 0 for neutral/unclaimed land, otherwise
+ * `player + 1`. Kept small so the byte layer stays compact. Territory is derived
+ * (systems/territory.ts RecalcTerritory), mirroring MILITARY.md §3.
+ */
+export const OWNER_NONE = 0;
+/** Player index owning a node, or -1 when neutral. */
+export function ownerPlayer(ownerByte: number): number {
+  return ownerByte === OWNER_NONE ? -1 : ownerByte - 1;
+}
+/** Owner byte for a player index. */
+export function ownerByteFor(player: number): number {
+  return player + 1;
+}
 
 // --- Map object encoding (FACT: settlers2.net objects doc + on-disk data) --
 export const OBJ_TYPE = {

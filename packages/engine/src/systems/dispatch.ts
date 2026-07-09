@@ -53,6 +53,11 @@ function demand(b: Building, wareType: WareType): number {
   }
   const def = buildingDef(b.type);
   if (!def) return 0;
+  // Military buildings only accept coins once occupied and with delivery enabled
+  // (MILITARY.md §3); an empty/new building or one with coins toggled off wants none.
+  if (def.kind === 'military' && wareType === WARE.coins && (!b.occupied || !b.coinsEnabled)) {
+    return 0;
+  }
   const idx = def.inputs.indexOf(wareType);
   if (idx < 0) return 0;
   return Math.max(0, def.inputCap - (b.inputStock[idx] ?? 0));

@@ -4,7 +4,7 @@
  * carriers (walking their road).
  */
 
-import type { JobType } from '../constants';
+import { SOLDIER_HITPOINTS, SOLDIER_RANK_NAMES, type JobType } from '../constants';
 import { storeAlloc, type Settler, type World } from '../world';
 
 /** Assign a walk path and start moving. `path` excludes the current node. */
@@ -58,8 +58,34 @@ export function spawnSettler(
     homeBuildingId: -1,
     roadId: -1,
     targetNode: -1,
+    rank: -1,
+    hp: 0,
+    hasArmor: false,
+    attackTargetId: -1,
+    oppRank: -1,
+    oppHp: 0,
+    oppHasArmor: false,
+    fightTimer: 0,
+    fightTurn: 0,
   }));
   const s = world.settlers.items[id];
   if (!s) throw new Error('spawnSettler failed');
+  return s;
+}
+
+/**
+ * Spawn a soldier settler of a given rank at `node`. The soldier's `job` is set
+ * to its rank name (SOLDIER_RANK_NAMES) for renderer parity; `rank`/`hp` carry
+ * the combat stats (MILITARY.md §1).
+ */
+export function spawnSoldier(
+  world: World,
+  rank: number,
+  player: number,
+  node: number,
+): Settler {
+  const s = spawnSettler(world, SOLDIER_RANK_NAMES[rank] ?? 'soldier', player, node);
+  s.rank = rank;
+  s.hp = SOLDIER_HITPOINTS[rank] ?? 3;
   return s;
 }

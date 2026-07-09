@@ -63,6 +63,11 @@ export function spawnBuilding(
     outputQueue: [],
     workTimer: 0,
     altToggle: 0,
+    garrison: def?.kind === 'military' ? [0, 0, 0, 0, 0] : [],
+    occupied: false,
+    coinsEnabled: true,
+    incoming: 0,
+    promotionTimer: -1,
   }));
   world.buildingAtNode[node] = bid;
   return getBuilding(world, bid);
@@ -122,6 +127,16 @@ export function connectBuildings(
   player = 0,
 ): number[] | null {
   return connectRoad(world, geom, doorFlagNode(geom, nodeA), doorFlagNode(geom, nodeB), player);
+}
+
+/**
+ * Directly garrison a (working) military building with soldiers per rank and mark
+ * it occupied — bypasses the occupation walk-in for combat/promotion tests.
+ */
+export function garrisonBuilding(b: Building, perRank: number[]): void {
+  for (let r = 0; r < b.garrison.length; r++) b.garrison[r] = perRank[r] ?? 0;
+  const total = b.garrison.reduce((a, c) => a + c, 0);
+  if (total > 0) b.occupied = true;
 }
 
 /** Convenience: place a building via command, then tick once so its flag exists. */

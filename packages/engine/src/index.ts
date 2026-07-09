@@ -15,6 +15,13 @@ import { runCarriers } from './systems/carriers';
 import { runConstruction } from './systems/construction';
 import { runProduction } from './systems/production';
 import { runDispatch } from './systems/dispatch';
+import { runMilitary, garrisonCount } from './systems/military';
+import {
+  HQ_RADIUS,
+  VISUALRANGE_LOOKOUTTOWER,
+  VISUALRANGE_MILITARY,
+  ownerPlayer,
+} from './constants';
 import { storeLive, type Building, type Flag, type Road, type Settler, type World } from './world';
 
 export const ENGINE_VERSION = '0.1.0';
@@ -72,6 +79,7 @@ export function tickWorld(world: World, rules: TerrainRules = GREENLAND_RULES): 
   runDueCommands(world, geom, rules, events); // 1. commands
   runConstruction(world, geom, rules, events); // 2. construction (+ builder steps)
   runProduction(world, geom, rules, events); // 3. production (+ worker steps)
+  runMilitary(world, geom, rules, events); // 4. military (occupy/fight/promote/catapult)
   runDispatch(world, geom, events); // 5a. ware routing + delivery
   runCarriers(world, events); // 5b. carriers
   world.tick++;
@@ -204,4 +212,110 @@ export function getToolPriority(world: World, player: number): string[] {
 /** The player's per-ware transport priority map (lower number = fetched first). */
 export function getTransportPriority(world: World, player: number): Record<string, number> {
   return { ...(world.players[player]?.transportPriority ?? {}) };
+}
+
+// --- Military / territory view helpers (read-only) ------------------------
+
+/** Owning player of a node (-1 = neutral). MILITARY.md §3. */
+export function ownerAt(world: World, node: number): number {
+  return ownerPlayer(world.owner[node]);
+}
+
+/** All nodes currently owned by a player (id order). */
+export function territoryOf(world: World, player: number): number[] {
+  const out: number[] = [];
+  for (let node = 0; node < world.owner.length; node++) {
+    if (ownerPlayer(world.owner[node]) === player) out.push(node);
+  }
+  return out;
+}
+
+/**
+ * Border-stone nodes for a player: owned nodes that touch at least one node not
+ * owned by the same player (the derived border ring, MILITARY.md §3). Cheap
+ * derivation from `world.owner`; no map objects needed.
+ */
+export function borderNodes(world: World, player: number): number[] {
+  const geom = worldGeometry(world);
+  const out: number[] = [];
+  for (let node = 0; node < world.owner.length; node++) {
+    if (ownerPlayer(world.owner[node]) !== player) continue;
+    for (const n of geom.neighbours(node)) {
+      if (ownerPlayer(world.owner[n]) !== player) {
+        out.push(node);
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Per-player visibility set (fog-of-war groundwork, MILITARY.md §3). A node is
+ * visible when it lies within the player's owned territory plus the extra sight
+ * range of its military buildings/HQ (VISUALRANGE_MILITARY), or within a lookout
+ * tower's absolute range. Returned as a `Set<number>` of visible node ids; the
+ * renderer can consume it directly. Cheap enough to recompute when territory
+ * changes (the intended trigger).
+ */
+export function visibleNodes(world: World, player: number): Set<number> {
+  const geom = worldGeometry(world);
+  const visible = new Set<number>();
+  // Owned territory is always visible.
+  for (let node = 0; node < world.owner.length; node++) {
+    if (ownerPlayer(world.owner[node]) === player) visible.add(node);
+  }
+  // Add each military building's / HQ's extra sight disc, and lookout towers.
+  const addDisc = (center: number, radius: number): void => {
+    for (let node = 0; node < geom.size; node++) {
+      if (geom.distance(center, node) <= radius) visible.add(node);
+    }
+  };
+  for (const b of storeLive(world.buildings)) {
+    if (b.player !== player) continue;
+    const def = buildingDef(b.type);
+    if (!def) continue;
+    if (def.kind === 'hq') addDisc(b.node, HQ_RADIUS + VISUALRANGE_MILITARY);
+    else if (def.kind === 'military' && b.occupied) {
+      addDisc(b.node, (def.militaryRadius ?? 0) + VISUALRANGE_MILITARY);
+    } else if (b.type === 'lookout') addDisc(b.node, VISUALRANGE_LOOKOUTTOWER);
+  }
+  return visible;
+}
+
+/** Read-only snapshot of a military building's garrison, coins and state. */
+export interface MilitaryView {
+  buildingId: number;
+  type: BuildingType;
+  player: number;
+  occupied: boolean;
+  /** Soldier count per rank 0..4. */
+  garrison: number[];
+  troops: number;
+  maxTroops: number;
+  coins: number;
+  maxGold: number;
+  coinsEnabled: boolean;
+  militaryRadius: number;
+}
+
+/** Garrison/coin snapshot of a military building (null when not military/dead). */
+export function militaryView(world: World, buildingId: number): MilitaryView | null {
+  const b = world.buildings.items[buildingId];
+  if (!b) return null;
+  const def = buildingDef(b.type);
+  if (!def || def.kind !== 'military') return null;
+  return {
+    buildingId: b.id,
+    type: b.type,
+    player: b.player,
+    occupied: b.occupied,
+    garrison: b.garrison.slice(),
+    troops: garrisonCount(b),
+    maxTroops: def.maxTroops ?? 0,
+    coins: b.inputStock[0] ?? 0,
+    maxGold: def.maxGold ?? 0,
+    coinsEnabled: b.coinsEnabled,
+    militaryRadius: def.militaryRadius ?? 0,
+  };
 }

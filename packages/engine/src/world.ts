@@ -12,9 +12,11 @@ import type { Command } from './commands';
 import {
   BUILDING,
   DEFAULT_TRANSPORT_PRIORITY,
+  HQ_START_SOLDIERS,
   HQ_START_WARES,
   HQ_START_WORKERS,
   JOB_TYPES,
+  NUM_SOLDIER_RANKS,
   OBJ_TYPE,
   TOOL_WARES,
   WARE_TYPES,
@@ -24,6 +26,7 @@ import {
 } from './constants';
 import { Geometry } from './geometry';
 import { seedRng, type RngState } from './rng';
+import { recalcTerritory } from './systems/territory';
 
 /** Format version for serialized worlds. */
 export const WORLD_VERSION = 1;
@@ -98,6 +101,17 @@ export interface Building {
   workTimer: number;
   /** Alternating-output toggle (armory: 0 = sword, 1 = shield). */
   altToggle: number;
+  // --- Military fields (MILITARY.md; non-military buildings leave these zeroed) ---
+  /** Garrisoned soldier count per rank 0..4 (empty for non-military). */
+  garrison: number[];
+  /** True once at least one soldier has occupied it: territory is active (§3). */
+  occupied: boolean;
+  /** Coin delivery toggle (MILITARY.md §3; default true). */
+  coinsEnabled: boolean;
+  /** Soldiers currently walking in to occupy (so we don't over-order) (§3). */
+  incoming: number;
+  /** Ticks until the next promotion event (-1 = none scheduled) (§6). */
+  promotionTimer: number;
 }
 
 /** A settler entity (workers and carriers). */
@@ -126,6 +140,22 @@ export interface Settler {
   roadId: number;
   /** Target node the carrier is currently walking to (-1 = none). */
   targetNode: number;
+  // --- Soldier fields (MILITARY.md; civilians leave these at rank -1 / hp 0) ---
+  /** Soldier rank 0..4, or -1 for a civilian settler. */
+  rank: number;
+  /** Remaining hitpoints (MILITARY.md §1). */
+  hp: number;
+  /** Carries armor absorbing one hit (Gold edition, MILITARY.md §1/§5). */
+  hasArmor: boolean;
+  /** Attack target building id while marching/fighting (-1 = none). */
+  attackTargetId: number;
+  /** In a fight: opponent's rank / remaining hp / armor and round timer (§5). */
+  oppRank: number;
+  oppHp: number;
+  oppHasArmor: boolean;
+  /** Fight round timer (ticks) and whose turn it is (0 = this soldier). */
+  fightTimer: number;
+  fightTurn: number;
 }
 
 export type SettlerState =
@@ -136,7 +166,10 @@ export type SettlerState =
   | 'home' // returning to workplace after field work
   | 'carrierIdle' // carrier resting at road middle
   | 'carrierToPickup' // carrier walking to an end flag to collect a ware
-  | 'carrierToDropoff'; // carrier carrying a ware to the far flag
+  | 'carrierToDropoff' // carrier carrying a ware to the far flag
+  | 'soldierToOccupy' // soldier walking in to garrison a military building
+  | 'soldierMarch' // soldier marching to an attack target's flag
+  | 'soldierFight'; // soldier resolving a one-on-one duel at a flag
 
 /** Per-player state and warehouse inventory. */
 export interface Player {
@@ -156,6 +189,13 @@ export interface Player {
   toolCycle: number;
   /** Per-ware transport priority (lower = fetched first). CONSTANTS.md §4. */
   transportPriority: Record<WareType, number>;
+  /**
+   * Idle soldiers waiting in warehouses, count per rank 0..4 (MILITARY.md §1).
+   * Recruited privates land in slot 0; occupation draws from the weak end.
+   */
+  soldiers: number[];
+  /** Ticks until the next soldier is recruited (-1 = idle). MILITARY.md §6. */
+  recruitTimer: number;
 }
 
 /** A generic dense store with a free list; ids are array indices. */
@@ -348,12 +388,17 @@ export function createWorld(map: MapJson, options: CreateWorldOptions): World {
       toolPriority: [...TOOL_WARES],
       toolCycle: 0,
       transportPriority: { ...DEFAULT_TRANSPORT_PRIORITY },
+      soldiers: [...HQ_START_SOLDIERS],
+      recruitTimer: -1,
     };
     world.players.push(player);
     if (hx === undefined || hy === undefined || hx === 0xffff || hy === 0xffff) continue;
     const node = geom.index(hx, hy);
     placeHeadquarters(world, geom, node, p);
   }
+
+  // Seed ownership from every HQ (MILITARY.md §3): the HQ claims its radius disc.
+  recalcTerritory(world, geom);
 
   return world;
 }
@@ -383,6 +428,11 @@ function placeHeadquarters(world: World, geom: Geometry, node: number, player: n
     outputQueue: [],
     workTimer: 0,
     altToggle: 0,
+    garrison: new Array<number>(NUM_SOLDIER_RANKS).fill(0),
+    occupied: true, // the HQ is always a manned territory anchor (MILITARY.md §3)
+    coinsEnabled: false,
+    incoming: 0,
+    promotionTimer: -1,
   }));
   world.buildingAtNode[node] = bId;
   world.objectType[node] = OBJ_TYPE.hqMarker;
