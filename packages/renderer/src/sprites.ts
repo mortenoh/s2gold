@@ -92,6 +92,8 @@ interface RegisteredAtlas {
   readonly meta: SpriteAtlasMeta;
   readonly textures: readonly WebGLTexture[];
   readonly sizes: readonly (readonly [number, number])[];
+  /** Player-colour mask texture per page (index-aligned; null when absent). */
+  readonly pmaskTextures: readonly (WebGLTexture | null)[];
 }
 
 /** A static object with its base world anchor precomputed once. */
@@ -115,6 +117,8 @@ interface QuadItem {
   u1: number;
   v1: number;
   tint: readonly [number, number, number];
+  /** When true the quad samples the page's pmask so `tint` recolours it. */
+  masked: boolean;
 }
 
 /** Counts returned from a {@link SpriteRenderer.render} call for diagnostics. */
@@ -221,14 +225,25 @@ export class SpriteRenderer {
     gl.bindTexture(gl.TEXTURE_2D, null);
   }
 
-  /** Upload an atlas's pages and remember its metadata by archive name. */
-  registerAtlas(meta: SpriteAtlasMeta, pages: readonly AtlasPage[]): void {
+  /**
+   * Upload an atlas's pages and remember its metadata by archive name.
+   * `pmaskPages` (index-aligned with `pages`) are the player-colour mask images;
+   * pass them so player-tinted sprites (`pmask: true`) recolour correctly. Masks
+   * use NEAREST sampling so the mask alpha stays crisp.
+   */
+  registerAtlas(
+    meta: SpriteAtlasMeta,
+    pages: readonly AtlasPage[],
+    pmaskPages: readonly (AtlasPage | null)[] = [],
+  ): void {
     const gl = this.gl;
     const textures: WebGLTexture[] = [];
     const sizes: (readonly [number, number])[] = [];
-    for (const page of pages) {
+    const pmaskTextures: (WebGLTexture | null)[] = [];
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
       const tex = gl.createTexture();
-      if (!tex) throw new Error('failed to allocate atlas texture');
+      if (!tex || !page) throw new Error('failed to allocate atlas texture');
       gl.bindTexture(gl.TEXTURE_2D, tex);
       gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, page);
@@ -238,9 +253,24 @@ export class SpriteRenderer {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       textures.push(tex);
       sizes.push([page.width, page.height]);
+
+      const mask = pmaskPages[i];
+      if (mask) {
+        const mtex = gl.createTexture();
+        if (!mtex) throw new Error('failed to allocate pmask texture');
+        gl.bindTexture(gl.TEXTURE_2D, mtex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, mask);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        pmaskTextures.push(mtex);
+      } else {
+        pmaskTextures.push(null);
+      }
     }
     gl.bindTexture(gl.TEXTURE_2D, null);
-    this.atlases.set(meta.archive, { meta, textures, sizes });
+    this.atlases.set(meta.archive, { meta, textures, sizes, pmaskTextures });
   }
 
   /** True once an atlas with this archive name has been registered. */
@@ -318,6 +348,10 @@ export class SpriteRenderer {
       v0 = v1 - (v1 - v0) * keep;
     }
     if (x1 <= 0 || x0 >= viewW || y1 <= 0 || y0 >= viewH) return;
+    // Recolour only when this sprite ships a mask, the caller asked for a tint,
+    // and the archive actually uploaded a pmask page for this atlas.
+    const masked =
+      s.pmask === true && tint !== NO_TINT && reg.pmaskTextures[s.atlas] != null;
     out.push({
       archive,
       page: s.atlas,
@@ -331,6 +365,7 @@ export class SpriteRenderer {
       u1: (s.x + s.w) / tw,
       v1,
       tint,
+      masked,
     });
   }
 
@@ -438,8 +473,6 @@ export class SpriteRenderer {
     );
     gl.uniform1i(this.uAtlas, 0);
     gl.uniform1i(this.uPmask, 1);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.whiteTex);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
@@ -460,12 +493,16 @@ export class SpriteRenderer {
         count++;
         i++;
       }
-      const tex = this.atlases.get(archive)?.textures[page];
-      if (tex && o > 0) {
+      const reg = this.atlases.get(archive);
+      const tex = reg?.textures[page];
+      if (reg && tex && o > 0) {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
         gl.bufferData(gl.ARRAY_BUFFER, buf.subarray(0, o), gl.DYNAMIC_DRAW);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, tex);
+        // Bind this page's player-colour mask (white fallback = no recolour).
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, reg.pmaskTextures[page] ?? this.whiteTex);
         gl.drawArrays(gl.TRIANGLES, 0, count * VERTS_PER_QUAD);
         drawCalls++;
       }
@@ -478,6 +515,8 @@ export class SpriteRenderer {
 
   private writeQuad(buf: Float32Array, start: number, q: QuadItem): number {
     let o = start;
+    // The pmask page is aligned 1:1 with the atlas page, so a masked quad reuses
+    // its own atlas uv to sample the mask; unmasked quads flag maskU < 0 to skip.
     const push = (x: number, y: number, u: number, v: number): void => {
       buf[o++] = x;
       buf[o++] = y;
@@ -486,8 +525,8 @@ export class SpriteRenderer {
       buf[o++] = q.tint[0];
       buf[o++] = q.tint[1];
       buf[o++] = q.tint[2];
-      buf[o++] = -1; // maskU (no pmask for map objects)
-      buf[o++] = -1; // maskV
+      buf[o++] = q.masked ? u : -1; // maskU
+      buf[o++] = q.masked ? v : -1; // maskV
     };
     push(q.x0, q.y0, q.u0, q.v0);
     push(q.x1, q.y0, q.u1, q.v0);
@@ -503,6 +542,7 @@ export class SpriteRenderer {
     const gl = this.gl;
     for (const reg of this.atlases.values()) {
       for (const tex of reg.textures) gl.deleteTexture(tex);
+      for (const mtex of reg.pmaskTextures) if (mtex) gl.deleteTexture(mtex);
     }
     this.atlases.clear();
     gl.deleteTexture(this.whiteTex);

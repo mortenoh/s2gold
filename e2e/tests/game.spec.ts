@@ -26,6 +26,10 @@ const P4_DIR =
   '/private/tmp/claude-502/-Users-morteoh-dev-local-s2gold/' +
   'bb77c315-f7af-4a5f-a4d3-fe7955aadc74/scratchpad/p4app';
 
+const P4UI_DIR =
+  '/private/tmp/claude-502/-Users-morteoh-dev-local-s2gold/' +
+  'bb77c315-f7af-4a5f-a4d3-fe7955aadc74/scratchpad/p4ui';
+
 async function readDebug(page: Page): Promise<S2Debug> {
   return page.evaluate(() => {
     const dbg = (window as unknown as { __s2debug?: S2Debug }).__s2debug;
@@ -79,6 +83,13 @@ function collectErrors(page: Page): string[] {
   return errors;
 }
 
+/** Turn fog of war off (it defaults on for a new game in P4). */
+async function disableFog(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    (window as unknown as { __s2debug?: { setFog(on: boolean): void } }).__s2debug?.setFog(false);
+  });
+}
+
 test('game page renders MISS200 terrain without errors', async ({ page }) => {
   test.skip(!(await assetsPresent(page)), 'converted assets not installed');
   const errors = collectErrors(page);
@@ -87,6 +98,10 @@ test('game page renders MISS200 terrain without errors', async ({ page }) => {
   await expect(page.locator('body[data-map-ready]')).toBeAttached({ timeout: 15_000 });
   await expect(page.locator('body')).toHaveAttribute('data-map-ready', 'maps_miss200');
   await expect(page.getByTestId('map-title')).toHaveText('I - Off we go');
+
+  // Fog of war defaults ON (P4); disable it so this terrain-coverage check sees
+  // the whole viewport rather than the unexplored black beyond the HQ's sight.
+  await disableFog(page);
 
   // Give the render loop a few frames, then check the canvas is non-blank.
   await page.waitForTimeout(300);
@@ -118,6 +133,7 @@ test('scrolling and zooming keep the canvas non-blank', async ({ page }) => {
 
   await page.goto('/game.html');
   await expect(page.locator('body[data-map-ready]')).toBeAttached({ timeout: 15_000 });
+  await disableFog(page); // P4 fog defaults on; this pans over unexplored land.
 
   // Drag far enough to cross the wrap seam on a 64x64 map (3584 world px).
   const canvas = page.getByTestId('game-canvas');
@@ -162,6 +178,7 @@ test('switching maps keeps rendering', async ({ page }) => {
   await expect(page.locator('body')).toHaveAttribute('data-map-ready', target ?? '', {
     timeout: 15_000,
   });
+  await disableFog(page); // fresh map re-enables fog; disable for the coverage check.
   await page.waitForTimeout(300);
 
   const sample = await sampleCanvas(page);
@@ -569,6 +586,144 @@ test('P4: save appears in the load list and can be deleted', async ({ page }) =>
   await expect(page.getByTestId('save-item').filter({ hasText: name })).toHaveCount(0, {
     timeout: 5000,
   });
+});
+
+// --- P4 military gate: scripted two-player battle ---------------------------
+
+/** The military-relevant slice of window.__s2debug the battle test drives. */
+interface S2Military {
+  players: number;
+  hqNode: number;
+  counters: Record<string, number>;
+  nodeOf(x: number, y: number): number;
+  canBuild(node: number, type: string): boolean;
+  militaryTroops(node: number): number;
+  debugSpawnMilitary(player: number, node: number, type: string): number;
+  nodeToScreen(node: number): { x: number; y: number };
+}
+
+/** Read the military debug surface (throws if it is missing). */
+function readMil(page: Page): Promise<{ players: number; hqNode: number; counters: Record<string, number> }> {
+  return page.evaluate(() => {
+    const d = (window as unknown as { __s2debug?: S2Military }).__s2debug;
+    if (!d) throw new Error('window.__s2debug missing');
+    return { players: d.players, hqNode: d.hqNode, counters: d.counters };
+  });
+}
+
+test('P4: two-player battle — borders, garrison panel, attack, capture', async ({ page }) => {
+  test.skip(!(await assetsPresent(page)), 'converted assets not installed');
+  test.setTimeout(90_000);
+  const errors = collectErrors(page);
+
+  await page.goto('/game.html?map=maps4_map02');
+  await expect(page.locator('body[data-map-ready]')).toBeAttached({ timeout: 15_000 });
+  await expect(page.locator('body')).toHaveAttribute('data-map-ready', 'maps4_map02');
+
+  // A 2-HQ map seeds two players (player 1 idle; its HQ renders + holds land).
+  const info = await readMil(page);
+  expect(info.players, 'two players seeded on a 2-HQ map').toBe(2);
+
+  // Pause and pick two military sites near player 0's HQ: a watchtower for us and
+  // a nearby enemy barracks (both close so they stay on-screen for clicking).
+  await page.getByTestId('pause-toggle').click();
+  const plan = await page.evaluate(() => {
+    const d = (window as unknown as { __s2debug: S2Military }).__s2debug;
+    const W = 64;
+    const hq = d.hqNode;
+    const hx = hq % W;
+    const hy = Math.floor(hq / W);
+    const find = (type: string, r0: number, r1: number, skip: number[]): number => {
+      for (let rr = r0; rr <= r1; rr++) {
+        for (let dy = -rr; dy <= rr; dy++) {
+          for (let dx = -rr; dx <= rr; dx++) {
+            const n = d.nodeOf(hx + dx, hy + dy);
+            if (n === hq || skip.includes(n)) continue;
+            if (d.canBuild(n, type)) return n;
+          }
+        }
+      }
+      return -1;
+    };
+    const tower = find('watchtower', 2, 5, []);
+    const enemy = find('barracks', 4, 7, [tower]);
+    return { tower, enemy };
+  });
+  expect(plan.tower, 'a watchtower site exists near HQ').toBeGreaterThanOrEqual(0);
+  expect(plan.enemy, 'an enemy barracks site exists near HQ').toBeGreaterThanOrEqual(0);
+
+  // Cheat-place a fully-built player-0 watchtower and a player-1 enemy barracks;
+  // the engine walks soldiers in and activates each building's territory.
+  await page.evaluate((p) => {
+    const d = (window as unknown as { __s2debug: S2Military }).__s2debug;
+    d.debugSpawnMilitary(0, p.tower, 'watchtower');
+    d.debugSpawnMilitary(1, p.enemy, 'barracks');
+  }, plan);
+
+  // Run and wait for both garrisons to fill and territory to establish.
+  await page.getByTestId('pause-toggle').click();
+  await page.getByTestId('speed-10').click();
+  await page.waitForFunction(
+    (p) => {
+      const d = (window as unknown as { __s2debug: S2Military }).__s2debug;
+      return d.militaryTroops(p.tower) >= 4 && d.militaryTroops(p.enemy) >= 1;
+    },
+    plan,
+    { timeout: 45_000 },
+  );
+
+  // Fog-on screenshot: our lit territory + border stones fading into the dark.
+  await page.getByTestId('game-canvas').screenshot({ path: `${P4UI_DIR}/borders-fog-on.png` });
+
+  // Fog off for the battle so both sides render for the fight screenshots.
+  await disableFog(page);
+  await page.waitForTimeout(200);
+  await page.getByTestId('game-canvas').screenshot({ path: `${P4UI_DIR}/multiplayer.png` });
+
+  // Own building: garrison list by rank + coin toggle.
+  await clickNode(page, plan.tower);
+  await expect(page.getByTestId('military-panel')).toBeVisible();
+  await expect(page.getByTestId('garrison-list')).toBeVisible();
+  await expect(page.getByTestId('coin-toggle')).toBeVisible();
+  await page.getByTestId('game-canvas').screenshot({ path: `${P4UI_DIR}/garrison-panel.png` });
+  await page.getByTestId('coin-toggle').click(); // exercise the toggleCoins command
+  await page.getByTestId('military-close').click();
+
+  // Enemy building: attack controls, then launch the attack from the panel.
+  await clickNode(page, plan.enemy);
+  await expect(page.getByTestId('military-panel')).toBeVisible();
+  await expect(page.getByTestId('attack-submit')).toBeVisible({ timeout: 5000 });
+  await page.getByTestId('game-canvas').screenshot({ path: `${P4UI_DIR}/attack-panel.png` });
+  await page.getByTestId('attack-submit').click();
+
+  // A duel starts as our soldiers reach the enemy flag.
+  await page.waitForFunction(
+    () => (window as unknown as { __s2debug: S2Military }).__s2debug.counters.fightsStarted >= 1,
+    undefined,
+    { timeout: 30_000 },
+  );
+  await page.getByTestId('game-canvas').screenshot({ path: `${P4UI_DIR}/fight.png` });
+
+  // The battle resolves: the barracks is captured or a soldier falls.
+  await page.waitForFunction(
+    () => {
+      const c = (window as unknown as { __s2debug: S2Military }).__s2debug.counters;
+      return (c.buildingsCaptured ?? 0) >= 1 || (c.soldiersDied ?? 0) >= 1;
+    },
+    undefined,
+    { timeout: 30_000 },
+  );
+  await page.getByTestId('game-canvas').screenshot({ path: `${P4UI_DIR}/aftermath.png` });
+
+  const counters = (await readMil(page)).counters;
+  expect(counters.fightsStarted, 'a fight started').toBeGreaterThanOrEqual(1);
+  expect(
+    (counters.buildingsCaptured ?? 0) + (counters.soldiersDied ?? 0),
+    'the battle resolved (capture or casualty)',
+  ).toBeGreaterThanOrEqual(1);
+  expect(counters.territoryChanges, 'territory changed as buildings occupied').toBeGreaterThanOrEqual(1);
+
+  expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);
 });
 
 test('MISS200 scene contains trees and granite, rendered over terrain', async ({ page }) => {

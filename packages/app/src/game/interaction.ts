@@ -93,6 +93,13 @@ export interface InteractionDeps {
   onStatus(text: string): void;
   /** True when the pending click ended a drag and should not open a menu. */
   suppressClick?(): boolean;
+  /**
+   * Try to open the military building panel at a node. Returns true when a
+   * military building was there (so the build menu is suppressed).
+   */
+  openMilitary?(node: number, clientX: number, clientY: number): boolean;
+  /** Close any open military panel (e.g. a click landed elsewhere). */
+  closeMilitary?(): void;
 }
 
 /** Live road-build preview: the hovered destination and the path to it. */
@@ -162,6 +169,7 @@ export class Interaction {
 
   private onClick(ev: MouseEvent): void {
     this.closeMenu();
+    this.deps.closeMilitary?.();
     if (this.deps.suppressClick?.()) return;
     const node = this.screenToNode(ev.clientX, ev.clientY);
     if (node < 0) return;
@@ -169,6 +177,8 @@ export class Interaction {
       this.finishRoad(node);
       return;
     }
+    // A military building (own or enemy) opens its garrison/attack panel first.
+    if (this.deps.openMilitary?.(node, ev.clientX, ev.clientY)) return;
     this.openMenu(ev.clientX, ev.clientY, node);
   }
 

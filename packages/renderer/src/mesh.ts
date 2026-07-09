@@ -41,6 +41,12 @@ export interface TerrainMesh {
   readonly vertices: Float32Array;
   /** Number of vertices (always a multiple of 3). */
   readonly vertexCount: number;
+  /**
+   * Wrapped source node index each vertex samples its attributes from
+   * (`vertexCount` entries). Lets the renderer remodulate per-vertex brightness
+   * by a per-node factor — e.g. fog of war — without rebuilding the mesh.
+   */
+  readonly nodeOfVertex: Uint32Array;
 }
 
 interface UvTriangle {
@@ -108,13 +114,16 @@ export function buildTerrainMesh(map: TerrainMapData): TerrainMesh {
   const nodeCount = width * height;
   const vertexCount = nodeCount * 6;
   const vertices = new Float32Array(vertexCount * FLOATS_PER_VERTEX);
+  const nodeOfVertex = new Uint32Array(vertexCount);
 
   const nodeIndex = (pt: LatticePoint): number => pt.y * width + pt.x;
 
   let o = 0;
+  let vi = 0;
   const emit = (pt: LatticePoint, u: number, v: number): void => {
     const wrapped = wrapNode(pt, width, height);
     const idx = nodeIndex(wrapped);
+    nodeOfVertex[vi++] = idx;
     const pos = nodeWorldPos(pt, map.heightLayer[idx] ?? 0);
     vertices[o++] = pos.x;
     vertices[o++] = pos.y;
@@ -148,5 +157,5 @@ export function buildTerrainMesh(map: TerrainMapData): TerrainMesh {
     }
   }
 
-  return { vertices, vertexCount };
+  return { vertices, vertexCount, nodeOfVertex };
 }

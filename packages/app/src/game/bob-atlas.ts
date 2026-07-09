@@ -14,6 +14,7 @@
 
 import type { AtlasPage, AtlasSprite, SpriteAtlasMeta } from '@s2gold/renderer';
 import { assetUrl, fetchJson } from '../lib/manifest';
+import { loadMaskPages } from './sprite-atlas';
 
 /** Raw bobs/<name>/atlas.json shape as emitted by the pipeline. */
 interface BobAtlasJson {
@@ -33,6 +34,8 @@ export interface BobAtlas {
   readonly archive: string;
   readonly meta: SpriteAtlasMeta;
   readonly pages: readonly AtlasPage[];
+  /** Player-colour mask pages (index-aligned with `pages`; null when absent). */
+  readonly pmaskPages: readonly (AtlasPage | null)[];
   /** `[fat][direction][step]` -> body sprite key. */
   readonly bodyTable: number[][][];
   /** `[job][step][fat][direction]` -> overlay native index. */
@@ -71,10 +74,12 @@ export async function loadBobAtlas(name: string, archive = name): Promise<BobAtl
   const pages = await Promise.all(
     raw.atlases.map((file) => loadImage(assetUrl(`bobs/${name}/${file}`))),
   );
+  const pmaskPages = await loadMaskPages(`bobs/${name}`, raw.pmasks, raw.atlases.length);
   return {
     archive,
     meta,
     pages,
+    pmaskPages,
     bodyTable: raw.body_table,
     links: raw.links,
     overlayBase: raw.overlay_base,

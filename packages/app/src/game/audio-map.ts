@@ -23,6 +23,13 @@
  * documented choice rather than a researched fact. Continuous chopping/sawing
  * are approximated by their one-shot production events (we only receive discrete
  * per-tick events, not the original's animation-frame sound triggers).
+ *
+ * Military cues (P4): the fetched RttR sources do not expose the exact SOUND.LST
+ * indices `noFighting.cpp` / `nofCatapultMan.cpp` play, so the four military
+ * clips below are DOCUMENTED CHOICES (same status as builder-hammer): each is a
+ * plausible clip picked from the installed SOUND.LST set for its event, not a
+ * researched constant. They keep the audio layer voiced for combat without
+ * copying any code.
  */
 
 import type { GameEvent, World } from '@s2gold/engine';
@@ -36,6 +43,11 @@ export const SOUND = {
   foresterPlant: 57,
   foresterDig: 76,
   builderHammer: 78,
+  // Military (documented choices; see module header).
+  fightClash: 64,
+  soldierDied: 92,
+  buildingCaptured: 87,
+  catapultFire: 74,
 } as const;
 
 /** A positioned sound cue: which clip, and the map node it originates at. */
@@ -66,6 +78,18 @@ export function soundForEvent(e: GameEvent, world: World): SoundCue | null {
     }
     case 'BuildingCompleted':
       return { id: SOUND.builderHammer, node: e.node };
+    case 'FightStarted':
+      return { id: SOUND.fightClash, node: e.node };
+    case 'SoldierDied':
+      return { id: SOUND.soldierDied, node: e.node };
+    case 'BuildingCaptured':
+      return { id: SOUND.buildingCaptured, node: e.node };
+    case 'CatapultFired': {
+      const node =
+        world.buildings.items[e.targetBuildingId]?.node ??
+        world.buildings.items[e.buildingId]?.node;
+      return node === undefined ? null : { id: SOUND.catapultFire, node };
+    }
     default:
       return null;
   }

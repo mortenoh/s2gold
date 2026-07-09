@@ -8,11 +8,13 @@
 import './styles.css';
 import {
   Camera,
+  PLAYER_COLORS,
   RoadRenderer,
   SpriteRenderer,
   TerrainRenderer,
   TR_H,
   TR_W,
+  unpackColor,
   type LandscapeSet,
 } from '@s2gold/renderer';
 import { clear, el } from '../lib/dom';
@@ -24,6 +26,8 @@ import { MinimapView } from './minimap-view';
 import { GameSession, SPEEDS, type Speed } from './session';
 import {
   buildDynamics,
+  borderStoneSegments,
+  garrisonDotSegments,
   nodeAnchor,
   nodeMarkerSegments,
   pathSegments,
@@ -32,6 +36,7 @@ import {
   BOB_ARCHIVE,
 } from './game-render';
 import { Interaction } from './interaction';
+import { MilitaryPanel } from './military-ui';
 import { SaveMenu } from './save-ui';
 import { AudioEngine, positional } from './audio';
 
@@ -83,6 +88,24 @@ interface S2Debug {
   };
   /** HQ building node id for player 0 (-1 when none). */
   hqNode: number;
+  /** Number of players seeded in the current world. */
+  players: number;
+  /** Toggle fog of war (default on for a new game). */
+  setFog(on: boolean): void;
+  /** Owning player of a node (-1 = neutral). */
+  ownerOf(node: number): number;
+  /** Building id at a node, or -1. */
+  buildingIdAt(node: number): number;
+  /** Total garrisoned soldiers at a military building node (-1 when not military). */
+  militaryTroops(node: number): number;
+  /** How many soldiers the local player could send against a target building. */
+  attackableSoldiers(targetBuildingId: number): number;
+  /** Cheat: place a fully-built, unoccupied military building for a player. */
+  debugSpawnMilitary(player: number, node: number, type: string): number;
+  /** Order up to `soldiers` attackers at an enemy military building. */
+  attack(targetBuildingId: number, soldiers: number): void;
+  /** Toggle coin delivery to one of the local player's military buildings. */
+  toggleCoins(buildingId: number, enabled: boolean): void;
   /** Node id nearest a map (x, y) lattice coordinate. */
   nodeOf(x: number, y: number): number;
   /** The flag node (SE of a door node) that a building here would use. */
@@ -154,6 +177,10 @@ async function boot(): Promise<void> {
   const menuButton = el('button', {
     text: 'Menu',
     attrs: { 'data-testid': 'menu-toggle', type: 'button', title: 'Save / load (F5 / F9)' },
+  });
+  const fogButton = el('button', {
+    text: 'Fog: on',
+    attrs: { 'data-testid': 'fog-toggle', type: 'button', title: 'Toggle fog of war' },
   });
   // Long, transient hints (road mode etc.) float in their own toast below the
   // bar so the top bar never has to wrap to make room for them.
@@ -263,6 +290,7 @@ async function boot(): Promise<void> {
       zoomButton,
       pauseButton,
       menuButton,
+      fogButton,
       ...speedButtons,
       audioControls,
       resources,
@@ -288,11 +316,11 @@ async function boot(): Promise<void> {
   // Building/flag (rom_z) and settler (carrier BOB) atlases are map-independent
   // for the Roman nation; register them once.
   const romanAtlas = await loadAtlas(BUILDING_ARCHIVE);
-  if (romanAtlas) sprites.registerAtlas(romanAtlas.meta, romanAtlas.pages);
+  if (romanAtlas) sprites.registerAtlas(romanAtlas.meta, romanAtlas.pages, romanAtlas.pmaskPages);
   const carrier: BobAtlas | null = await loadBobAtlas('carrier', BOB_ARCHIVE);
-  if (carrier) sprites.registerAtlas(carrier.meta, carrier.pages);
+  if (carrier) sprites.registerAtlas(carrier.meta, carrier.pages, carrier.pmaskPages);
   const jobs: BobAtlas | null = await loadBobAtlas('jobs', JOBS_ARCHIVE);
-  if (jobs) sprites.registerAtlas(jobs.meta, jobs.pages);
+  if (jobs) sprites.registerAtlas(jobs.meta, jobs.pages, jobs.pmaskPages);
 
   let camera = new Camera(1, 1);
   let session: GameSession | null = null;
@@ -336,7 +364,7 @@ async function boot(): Promise<void> {
     const archive = objectAtlasForLandscape(map.terrain);
     if (!sprites.hasAtlas(archive)) {
       const loaded = await loadAtlas(archive);
-      if (loaded) sprites.registerAtlas(loaded.meta, loaded.pages);
+      if (loaded) sprites.registerAtlas(loaded.meta, loaded.pages, loaded.pmaskPages);
     }
     objAtlasReady = sprites.hasAtlas(archive);
 
@@ -347,6 +375,8 @@ async function boot(): Promise<void> {
 
     camera = new Camera(map.data.width, map.data.height);
     minimap.setMap(map.data, camera.worldSize.w, camera.worldSize.h);
+    applyFog();
+    refreshTerritory();
 
     const hqX = map.hqX[0] ?? 0xffff;
     const hqY = map.hqY[0] ?? 0xffff;
@@ -428,6 +458,19 @@ async function boot(): Promise<void> {
       suggestRoad: (a, b) => s.suggestRoad(a, b),
       setSpeed: (sp) => setSpeed(sp as Speed),
       setPaused: (p) => setPaused(p),
+      players: s.playerCount,
+      setFog: (on) => {
+        s.setFog(on);
+        applyFog();
+      },
+      ownerOf: (node) => s.ownerOf(node),
+      buildingIdAt: (node) => s.buildingIdAt(node),
+      militaryTroops: (node) => s.militaryAt(node)?.troops ?? -1,
+      attackableSoldiers: (targetBuildingId) => s.attackableSoldiers(targetBuildingId),
+      debugSpawnMilitary: (player, node, type) =>
+        s.debugSpawnMilitary(player, node, type as Parameters<GameSession['placeBuilding']>[1]),
+      attack: (targetBuildingId, soldiers) => s.attack(targetBuildingId, soldiers),
+      toggleCoins: (buildingId, enabled) => s.toggleCoins(buildingId, enabled),
       roadPreview: () => {
         const rp = interaction.roadPreview;
         return rp ? { node: rp.node, valid: rp.valid, hasPath: rp.path !== null } : null;
@@ -455,6 +498,33 @@ async function boot(): Promise<void> {
     speedButtons.forEach((btn, i) => btn.classList.toggle('active', SPEEDS[i] === speed));
   }
   speedButtons.forEach((btn, i) => btn.addEventListener('click', () => setSpeed(SPEEDS[i])));
+
+  /** Push the session's fog state to the terrain renderer + update the button. */
+  function applyFog(): void {
+    if (!session) return;
+    renderer.setFog(session.fogEnabled ? session.visibility : null);
+    session.fogDirty = false;
+    fogButton.textContent = session.fogEnabled ? 'Fog: on' : 'Fog: off';
+    fogButton.classList.toggle('active', session.fogEnabled);
+  }
+
+  /** Cached per-player border-ring nodes, refreshed only when territory changes. */
+  let borderCache: number[][] = [];
+
+  /** Refresh territory-derived overlays (minimap tint + cached border rings). */
+  function refreshTerritory(): void {
+    if (!session) return;
+    minimap.setOwners(session.world.owner, PLAYER_COLORS);
+    borderCache = [];
+    for (let p = 0; p < session.playerCount; p++) borderCache[p] = session.borders(p);
+    session.territoryDirty = false;
+  }
+
+  fogButton.addEventListener('click', () => {
+    if (!session) return;
+    session.setFog(!session.fogEnabled);
+    applyFog();
+  });
 
   mapSelect.addEventListener('change', () => {
     const entry = index.find((m) => m.name === mapSelect.value);
@@ -526,6 +596,14 @@ async function boot(): Promise<void> {
 
   // --- Interaction ----------------------------------------------------------
 
+  const military = new MilitaryPanel({
+    root,
+    session: () => {
+      if (!session) throw new Error('no session');
+      return session;
+    },
+  });
+
   const interaction = new Interaction({
     canvas,
     root,
@@ -539,6 +617,8 @@ async function boot(): Promise<void> {
       status.hidden = text.length === 0;
     },
     suppressClick: () => draggedFar,
+    openMilitary: (node, x, y) => military.openAt(node, x, y),
+    closeMilitary: () => military.close(),
   });
 
   // --- Save / load ----------------------------------------------------------
@@ -628,11 +708,21 @@ async function boot(): Promise<void> {
     }
 
     if (session?.staticsDirty) rebuildStatics();
+    if (session?.fogDirty) applyFog();
+    if (session?.territoryDirty) refreshTerritory();
 
     renderer.resize();
     renderer.render(camera);
     if (session) {
+      const vis = session.fogEnabled ? session.visibility : null;
       roads.render(camera, roadSegments(session.world, session.geom));
+      // Territory border stones, drawn in each player's colour over the terrain.
+      for (let p = 0; p < session.playerCount; p++) {
+        const stones = borderStoneSegments(session.world, borderCache[p] ?? [], vis);
+        if (stones.length === 0) continue;
+        const [r, g, b] = unpackColor(PLAYER_COLORS[p % PLAYER_COLORS.length] ?? 0xffffff);
+        roads.render(camera, stones, [r, g, b, 1]);
+      }
       // Live road-build preview: translucent path + an end marker (green when a
       // road can be built to the hovered node, red when it cannot).
       const preview = interaction.roadPreview;
@@ -659,9 +749,21 @@ async function boot(): Promise<void> {
             session.geom,
             { carrier, jobs, objectArchive: objectAtlasForLandscape(landscape) },
             { waveFrame, walkFrame, alpha },
+            session.fogEnabled ? session.visibility : null,
           )
         : [];
     const stats = sprites.render(camera, waveFrame, dynamics);
+    // Compact garrison markers, above each occupied military building, on top of
+    // the sprite layer so they are never hidden by the building.
+    if (session) {
+      const vis = session.fogEnabled ? session.visibility : null;
+      for (let p = 0; p < session.playerCount; p++) {
+        const dots = garrisonDotSegments(session.world, p, vis);
+        if (dots.length === 0) continue;
+        const [r, g, b] = unpackColor(PLAYER_COLORS[p % PLAYER_COLORS.length] ?? 0xffffff);
+        roads.render(camera, dots, [r, g, b, 1]);
+      }
+    }
     minimap.draw(camera, canvas.width, canvas.height);
 
     updateHud(stats.quads, stats.drawCalls);

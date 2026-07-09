@@ -11,13 +11,16 @@ interface AtlasJson {
   archive: string;
   atlases: string[];
   sprites: Record<string, AtlasSprite>;
-  pmasks?: number[];
+  /** Player-colour mask page filenames (index-aligned with `atlases`). */
+  pmasks?: string[];
 }
 
 /** Parsed atlas metadata plus its decoded page images. */
 export interface LoadedAtlas {
   readonly meta: SpriteAtlasMeta;
   readonly pages: readonly AtlasPage[];
+  /** Player-colour mask pages (index-aligned with `pages`; null when absent). */
+  readonly pmaskPages: readonly (AtlasPage | null)[];
 }
 
 function parseMeta(raw: AtlasJson): SpriteAtlasMeta {
@@ -31,7 +34,9 @@ function parseMeta(raw: AtlasJson): SpriteAtlasMeta {
     archive: raw.archive,
     atlases: raw.atlases,
     sprites,
-    pmasks: raw.pmasks ?? [],
+    // Mask *pages* are loaded separately (see loadMaskPages); the per-sprite
+    // `pmask` flag drives tinting, so this vestigial index list stays empty.
+    pmasks: [],
   };
 }
 
@@ -53,5 +58,30 @@ export async function loadAtlas(archive: string): Promise<LoadedAtlas | null> {
   const pages = await Promise.all(
     raw.atlases.map((name) => loadImage(assetUrl(`graphics/${archive}/${name}`))),
   );
-  return { meta, pages };
+  const pmaskPages = await loadMaskPages(`graphics/${archive}`, raw.pmasks, raw.atlases.length);
+  return { meta, pages, pmaskPages };
+}
+
+/**
+ * Load the pmask page images for an archive (index-aligned with the atlas
+ * pages; null where a mask is absent). Missing masks degrade gracefully to no
+ * recolour rather than failing the whole atlas load.
+ */
+export async function loadMaskPages(
+  dir: string,
+  masks: readonly string[] | undefined,
+  pageCount: number,
+): Promise<(AtlasPage | null)[]> {
+  const out: (AtlasPage | null)[] = new Array<AtlasPage | null>(pageCount).fill(null);
+  if (!masks) return out;
+  await Promise.all(
+    masks.slice(0, pageCount).map(async (file, i) => {
+      try {
+        out[i] = await loadImage(assetUrl(`${dir}/${file}`));
+      } catch {
+        out[i] = null;
+      }
+    }),
+  );
+  return out;
 }

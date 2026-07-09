@@ -54,6 +54,14 @@ void main() {
 /** Maximum on-screen node raise; used as draw-culling margin. */
 const MAX_RAISE = 60 * HEIGHT_FACTOR;
 
+/**
+ * Brightness multiplier applied to a node's terrain by its fog-of-war state,
+ * indexed by the per-node byte passed to {@link TerrainRenderer.setFog}:
+ * 0 = unexplored (black), 1 = explored but not currently seen (dim snapshot),
+ * 2 = visible (full brightness). Values outside 0..2 are treated as visible.
+ */
+const FOG_BRIGHTNESS: readonly number[] = [0, 0.4, 1];
+
 function compile(gl: WebGL2RenderingContext, type: number, source: string): WebGLShader {
   const shader = gl.createShader(type);
   if (!shader) throw new Error('failed to create shader');
@@ -89,6 +97,12 @@ export class TerrainRenderer {
   private vertexCount = 0;
   private worldW = 0;
   private worldH = 0;
+  /** Pristine interleaved vertices (fog-free), kept so fog can remodulate them. */
+  private baseVertices: Float32Array = new Float32Array(0);
+  /** Wrapped source node per vertex (for per-node fog brightness). */
+  private nodeOfVertex: Uint32Array = new Uint32Array(0);
+  /** Scratch buffer for the fog-modulated vertex upload. */
+  private fogVertices: Float32Array = new Float32Array(0);
 
   constructor(
     readonly canvas: HTMLCanvasElement,
@@ -152,6 +166,9 @@ export class TerrainRenderer {
     this.vertexCount = mesh.vertexCount;
     this.worldW = mapPixelWidth(map.width);
     this.worldH = mapPixelHeight(map.height);
+    this.baseVertices = mesh.vertices;
+    this.nodeOfVertex = mesh.nodeOfVertex;
+    this.fogVertices = new Float32Array(mesh.vertices.length);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
     gl.bufferData(gl.ARRAY_BUFFER, mesh.vertices, gl.STATIC_DRAW);
@@ -164,6 +181,37 @@ export class TerrainRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+
+  /**
+   * Apply (or clear) fog of war. `fog` is one byte per map node (row-major
+   * width*height): 0 unexplored, 1 explored/not-seen, 2 visible (see
+   * {@link FOG_BRIGHTNESS}). Pass `null` to restore full brightness. Cheap to
+   * call whenever visibility changes (e.g. on TerritoryChanged) — it re-modulates
+   * the static mesh's per-vertex brightness and re-uploads the buffer.
+   */
+  setFog(fog: Uint8Array | null): void {
+    if (this.vertexCount === 0) return;
+    const gl = this.gl;
+    const stride = FLOATS_PER_VERTEX;
+    let data: Float32Array;
+    if (!fog) {
+      data = this.baseVertices;
+    } else {
+      const base = this.baseVertices;
+      const out = this.fogVertices;
+      out.set(base);
+      for (let v = 0; v < this.vertexCount; v++) {
+        const node = this.nodeOfVertex[v] ?? 0;
+        const state = fog[node] ?? 2;
+        const factor = FOG_BRIGHTNESS[state] ?? 1;
+        out[v * stride + 4] = (base[v * stride + 4] ?? 1) * factor;
+      }
+      data = out;
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
   }
 
   /** True when a map has been loaded. */

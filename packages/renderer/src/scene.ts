@@ -98,8 +98,14 @@ export interface AtlasSprite {
   readonly nx: number;
   /** Hotspot y offset: draw so `screenY = anchorY - ny`. */
   readonly ny: number;
-  /** Bitmap kind: "rle" | "player" | "shadow" | "raw". */
+  /** Bitmap kind: "rle" | "player" | "shadow" | "raw" | "body". */
   readonly kind: string;
+  /**
+   * True when this sprite ships a player-colour mask at the same atlas rect in
+   * the archive's pmask page: the tint path replaces its masked pixels with the
+   * player colour (see {@link SpriteRenderer}). Absent/false = never tinted.
+   */
+  readonly pmask?: boolean;
 }
 
 /** Parsed atlas metadata (the `atlas.json` next to the atlas PNGs). */

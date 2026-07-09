@@ -233,6 +233,117 @@ body {
   margin-top: 0;
 }
 
+/* Military building panel (garrison / coins / attack). */
+.military-panel {
+  position: absolute;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 170px;
+  padding: 8px 10px;
+  background: rgba(20, 20, 24, 0.97);
+  border: 1px solid #4a4a55;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55);
+  color: #ddd;
+  font-size: 12px;
+}
+
+.military-panel .mil-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 700;
+  color: #fff;
+  font-size: 13px;
+}
+
+.military-panel .mil-owner {
+  font-weight: 400;
+  font-size: 11px;
+  color: #9fd0ff;
+}
+
+.military-panel .mil-sub {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #9aa;
+}
+
+.military-panel .mil-garrison {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.military-panel .mil-rank {
+  color: #ffd479;
+  font-variant-numeric: tabular-nums;
+}
+
+.military-panel .mil-empty {
+  color: #888;
+  font-style: italic;
+}
+
+.military-panel .mil-coins,
+.military-panel .mil-attack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid #33333c;
+  padding-top: 6px;
+}
+
+.military-panel .mil-attack-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.military-panel input[type='number'] {
+  width: 56px;
+  background: #14141a;
+  color: #eee;
+  border: 1px solid #4a4a55;
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
+.military-panel button {
+  background: #2a2a32;
+  color: #eee;
+  border: 1px solid #4a4a55;
+  border-radius: 4px;
+  padding: 4px 9px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.military-panel button:hover {
+  background: #3f6fb0;
+  border-color: #6f9fe0;
+}
+
+.military-panel [data-testid='attack-submit'] {
+  border-color: #8a3a3a;
+  color: #f0b4b4;
+}
+
+.military-panel [data-testid='attack-submit']:hover {
+  background: #7a2a2a;
+  border-color: #b06f6f;
+}
+
+.military-panel .mil-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 /* Save / load overlay panel. */
 .save-panel {
   position: absolute;

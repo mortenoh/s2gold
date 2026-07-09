@@ -17,6 +17,7 @@
 
 import {
   BUILDING_DEFS,
+  buildingDef,
   DIRECTIONS,
   TICKS,
   type Building,
@@ -195,14 +196,20 @@ export function buildDynamics(
   geom: Geometry,
   atlases: RenderAtlases,
   anim: SceneAnimation,
+  visibility: Uint8Array | null = null,
 ): DynamicSprite[] {
   const { carrier, jobs, objectArchive } = atlases;
   const out: DynamicSprite[] = [];
+  // Fog: a dynamic on a node that is not currently visible is hidden (explored
+  // land keeps only its darkened terrain snapshot; unexplored is black). The
+  // local player's own territory is always visible, so own units/buildings stay.
+  const hidden = (node: number): boolean => visibility !== null && visibility[node] !== 2;
 
   // Buildings (finished buildings, and construction sites that reveal the
   // finished building bottom-up over their skeleton as the build progresses).
   for (const b of world.buildings.items) {
     if (!b) continue;
+    if (hidden(b.node)) continue;
     const a = nodeAnchor(world, b.node);
     if (b.state === 'site' && b.type !== 'headquarters') {
       const site = buildingSprite(b.type, 'site');
@@ -246,6 +253,7 @@ export function buildDynamics(
   // near-full size via scale; the engine swaps it for a full static tree on
   // maturation (see main's sapling-count watch that rebuilds statics).
   for (const sap of world.saplings) {
+    if (hidden(sap.node)) continue;
     const anchor = nodeAnchor(world, sap.node);
     const remaining = sap.matureTick - world.tick;
     const progress = Math.max(0, Math.min(1, 1 - remaining / TICKS.treeGrow));
@@ -262,6 +270,7 @@ export function buildDynamics(
   // Flags + wares waiting on them.
   for (const f of world.flags.items) {
     if (!f) continue;
+    if (hidden(f.node)) continue;
     const a = nodeAnchor(world, f.node);
     const frame = anim.waveFrame % FLAG_FRAMES;
     out.push({
@@ -293,10 +302,30 @@ export function buildDynamics(
   // carriers keep the carrier body and draw the ware they carry.
   for (const s of world.settlers.items) {
     if (!s) continue;
+    if (hidden(s.node)) continue;
     const pos = settlerAnchor(world, geom, s, anim.alpha);
     const dir = bobDir(pos.dir);
     const step = pos.moving ? (anim.walkFrame + s.id) % BOB_WALK_FRAMES : 0;
     const jobBob = JOB_BOB_ID[s.job];
+
+    // A duel is fought on the attacking soldier alone (the defender is virtual);
+    // draw a mirrored opponent body beside it so a fight reads as two soldiers
+    // facing each other (MILITARY.md §5). The opponent takes the defender's
+    // player colour, looked up from the building under attack.
+    if (s.rank >= 0 && s.state === 'soldierFight') {
+      const target = world.buildings.items[s.attackTargetId];
+      const oppDir = (dir + 3) % 6; // faces back toward the attacker
+      const oppBody = carrier.bodyTable[0]?.[oppDir]?.[0];
+      if (oppBody !== undefined) {
+        out.push({
+          worldX: pos.x + 10,
+          worldY: pos.y,
+          archive: BOB_ARCHIVE,
+          spriteIndex: oppBody,
+          player: target?.player ?? s.player,
+        });
+      }
+    }
 
     if (jobs && jobBob !== undefined) {
       const body = jobs.bodyTable[0]?.[dir]?.[step];
@@ -399,6 +428,62 @@ export function nodeMarkerSegments(world: World, node: number, size = 7): RoadSe
     { x0: a.x - size, y0: a.y - size, x1: a.x + size, y1: a.y + size },
     { x0: a.x - size, y0: a.y + size, x1: a.x + size, y1: a.y - size },
   ];
+}
+
+/**
+ * Small player-coloured posts marking a territory's border ring. The original
+ * dots the frontier with little stones in the owner's colour; the exact nation
+ * sprite index was not confidently isolated from the converted archive, so these
+ * are drawn as compact flat markers (an upright post + base) via the flat-quad
+ * overlay in the player colour — a clean-room-safe stand-in. Fog-aware: a border
+ * node that is not currently visible is skipped.
+ */
+export function borderStoneSegments(
+  world: World,
+  nodes: readonly number[],
+  visibility: Uint8Array | null = null,
+): RoadSegment[] {
+  const out: RoadSegment[] = [];
+  for (const node of nodes) {
+    if (visibility !== null && visibility[node] !== 2) continue;
+    const a = nodeAnchor(world, node);
+    // A short vertical post with a small base cross-bar reads as a border stone.
+    out.push({ x0: a.x, y0: a.y - 6, x1: a.x, y1: a.y + 1 });
+    out.push({ x0: a.x - 3, y0: a.y, x1: a.x + 3, y1: a.y });
+  }
+  return out;
+}
+
+/**
+ * Compact garrison markers: a row of small dots above each occupied military
+ * building of `player`, one per garrisoned soldier (the original shows little
+ * figures at the building). Fog-aware for enemy buildings; own land is always
+ * visible. Returned as flat-quad segments to draw in the player colour.
+ */
+export function garrisonDotSegments(
+  world: World,
+  player: number,
+  visibility: Uint8Array | null = null,
+): RoadSegment[] {
+  const out: RoadSegment[] = [];
+  for (const b of world.buildings.items) {
+    if (!b || b.player !== player || !b.occupied) continue;
+    const def = buildingDef(b.type);
+    if (!def || def.kind !== 'military') continue;
+    if (visibility !== null && visibility[b.node] !== 2) continue;
+    let troops = 0;
+    for (const c of b.garrison) troops += c;
+    if (troops <= 0) continue;
+    const a = nodeAnchor(world, b.node);
+    for (let i = 0; i < troops; i++) {
+      const cx = a.x - (troops - 1) * 3 + i * 6;
+      const cy = a.y - 40;
+      // A tiny 2px cross per soldier.
+      out.push({ x0: cx - 2, y0: cy, x1: cx + 2, y1: cy });
+      out.push({ x0: cx, y0: cy - 2, x1: cx, y1: cy + 2 });
+    }
+  }
+  return out;
 }
 
 /** Resolve the carrier overlay sprite key for a ware type + BOB direction. */
