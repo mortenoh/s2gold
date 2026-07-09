@@ -33,6 +33,8 @@ import {
   SEA,
   serializeWorld,
   shipsOf,
+  resourceAmount,
+  resourceType,
   territoryOf,
   tickWorld,
   visibleNodes,
@@ -532,9 +534,12 @@ export class GameSession {
     applyCommand(this.world, { type: 'sendGeologist', player: 0, flagNode });
   }
 
-  /** The surveyed resource kind (RESOURCE.*) at a node, or -1 if not surveyed. */
+  /** The surveyed resource kind (RESOURCE.*) at a node, or -1 if not surveyed.
+   * Reflects the CURRENT deposit, so a mined-out spot reads as nothing (0). */
   signAt(node: number): number {
-    return this.world.signs.find((s) => s.node === node)?.res ?? -1;
+    const surveyed = this.world.signs.some((s) => s.node === node);
+    if (!surveyed) return -1;
+    return resourceAmount(this.world.resource[node]) > 0 ? resourceType(this.world.resource[node]) : 0;
   }
 
   demolish(node: number): void {

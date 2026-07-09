@@ -81,7 +81,7 @@ const SIGN_LEGEND: readonly (readonly [string, string])[] = [
   ['rgb(242,115,26)', 'Iron'],
   ['rgb(255,217,26)', 'Gold'],
   ['rgb(89,153,255)', 'Granite'],
-  ['rgb(153,153,153)', 'Nothing (X)'],
+  ['rgb(153,153,153)', 'Nothing'],
 ];
 
 /** BOB archive keys registered once for the settler layers. */

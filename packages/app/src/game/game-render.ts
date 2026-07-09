@@ -650,6 +650,11 @@ export function disconnectedBuildingMarkers(world: World, player: number): RoadS
   return out;
 }
 
+/** Current resource kind at a surveyed node: its ore if any is left, else 0. */
+export function currentSignRes(world: World, node: number): number {
+  return resourceAmount(world.resource[node]) > 0 ? resourceType(world.resource[node]) : 0;
+}
+
 /**
  * Geologist survey-sign markers for one resource kind: a small mark on every
  * surveyed mountain node that holds that resource (`res` is a RESOURCE.* value;
@@ -659,7 +664,9 @@ export function disconnectedBuildingMarkers(world: World, player: number): RoadS
 export function signMarkers(world: World, res: number): RoadSegment[] {
   const out: RoadSegment[] = [];
   for (const sign of world.signs) {
-    if (sign.res !== res) continue;
+    // Read the CURRENT resource, not the survey-time snapshot, so a deposit
+    // that has since been mined out shows as nothing (X) rather than its old ore.
+    if (currentSignRes(world, sign.node) !== res) continue;
     // Once a building (a mine) sits on the spot, drop its sign — it's served its
     // purpose and would otherwise clutter the building.
     if (world.buildingAtNode[sign.node] >= 0) continue;
