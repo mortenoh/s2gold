@@ -575,6 +575,63 @@ export function garrisonDotSegments(
   return out;
 }
 
+/**
+ * Attention markers (an exclamation mark) above each of `player`'s buildings
+ * whose flag has no road path back to a warehouse (HQ or storehouse). Such a
+ * building can neither receive construction materials nor ship its output, so a
+ * site placed there never builds — the marker surfaces that at a glance. Own
+ * land is always visible, so no fog check is needed; warehouses (the supply
+ * sources themselves) are never marked.
+ */
+export function disconnectedBuildingMarkers(world: World, player: number): RoadSegment[] {
+  const isWarehouse = (b: Building): boolean => {
+    const def = buildingDef(b.type);
+    return !!def && (def.kind === 'hq' || def.kind === 'warehouse');
+  };
+  // Supply sources: the player's working warehouse flags. None => nothing to
+  // connect to yet (e.g. HQ destroyed), so mark nothing.
+  const sources: number[] = [];
+  for (const b of world.buildings.items) {
+    if (b && b.player === player && b.state === 'working' && isWarehouse(b)) sources.push(b.flagId);
+  }
+  if (sources.length === 0) return [];
+  // Flag adjacency over the player's roads, then flood-fill from every source.
+  const adj = new Map<number, number[]>();
+  const link = (a: number, b: number): void => {
+    const l = adj.get(a);
+    if (l) l.push(b);
+    else adj.set(a, [b]);
+  };
+  for (const r of world.roads.items) {
+    if (!r || r.player !== player) continue;
+    link(r.flagA, r.flagB);
+    link(r.flagB, r.flagA);
+  }
+  const reached = new Set<number>(sources);
+  const stack = [...sources];
+  while (stack.length > 0) {
+    const f = stack.pop() as number;
+    for (const n of adj.get(f) ?? []) {
+      if (!reached.has(n)) {
+        reached.add(n);
+        stack.push(n);
+      }
+    }
+  }
+  const out: RoadSegment[] = [];
+  for (const b of world.buildings.items) {
+    if (!b || b.player !== player || isWarehouse(b) || reached.has(b.flagId)) continue;
+    // A bright exclamation mark floating above the building: a vertical stem and
+    // a dot below it (a tiny cross so a zero-length segment still renders).
+    const a = nodeAnchor(world, b.node);
+    const top = a.y - 56;
+    out.push({ x0: a.x, y0: top, x1: a.x, y1: top + 13 }); // stem
+    out.push({ x0: a.x - 1, y0: top + 18, x1: a.x + 1, y1: top + 18 }); // dot
+    out.push({ x0: a.x, y0: top + 17, x1: a.x, y1: top + 19 }); // dot
+  }
+  return out;
+}
+
 /** Resolve the carrier overlay sprite key for a ware type + BOB direction. */
 function wareOverlay(carrier: BobAtlas, ware: WareType, dir: number, step = 0): number {
   const job = WARE_JOB[ware];

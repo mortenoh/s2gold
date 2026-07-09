@@ -27,6 +27,7 @@ import { GameSession, SPEEDS, type Speed } from './session';
 import {
   buildDynamics,
   borderStoneSegments,
+  disconnectedBuildingMarkers,
   garrisonDotSegments,
   nodeAnchor,
   nodeMarkerSegments,
@@ -900,6 +901,10 @@ async function boot(): Promise<void> {
         const [r, g, b] = unpackColor(PLAYER_COLORS[p % PLAYER_COLORS.length] ?? 0xffffff);
         roads.render(camera, dots, [r, g, b, 1]);
       }
+      // Warn about own buildings with no road path to a warehouse (they can't
+      // receive materials, so a site there never builds). Bright orange "!".
+      const disc = disconnectedBuildingMarkers(session.world, session.localPlayer);
+      if (disc.length > 0) roads.render(camera, disc, [1.0, 0.55, 0.0, 0.95]);
     }
     minimap.draw(camera, canvas.width, canvas.height);
 

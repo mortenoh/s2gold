@@ -341,9 +341,22 @@ export class Interaction {
       { class: 'ctx-menu ctx-menu-build', attrs: { 'data-testid': 'ctx-menu' } },
       ...items,
     );
+    // Position below-right of the cursor by default, but flip up / left (and
+    // clamp) when the menu would spill past the viewport edge — otherwise a
+    // menu opened near the bottom gets clipped. Measured after it is in the DOM.
     menu.style.left = `${clientX + 2}px`;
     menu.style.top = `${clientY + 2}px`;
     this.deps.root.append(menu);
+    const margin = 6;
+    const rect = menu.getBoundingClientRect();
+    let left = clientX + 2;
+    if (left + rect.width + margin > window.innerWidth) left = clientX - rect.width - 2;
+    left = Math.max(margin, Math.min(left, window.innerWidth - rect.width - margin));
+    let top = clientY + 2;
+    if (top + rect.height + margin > window.innerHeight) top = clientY - rect.height - 2;
+    top = Math.max(margin, Math.min(top, window.innerHeight - rect.height - margin));
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
     this.menu = menu;
   }
 
