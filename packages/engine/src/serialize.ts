@@ -21,7 +21,11 @@ export function deserializeWorld(data: string): World {
   if (parsed.version !== WORLD_VERSION) {
     throw new Error(`unsupported world version ${parsed.version} (expected ${WORLD_VERSION})`);
   }
-  parsed.signs ??= []; // added after some saves were written
+  // Fields added after WORLD_VERSION=1 saves started being written (no version
+  // bump accompanied them), so old saves may lack them. Back-patch empty values.
+  parsed.ships ??= { items: [], free: [] };
+  parsed.expeditions ??= [];
+  parsed.signs ??= [];
   return parsed;
 }
 
