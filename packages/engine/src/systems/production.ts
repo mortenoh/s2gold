@@ -269,6 +269,7 @@ function runHarvester(
 ): void {
   switch (worker.state) {
     case 'idle': {
+      if (b.outputQueue.length >= 8) return; // wait for the flag to clear
       const target = find();
       if (!target) return;
       worker.state = 'toWork';
@@ -337,6 +338,7 @@ function runFarmer(
   const radius = def.radius ?? 2;
   switch (worker.state) {
     case 'idle': {
+      if (b.outputQueue.length >= 8) return; // wait for the flag to clear
       const target =
         nearestReachable(world, geom, rules, b.node, radius, (n) => harvestableCrop(world, n)) ??
         nearestReachable(world, geom, rules, b.node, radius, (n) => plantable(world, rules, n));
