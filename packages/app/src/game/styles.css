@@ -76,6 +76,34 @@ body {
   color: #8f8;
 }
 
+.hud-top .audio-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hud-top .audio-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px;
+  border: 1px solid #3a3a44;
+  border-radius: 4px;
+}
+
+.hud-top .audio-label {
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #9aa;
+}
+
+.hud-top .audio-controls input[type='range'] {
+  width: 60px;
+  cursor: pointer;
+  accent-color: #6f9fe0;
+}
+
 .hud-top button.active {
   background: #3f6fb0;
   border-color: #6f9fe0;

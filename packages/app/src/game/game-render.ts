@@ -17,9 +17,11 @@
 
 import {
   DIRECTIONS,
+  TICKS,
   type Building,
   type BuildingType,
   type Geometry,
+  type JobType,
   type Settler,
   type WareType,
   type World,
@@ -51,6 +53,36 @@ export const WARE_JOB: Readonly<Record<WareType, number>> = {
   plank: 23,
   stone: 24,
 };
+
+/**
+ * JOBS.BOB job id per engine worker job, used to select the profession overlay
+ * (clothing/tool) layered over the generic walking body. FACTS from RttR
+ * `gameData/JobConsts.cpp` JOB_SPRITE_CONSTS `jobBobId` (Job enum order):
+ * Woodchopper=5, Tree-planter(forester)=8, Carpenter(sawmill)=6, Stonemason=7,
+ * Builder=23. The generic Helper/carrier (0) uses the carrier BOB instead, so
+ * it is intentionally absent here.
+ */
+export const JOB_BOB_ID: Partial<Readonly<Record<JobType, number>>> = {
+  woodcutter: 5,
+  forester: 8,
+  sawmiller: 6,
+  stonemason: 7,
+  builder: 23,
+};
+
+/** mapbobs sprite index of the pine (species 0) grown tree + its shadow. */
+const SAPLING_SPRITE = 200;
+const SAPLING_SHADOW = 350;
+
+/** Bundle of the sprite atlases + object archive the dynamic layer draws from. */
+export interface RenderAtlases {
+  /** Carrier BOB (generic bodies + carried-ware overlays). */
+  readonly carrier: BobAtlas;
+  /** JOBS.BOB atlas (profession bodies + overlays), or null when unavailable. */
+  readonly jobs: BobAtlas | null;
+  /** Graphics archive holding the map objects (trees) for the current map. */
+  readonly objectArchive: string;
+}
 
 /** Resolve the {sprite, shadow} rom_z index for a building in a given state. */
 export function buildingSprite(type: BuildingType, state: 'site' | 'working'): {
@@ -151,15 +183,41 @@ export interface SceneAnimation {
 export function buildDynamics(
   world: World,
   geom: Geometry,
-  carrier: BobAtlas,
+  atlases: RenderAtlases,
   anim: SceneAnimation,
 ): DynamicSprite[] {
+  const { carrier, jobs, objectArchive } = atlases;
   const out: DynamicSprite[] = [];
 
-  // Buildings.
+  // Buildings (finished buildings, and construction sites that reveal the
+  // finished building bottom-up over their skeleton as the build progresses).
   for (const b of world.buildings.items) {
     if (!b) continue;
     const a = nodeAnchor(world, b.node);
+    if (b.state === 'site' && b.type !== 'headquarters') {
+      const site = buildingSprite(b.type, 'site');
+      out.push({
+        worldX: a.x,
+        worldY: a.y,
+        archive: BUILDING_ARCHIVE,
+        spriteIndex: site.sprite,
+        shadowIndex: site.shadow,
+        player: b.player,
+      });
+      const done = buildingSprite(b.type, 'working');
+      const reveal = b.buildTicks > 0 ? Math.max(0, Math.min(1, b.buildProgress / b.buildTicks)) : 0;
+      if (reveal > 0.02) {
+        out.push({
+          worldX: a.x,
+          worldY: a.y + 0.01, // draw just after the skeleton at the same depth
+          archive: BUILDING_ARCHIVE,
+          spriteIndex: done.sprite,
+          clipBottom: reveal,
+          player: b.player,
+        });
+      }
+      continue;
+    }
     const { sprite, shadow } = buildingSprite(b.type, b.state);
     out.push({
       worldX: a.x,
@@ -168,6 +226,23 @@ export function buildDynamics(
       spriteIndex: sprite,
       shadowIndex: shadow,
       player: b.player,
+    });
+  }
+
+  // Forester saplings maturing into trees: grow a small pine from seedling to
+  // near-full size via scale; the engine swaps it for a full static tree on
+  // maturation (see main's sapling-count watch that rebuilds statics).
+  for (const sap of world.saplings) {
+    const anchor = nodeAnchor(world, sap.node);
+    const remaining = sap.matureTick - world.tick;
+    const progress = Math.max(0, Math.min(1, 1 - remaining / TICKS.treeGrow));
+    out.push({
+      worldX: anchor.x,
+      worldY: anchor.y,
+      archive: objectArchive,
+      spriteIndex: SAPLING_SPRITE,
+      shadowIndex: SAPLING_SHADOW,
+      scale: 0.25 + 0.65 * progress,
     });
   }
 
@@ -200,12 +275,38 @@ export function buildDynamics(
     }
   }
 
-  // Settlers (carriers + workers).
+  // Settlers. Workers walking to/from their site render the generic body plus
+  // their JOBS.BOB profession overlay (axe, saw, shovel, pickaxe, hammer);
+  // carriers keep the carrier body and draw the ware they carry.
   for (const s of world.settlers.items) {
     if (!s) continue;
     const pos = settlerAnchor(world, geom, s, anim.alpha);
     const dir = bobDir(pos.dir);
     const step = pos.moving ? (anim.walkFrame + s.id) % BOB_WALK_FRAMES : 0;
+    const jobBob = JOB_BOB_ID[s.job];
+
+    if (jobs && jobBob !== undefined) {
+      const body = jobs.bodyTable[0]?.[dir]?.[step];
+      if (body === undefined) continue;
+      out.push({
+        worldX: pos.x,
+        worldY: pos.y,
+        archive: jobs.archive,
+        spriteIndex: body,
+        player: s.player,
+      });
+      const link = jobs.links[jobBob]?.[step]?.[0]?.[dir];
+      if (link !== undefined) {
+        out.push({
+          worldX: pos.x,
+          worldY: pos.y + 0.01, // ware/tool overlay just in front of the body
+          archive: jobs.archive,
+          spriteIndex: jobs.overlayBase + link,
+        });
+      }
+      continue;
+    }
+
     const bodyKey = carrier.bodyTable[0]?.[dir]?.[step];
     if (bodyKey === undefined) continue;
     out.push({

@@ -294,18 +294,30 @@ export class SpriteRenderer {
     viewH: number,
     depth: number,
     tint: readonly [number, number, number],
+    scale = 1,
+    clipBottom = 1,
   ): void {
     const reg = this.atlases.get(archive);
     const s = reg?.meta.sprites.get(index);
     if (!reg || !s) return;
-    const x0 = ax - s.nx;
-    const y0 = ay - s.ny;
-    const x1 = x0 + s.w;
-    const y1 = y0 + s.h;
-    if (x1 <= 0 || x0 >= viewW || y1 <= 0 || y0 >= viewH) return;
+    const w = s.w * scale;
+    const h = s.h * scale;
+    const x0 = ax - s.nx * scale;
+    let y0 = ay - s.ny * scale;
+    const x1 = x0 + w;
+    const y1 = y0 + h;
     const size = reg.sizes[s.atlas] ?? [1, 1];
     const tw = size[0];
     const th = size[1];
+    let v0 = s.y / th;
+    const v1 = (s.y + s.h) / th;
+    // Reveal only the bottom `clipBottom` fraction: drop the top edge and its uv.
+    if (clipBottom < 1) {
+      const keep = Math.max(0, Math.min(1, clipBottom));
+      y0 = y1 - h * keep;
+      v0 = v1 - (v1 - v0) * keep;
+    }
+    if (x1 <= 0 || x0 >= viewW || y1 <= 0 || y0 >= viewH) return;
     out.push({
       archive,
       page: s.atlas,
@@ -315,9 +327,9 @@ export class SpriteRenderer {
       x1,
       y1,
       u0: s.x / tw,
-      v0: s.y / th,
+      v0,
       u1: (s.x + s.w) / tw,
-      v1: (s.y + s.h) / th,
+      v1,
       tint,
     });
   }
@@ -373,6 +385,8 @@ export class SpriteRenderer {
             d.player !== undefined
               ? unpackColor(PLAYER_COLORS[d.player % PLAYER_COLORS.length] ?? 0xffffff)
               : NO_TINT;
+          const scale = d.scale ?? 1;
+          const clipBottom = d.clipBottom ?? 1;
           if (d.shadowIndex !== undefined) {
             this.pushQuad(
               items,
@@ -384,9 +398,22 @@ export class SpriteRenderer {
               viewH,
               d.worldY - 0.5,
               NO_TINT,
+              scale,
             );
           }
-          this.pushQuad(items, d.archive, d.spriteIndex, ax, ay, viewW, viewH, d.worldY, tint);
+          this.pushQuad(
+            items,
+            d.archive,
+            d.spriteIndex,
+            ax,
+            ay,
+            viewW,
+            viewH,
+            d.worldY,
+            tint,
+            scale,
+            clipBottom,
+          );
         }
       }
     }

@@ -63,6 +63,17 @@ export interface DynamicSprite {
   readonly shadowIndex?: number;
   /** Player number (0..) for player-colour tinting; omitted = no tint. */
   readonly player?: number;
+  /**
+   * Uniform scale about the ground hotspot (default 1). Used to grow saplings
+   * from a small seedling into a full tree without extra sprites.
+   */
+  readonly scale?: number;
+  /**
+   * Fraction of the sprite's height, measured up from its bottom edge, that is
+   * drawn (default 1 = whole sprite). Values < 1 clip the top away, so a
+   * construction site can reveal the finished building bottom-up as it rises.
+   */
+  readonly clipBottom?: number;
 }
 
 /** The full per-frame scene consumed by the sprite renderer. */

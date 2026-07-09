@@ -30,6 +30,7 @@ import {
   BOB_ARCHIVE,
 } from './game-render';
 import { Interaction } from './interaction';
+import { AudioEngine, positional } from './audio';
 
 /** World-px pan speed per second when holding an arrow key. */
 const KEY_PAN_SPEED = 600;
@@ -43,6 +44,9 @@ const ANIM_FRAME_MS = 150;
 const WALK_FRAME_MS = 90;
 /** Fixed RNG seed so the economy is reproducible across runs. */
 const GAME_SEED = 0x5eed;
+
+/** BOB archive keys registered once for the settler layers. */
+const JOBS_ARCHIVE = 'jobs';
 
 /** Debug counters + helpers exposed on window for e2e assertions. */
 interface S2Debug {
@@ -64,6 +68,16 @@ interface S2Debug {
   flags: number;
   buildings: number;
   roads: number;
+  /** Audio engine counters for e2e (context state + sfx buffer/voice tallies). */
+  audio: {
+    contextState: string;
+    sfxRequested: number;
+    buffersLoaded: number;
+    sfxPlayed: number;
+    voices: number;
+    muted: boolean;
+    musicPlaying: boolean;
+  };
   /** HQ building node id for player 0 (-1 when none). */
   hqNode: number;
   /** Node id nearest a map (x, y) lattice coordinate. */
@@ -136,6 +150,84 @@ async function boot(): Promise<void> {
     el('button', { text: `${s}x`, attrs: { 'data-testid': `speed-${s}`, type: 'button' } }),
   );
 
+  // One page-lived audio engine (survives map switches); unlocked on first
+  // gesture per the browser autoplay policy. The music element is attached to
+  // the DOM (hidden) so it participates in the page like a normal player.
+  const audio = new AudioEngine();
+  audio.music.element.hidden = true;
+  root.append(audio.music.element);
+
+  // --- Audio HUD controls (mute + SFX volume + music on/off + music volume) --
+  const muteButton = el('button', {
+    text: audio.isMuted ? 'Unmute' : 'Mute',
+    attrs: { 'data-testid': 'sfx-mute', type: 'button' },
+  });
+  const sfxVolume = el('input', {
+    class: 'vol',
+    attrs: {
+      'data-testid': 'sfx-volume',
+      type: 'range',
+      min: '0',
+      max: '100',
+      value: String(Math.round(audio.volume * 100)),
+      title: 'SFX volume',
+    },
+  });
+  const musicButton = el('button', {
+    text: audio.music.isEnabled ? 'Music: on' : 'Music: off',
+    attrs: { 'data-testid': 'music-toggle', type: 'button' },
+  });
+  const musicVolume = el('input', {
+    class: 'vol',
+    attrs: {
+      'data-testid': 'music-volume',
+      type: 'range',
+      min: '0',
+      max: '100',
+      value: String(Math.round(audio.music.volume * 100)),
+      title: 'Music volume',
+    },
+  });
+  const audioControls = el(
+    'span',
+    { class: 'audio-controls' },
+    el(
+      'span',
+      { class: 'audio-group' },
+      el('span', { class: 'audio-label', text: 'SFX' }),
+      muteButton,
+      sfxVolume,
+    ),
+    el(
+      'span',
+      { class: 'audio-group' },
+      el('span', { class: 'audio-label', text: 'Music' }),
+      musicButton,
+      musicVolume,
+    ),
+  );
+
+  muteButton.addEventListener('click', () => {
+    audio.setMuted(!audio.isMuted);
+    muteButton.textContent = audio.isMuted ? 'Unmute' : 'Mute';
+  });
+  sfxVolume.addEventListener('input', () => {
+    audio.setVolume(Number(sfxVolume.value) / 100);
+  });
+  musicButton.addEventListener('click', () => {
+    audio.music.setEnabled(!audio.music.isEnabled);
+    musicButton.textContent = audio.music.isEnabled ? 'Music: on' : 'Music: off';
+  });
+  musicVolume.addEventListener('input', () => {
+    audio.music.setVolume(Number(musicVolume.value) / 100);
+  });
+
+  // Autoplay policy: the AudioContext and music can only start after a gesture.
+  // unlock() is idempotent, so leaving these attached costs nothing.
+  const unlockAudio = (): void => audio.unlock();
+  window.addEventListener('pointerdown', unlockAudio);
+  window.addEventListener('keydown', unlockAudio);
+
   for (const entry of index) {
     mapSelect.append(
       el('option', {
@@ -156,6 +248,7 @@ async function boot(): Promise<void> {
       zoomButton,
       pauseButton,
       ...speedButtons,
+      audioControls,
       resources,
       tickLabel,
       status,
@@ -182,6 +275,8 @@ async function boot(): Promise<void> {
   if (romanAtlas) sprites.registerAtlas(romanAtlas.meta, romanAtlas.pages);
   const carrier: BobAtlas | null = await loadBobAtlas('carrier', BOB_ARCHIVE);
   if (carrier) sprites.registerAtlas(carrier.meta, carrier.pages);
+  const jobs: BobAtlas | null = await loadBobAtlas('jobs', JOBS_ARCHIVE);
+  if (jobs) sprites.registerAtlas(jobs.meta, jobs.pages);
 
   let camera = new Camera(1, 1);
   let session: GameSession | null = null;
@@ -296,6 +391,7 @@ async function boot(): Promise<void> {
       flags: 0,
       buildings: 0,
       roads: 0,
+      audio: audio.debug(),
       hqNode: hqNode(),
       nodeOf: (x, y) => s.geom.index(x, y),
       flagNodeOf: (node) => s.geom.neighbour(node, 'SE'),
@@ -424,6 +520,7 @@ async function boot(): Promise<void> {
   let frames = 0;
   let fpsWindowStart = performance.now();
   let lastFrame = performance.now();
+  let prevSaplings = 0;
   function frame(now: number): void {
     const dt = Math.min(100, now - lastFrame);
     lastFrame = now;
@@ -441,6 +538,33 @@ async function boot(): Promise<void> {
 
     let alpha = 0;
     if (session) alpha = session.update(dt);
+
+    // One-shot SFX for this frame's events, positioned from world vs. camera.
+    if (session) {
+      const cues = session.drainSoundCues();
+      if (audio.ready && cues.length > 0) {
+        for (const cue of cues) {
+          const a = nodeAnchor(session.world, cue.node);
+          const p = positional(
+            a.x,
+            a.y,
+            camera.x,
+            camera.y,
+            camera.zoom,
+            canvas.width,
+            canvas.height,
+            camera.worldSize.w,
+            camera.worldSize.h,
+          );
+          audio.play(cue.id, p);
+        }
+      }
+      // Saplings maturing into trees emit no event; rebuild statics when the
+      // sapling count drops so the new full tree appears.
+      if (session.world.saplings.length < prevSaplings) session.staticsDirty = true;
+      prevSaplings = session.world.saplings.length;
+    }
+
     if (session?.staticsDirty) rebuildStatics();
 
     renderer.resize();
@@ -450,11 +574,14 @@ async function boot(): Promise<void> {
     const waveFrame = Math.floor(now / ANIM_FRAME_MS);
     const walkFrame = Math.floor(now / WALK_FRAME_MS);
     const dynamics =
-      session && carrier ? buildDynamics(session.world, session.geom, carrier, {
-        waveFrame,
-        walkFrame,
-        alpha,
-      }) : [];
+      session && carrier
+        ? buildDynamics(
+            session.world,
+            session.geom,
+            { carrier, jobs, objectArchive: objectAtlasForLandscape(landscape) },
+            { waveFrame, walkFrame, alpha },
+          )
+        : [];
     const stats = sprites.render(camera, waveFrame, dynamics);
     minimap.draw(camera, canvas.width, canvas.height);
 
@@ -493,6 +620,7 @@ async function boot(): Promise<void> {
       dbg.flags = countLive(session.world.flags);
       dbg.buildings = countLive(session.world.buildings);
       dbg.roads = countLive(session.world.roads);
+      dbg.audio = audio.debug();
       dbg.hqNode = hqNode();
     }
   }

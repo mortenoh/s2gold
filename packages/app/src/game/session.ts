@@ -22,6 +22,7 @@ import {
   type MapJson,
   type World,
 } from '@s2gold/engine';
+import { soundForEvent, type SoundCue } from './audio-map';
 
 /** Milliseconds per game frame at 1x speed. */
 const GF_MS = 50;
@@ -78,6 +79,8 @@ export class GameSession {
   staticsDirty = true;
 
   private acc = 0;
+  /** Sound cues emitted since the last drain (bounded to avoid unbounded growth). */
+  private readonly soundCues: SoundCue[] = [];
 
   constructor(map: MapJson, seed: number) {
     this.world = createWorld(map, { seed, players: 1 });
@@ -113,7 +116,21 @@ export class GameSession {
     for (const e of tickWorld(this.world, this.rules)) this.record(e);
   }
 
+  /**
+   * Drain the sound cues collected since the last call (one-shot audio for the
+   * frame). Returns a fresh array; the internal buffer is cleared.
+   */
+  drainSoundCues(): SoundCue[] {
+    if (this.soundCues.length === 0) return [];
+    const out = this.soundCues.slice();
+    this.soundCues.length = 0;
+    return out;
+  }
+
   private record(e: ReturnType<typeof tickWorld>[number]): void {
+    const cue = soundForEvent(e, this.world);
+    // Bound the buffer: at extreme catch-up the renderer may skip a drain.
+    if (cue && this.soundCues.length < 64) this.soundCues.push(cue);
     const c = this.counters;
     switch (e.type) {
       case 'TreeFelled':

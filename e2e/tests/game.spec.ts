@@ -18,6 +18,10 @@ const P2FINAL_DIR =
   '/private/tmp/claude-502/-Users-morteoh-dev-local-s2gold/' +
   'bb77c315-f7af-4a5f-a4d3-fe7955aadc74/scratchpad/p2final';
 
+const P3_DIR =
+  '/private/tmp/claude-502/-Users-morteoh-dev-local-s2gold/' +
+  'bb77c315-f7af-4a5f-a4d3-fe7955aadc74/scratchpad/p3';
+
 async function readDebug(page: Page): Promise<S2Debug> {
   return page.evaluate(() => {
     const dbg = (window as unknown as { __s2debug?: S2Debug }).__s2debug;
@@ -212,6 +216,10 @@ async function clickNode(page: Page, node: number): Promise<void> {
 
 test('P2 gate: build a wood/plank economy via the UI and watch it run', async ({ page }) => {
   test.skip(!(await assetsPresent(page)), 'converted assets not installed');
+  // This test lays out the economy, runs it at 10x until the loop closes, and
+  // additionally exercises P3 audio + captures P3 screenshots, so it needs more
+  // than the default 30s budget.
+  test.setTimeout(75_000);
   const errors = collectErrors(page);
 
   await page.goto('/game.html?map=maps_miss200');
@@ -311,6 +319,21 @@ test('P2 gate: build a wood/plank economy via the UI and watch it run', async ({
     { timeout: 5000 },
   );
 
+  // P3: construction sites (skeleton + rising building) with builders/workers
+  // walking to them, wearing their profession overlays.
+  await page.getByTestId('game-canvas').screenshot({ path: `${P3_DIR}/p3-construction-workers.png` });
+
+  // P3: enabling audio via a real click unlocks the AudioContext. The clicks
+  // above already dispatched pointerdown, so the context should be live.
+  const audioAfterClick = await page.evaluate(() => {
+    const d = (window as unknown as { __s2debug: { audio: { contextState: string } } }).__s2debug;
+    return d.audio.contextState;
+  });
+  expect(audioAfterClick, 'AudioContext created after a user gesture').not.toBe('none');
+
+  // Background music is a real <audio> element on the page.
+  expect(await page.locator('audio').count(), 'a music audio element exists').toBeGreaterThan(0);
+
   // 5) Run at 10x and watch the economy loop close.
   await page.getByTestId('speed-10').click();
   await expect(page.getByTestId('speed-10')).toHaveClass(/active/);
@@ -335,6 +358,29 @@ test('P2 gate: build a wood/plank economy via the UI and watch it run', async ({
   expect(game.counters.planksProduced, 'a plank reached the sawmill and was cut').toBeGreaterThanOrEqual(1);
   expect(game.counters.buildingsCompleted, 'construction sites completed').toBeGreaterThanOrEqual(2);
   expect(game.settlers, 'carriers/workers are active').toBeGreaterThan(0);
+
+  // P3: during the 10x economy run, worker-action events drove the audio engine
+  // to request (and decode) at least one SFX buffer, and the context is live.
+  await page.waitForFunction(
+    () => {
+      const a = (
+        window as unknown as { __s2debug: { audio: { sfxRequested: number } } }
+      ).__s2debug.audio;
+      return a.sfxRequested >= 1;
+    },
+    undefined,
+    { timeout: 15_000 },
+  );
+  const audioDbg = await page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          __s2debug: { audio: { contextState: string; sfxRequested: number; buffersLoaded: number } };
+        }
+      ).__s2debug.audio,
+  );
+  expect(audioDbg.contextState, 'AudioContext running after gesture').toBe('running');
+  expect(audioDbg.sfxRequested, 'an SFX buffer was requested during play').toBeGreaterThanOrEqual(1);
 
   // Mid-game screenshot showing buildings + carriers on roads.
   await page.getByTestId('game-canvas').screenshot({ path: `${P2FINAL_DIR}/p2-economy-1x.png` });
