@@ -12,9 +12,11 @@ import {
   canPlaceBuilding,
   canPlaceFlag,
   createWorld,
+  deserializeWorld,
   findWalkPath,
   flagAt,
   GREENLAND_RULES,
+  serializeWorld,
   tickWorld,
   worldGeometry,
   type BuildingType,
@@ -68,8 +70,10 @@ export type Speed = (typeof SPEEDS)[number];
 
 /** A running game over one map for a single local player (player 0). */
 export class GameSession {
-  readonly world: World;
-  readonly geom: Geometry;
+  /** Live world state. Replaced wholesale by {@link loadWorld} (save load). */
+  world: World;
+  /** Geometry over {@link world}; rebuilt when the world is replaced. */
+  geom: Geometry;
   readonly rules = GREENLAND_RULES;
   readonly counters: GameCounters = zeroCounters();
 
@@ -114,6 +118,28 @@ export class GameSession {
 
   private step(): void {
     for (const e of tickWorld(this.world, this.rules)) this.record(e);
+  }
+
+  // --- Save / load ----------------------------------------------------------
+
+  /** Canonical, JSON-safe serialization of the current world (for a save). */
+  serialize(): unknown {
+    return JSON.parse(serializeWorld(this.world)) as unknown;
+  }
+
+  /**
+   * Replace the live world from serialized save data (as produced by
+   * {@link serialize}). The tick loop keeps running against the new world;
+   * geometry is rebuilt and statics are flagged dirty so the renderer refreshes.
+   * Throws if the data is not a compatible world version.
+   */
+  loadWorld(data: unknown): void {
+    const next = deserializeWorld(JSON.stringify(data));
+    this.world = next;
+    this.geom = worldGeometry(next);
+    this.acc = 0;
+    this.staticsDirty = true;
+    this.soundCues.length = 0;
   }
 
   /**

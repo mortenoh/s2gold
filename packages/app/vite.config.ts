@@ -22,16 +22,31 @@ function cleanUrls(): Plugin {
   };
 }
 
+/**
+ * Proxy the save-game API to the FastAPI server so both dev and preview hit the
+ * same `/api/*` routes the production server serves. Only `/api` is forwarded;
+ * everything else is served by Vite. When the API server is down the proxy
+ * fails the request (ECONNREFUSED) and the UI degrades to "saves unavailable".
+ */
+const apiProxy = {
+  '/api': {
+    target: 'http://127.0.0.1:8000',
+    changeOrigin: true,
+  },
+} as const;
+
 export default defineConfig({
   root: import.meta.dirname,
   plugins: [cleanUrls()],
   server: {
     port: 5199,
     strictPort: true,
+    proxy: apiProxy,
   },
   preview: {
     port: 5199,
     strictPort: true,
+    proxy: apiProxy,
   },
   build: {
     target: 'es2022',

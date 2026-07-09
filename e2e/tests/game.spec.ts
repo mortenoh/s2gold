@@ -22,6 +22,10 @@ const P3_DIR =
   '/private/tmp/claude-502/-Users-morteoh-dev-local-s2gold/' +
   'bb77c315-f7af-4a5f-a4d3-fe7955aadc74/scratchpad/p3';
 
+const P4_DIR =
+  '/private/tmp/claude-502/-Users-morteoh-dev-local-s2gold/' +
+  'bb77c315-f7af-4a5f-a4d3-fe7955aadc74/scratchpad/p4app';
+
 async function readDebug(page: Page): Promise<S2Debug> {
   return page.evaluate(() => {
     const dbg = (window as unknown as { __s2debug?: S2Debug }).__s2debug;
@@ -389,6 +393,182 @@ test('P2 gate: build a wood/plank economy via the UI and watch it run', async ({
   await page.getByTestId('game-canvas').screenshot({ path: `${P2FINAL_DIR}/p2-economy-2x.png` });
 
   expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);
+});
+
+// --- P4 gate: expanded build menu + save/load -------------------------------
+
+/** True when the saves API is reachable through the dev proxy. */
+async function savesApiUp(page: Page): Promise<boolean> {
+  try {
+    const res = await page.request.get('/api/saves');
+    return res.ok();
+  } catch {
+    return false;
+  }
+}
+
+/** A flat node near the HQ where a house-size building can be placed. */
+async function buildableNode(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const d = (
+      window as unknown as {
+        __s2debug: {
+          hqNode: number;
+          nodeOf(x: number, y: number): number;
+          canBuild(node: number, type: string): boolean;
+        };
+      }
+    ).__s2debug;
+    const W = 64;
+    const hq = d.hqNode;
+    const hx = hq % W;
+    const hy = Math.floor(hq / W);
+    for (let rr = 2; rr <= 8; rr++) {
+      for (let dy = -rr; dy <= rr; dy++) {
+        for (let dx = -rr; dx <= rr; dx++) {
+          const node = d.nodeOf(hx + dx, hy + dy);
+          // A sawmill is house-size; if it fits here, huts/houses/castles do too.
+          if (node !== hq && d.canBuild(node, 'sawmill')) return node;
+        }
+      }
+    }
+    return -1;
+  });
+}
+
+test('P4: expanded build menu lists buildings by size class with costs', async ({ page }) => {
+  test.skip(!(await assetsPresent(page)), 'converted assets not installed');
+  const errors = collectErrors(page);
+
+  await page.goto('/game.html?map=maps_miss200');
+  await expect(page.locator('body[data-map-ready]')).toBeAttached({ timeout: 15_000 });
+  await page.getByTestId('pause-toggle').click(); // freeze so the site stays valid
+
+  const node = await buildableNode(page);
+  expect(node, 'a house-size build site exists near HQ').toBeGreaterThanOrEqual(0);
+
+  // Open the node context menu (the expanded, grouped build menu).
+  const pos = await page.evaluate((n) => {
+    const d = (window as unknown as { __s2debug: { nodeToScreen(n: number): { x: number; y: number } } }).__s2debug;
+    return d.nodeToScreen(n);
+  }, node);
+  await page.getByTestId('game-canvas').click({ position: pos });
+
+  const menu = page.getByTestId('ctx-menu');
+  await expect(menu).toBeVisible();
+
+  // Category headers from the size classes are present.
+  await expect(menu.locator('.ctx-category', { hasText: 'Huts' })).toBeVisible();
+  await expect(menu.locator('.ctx-category', { hasText: 'Houses' })).toBeVisible();
+
+  // Every building button shows a cost like "(2b 2s)"; more than 10 are offered.
+  const buttons = menu.locator('button[data-testid^="ctx-"]');
+  const labels = await buttons.allTextContents();
+  const withCost = labels.filter((t) => /\(\d+b/.test(t));
+  expect(withCost.length, `build menu lists many buildings: ${labels.join(', ')}`).toBeGreaterThan(10);
+
+  // The classic P2 buildings are still there (keeps the flat-menu tests valid).
+  await expect(page.getByTestId('ctx-woodcutter')).toBeVisible();
+  await expect(page.getByTestId('ctx-sawmill')).toBeVisible();
+
+  await page.getByTestId('game-canvas').screenshot({ path: `${P4_DIR}/build-submenu.png` });
+  expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);
+});
+
+test('P4: road-build preview activates for a valid destination and clears on Esc', async ({
+  page,
+}) => {
+  test.skip(!(await assetsPresent(page)), 'converted assets not installed');
+  const errors = collectErrors(page);
+
+  await page.goto('/game.html?map=maps_miss200');
+  await expect(page.locator('body[data-map-ready]')).toBeAttached({ timeout: 15_000 });
+  await page.getByTestId('pause-toggle').click();
+
+  // Origin = HQ flag; a reachable free node a few steps east is a valid dest.
+  const spots = await page.evaluate(() => {
+    const d = (
+      window as unknown as {
+        __s2debug: {
+          hqNode: number;
+          nodeOf(x: number, y: number): number;
+          flagNodeOf(n: number): number;
+          canFlag(n: number): boolean;
+          suggestRoad(a: number, b: number): number[] | null;
+          nodeToScreen(n: number): { x: number; y: number };
+        };
+      }
+    ).__s2debug;
+    const W = 64;
+    const hq = d.hqNode;
+    const hx = hq % W;
+    const hy = Math.floor(hq / W);
+    const hqFlag = d.flagNodeOf(hq);
+    let valid = -1;
+    for (let dx = 3; dx <= 7 && valid < 0; dx++) {
+      const n = d.nodeOf(hx + dx, hy);
+      if (n !== hqFlag && d.canFlag(n) && d.suggestRoad(hqFlag, n)) valid = n;
+    }
+    return { hqFlag, valid, sHqFlag: d.nodeToScreen(hqFlag), sValid: d.nodeToScreen(valid) };
+  });
+  expect(spots.valid, 'a valid road destination exists near HQ').toBeGreaterThanOrEqual(0);
+
+  // Enter road mode from the HQ flag, then hover the destination.
+  await page.getByTestId('game-canvas').click({ position: spots.sHqFlag });
+  await page.getByTestId('ctx-build').click();
+  await page.mouse.move(spots.sValid.x, spots.sValid.y, { steps: 6 });
+
+  // The preview reports a valid, path-backed destination at the hovered node.
+  await page.waitForFunction(
+    (node) => {
+      const rp = (
+        window as unknown as {
+          __s2debug: { roadPreview(): { node: number; valid: boolean; hasPath: boolean } | null };
+        }
+      ).__s2debug.roadPreview();
+      return rp !== null && rp.valid && rp.hasPath && rp.node === node;
+    },
+    spots.valid,
+    { timeout: 3000 },
+  );
+
+  // Esc exits road mode and clears the preview.
+  await page.keyboard.press('Escape');
+  const cleared = await page.evaluate(() => {
+    return (
+      window as unknown as { __s2debug: { roadPreview(): unknown } }
+    ).__s2debug.roadPreview();
+  });
+  expect(cleared, 'preview cleared after Esc').toBeNull();
+  expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);
+});
+
+test('P4: save appears in the load list and can be deleted', async ({ page }) => {
+  test.skip(!(await assetsPresent(page)), 'converted assets not installed');
+
+  await page.goto('/game.html?map=maps_miss200');
+  await expect(page.locator('body[data-map-ready]')).toBeAttached({ timeout: 15_000 });
+  test.skip(!(await savesApiUp(page)), 'saves API not reachable (FastAPI server offline)');
+
+  // Open the Menu overlay.
+  await page.getByTestId('menu-toggle').click();
+  await expect(page.getByTestId('save-panel')).toBeVisible();
+
+  // Save under a unique name so the assertion is unambiguous across runs.
+  const name = `e2e save ${Date.now()}`;
+  await page.getByTestId('save-name').fill(name);
+  await page.getByTestId('save-submit').click();
+
+  // The save shows up in the load list for this map.
+  const item = page.getByTestId('save-item').filter({ hasText: name });
+  await expect(item).toBeVisible({ timeout: 5000 });
+  await expect(item).toContainText('tick');
+
+  // Clean up: delete it and confirm it leaves the list.
+  await item.getByTestId('save-delete').click();
+  await expect(page.getByTestId('save-item').filter({ hasText: name })).toHaveCount(0, {
+    timeout: 5000,
+  });
 });
 
 test('MISS200 scene contains trees and granite, rendered over terrain', async ({ page }) => {

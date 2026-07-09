@@ -13,6 +13,9 @@
 import type { Camera } from './camera';
 import { TR_H, TR_W } from './terrain-data';
 
+/** Default committed-road colour (opaque dirt path). */
+const DIRT_COLOR: readonly [number, number, number, number] = [0.72, 0.6, 0.42, 1.0];
+
 /** A road edge as two world-pixel endpoints (a node-to-node step). */
 export interface RoadSegment {
   readonly x0: number;
@@ -109,8 +112,16 @@ export class RoadRenderer {
     this.worldH = height * TR_H;
   }
 
-  /** Draw all road segments for the current camera. */
-  render(camera: Camera, segments: readonly RoadSegment[]): void {
+  /**
+   * Draw road segments for the current camera. `color` (rgba, 0..1) overrides
+   * the default dirt path — pass a translucent colour to draw a build preview
+   * or marker over the committed roads (blending is already enabled).
+   */
+  render(
+    camera: Camera,
+    segments: readonly RoadSegment[],
+    color: readonly [number, number, number, number] = DIRT_COLOR,
+  ): void {
     if (segments.length === 0 || this.worldW === 0) return;
     const gl = this.gl;
     const cw = gl.drawingBufferWidth;
@@ -154,7 +165,7 @@ export class RoadRenderer {
     gl.useProgram(this.program);
     gl.bindVertexArray(this.vao);
     gl.uniform2f(this.uScale, (2 * camera.zoom) / cw, (2 * camera.zoom) / ch);
-    gl.uniform4f(this.uColor, 0.72, 0.6, 0.42, 1.0); // dirt path
+    gl.uniform4f(this.uColor, color[0], color[1], color[2], color[3]);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);

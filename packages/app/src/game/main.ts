@@ -25,11 +25,14 @@ import { GameSession, SPEEDS, type Speed } from './session';
 import {
   buildDynamics,
   nodeAnchor,
+  nodeMarkerSegments,
+  pathSegments,
   roadSegments,
   BUILDING_ARCHIVE,
   BOB_ARCHIVE,
 } from './game-render';
 import { Interaction } from './interaction';
+import { SaveMenu } from './save-ui';
 import { AudioEngine, positional } from './audio';
 
 /** World-px pan speed per second when holding an arrow key. */
@@ -100,6 +103,8 @@ interface S2Debug {
   suggestRoad(startNode: number, endNode: number): number[] | null;
   setSpeed(speed: number): void;
   setPaused(paused: boolean): void;
+  /** Current road-build preview state (null when not in road mode). */
+  roadPreview(): { node: number; valid: boolean; hasPath: boolean } | null;
 }
 
 declare global {
@@ -116,6 +121,9 @@ function showMessage(root: HTMLElement, testid: string, html: string): void {
 async function boot(): Promise<void> {
   const root = document.querySelector<HTMLElement>('#game');
   if (!root) return;
+  // Non-null alias usable inside nested functions (control-flow narrowing of
+  // `root` does not carry into nested function bodies).
+  const gameRoot: HTMLElement = root;
 
   const index = await loadMapIndex();
   if (!index) {
@@ -142,6 +150,10 @@ async function boot(): Promise<void> {
   const pauseButton = el('button', {
     text: 'Pause',
     attrs: { 'data-testid': 'pause-toggle', type: 'button' },
+  });
+  const menuButton = el('button', {
+    text: 'Menu',
+    attrs: { 'data-testid': 'menu-toggle', type: 'button', title: 'Save / load (F5 / F9)' },
   });
   // Long, transient hints (road mode etc.) float in their own toast below the
   // bar so the top bar never has to wrap to make room for them.
@@ -250,6 +262,7 @@ async function boot(): Promise<void> {
       mapSelect,
       zoomButton,
       pauseButton,
+      menuButton,
       ...speedButtons,
       audioControls,
       resources,
@@ -285,6 +298,9 @@ async function boot(): Promise<void> {
   let session: GameSession | null = null;
   let landscape: LandscapeSet = 0;
   let objAtlasReady = false;
+  // Current map identity (drives per-map save filtering + default save names).
+  let currentMap = '';
+  let currentMapTitle = '';
   const minimap = new MinimapView(minimapCanvas, (wx, wy) => {
     camera.centerOn(wx, wy, canvas.width, canvas.height);
   });
@@ -342,6 +358,8 @@ async function boot(): Promise<void> {
 
     installDebug();
 
+    currentMap = entry.name;
+    currentMapTitle = map.title || entry.name;
     mapTitle.textContent = map.title || entry.name;
     mapSelect.value = entry.name;
     zoomButton.textContent = zoomLabel();
@@ -410,6 +428,10 @@ async function boot(): Promise<void> {
       suggestRoad: (a, b) => s.suggestRoad(a, b),
       setSpeed: (sp) => setSpeed(sp as Speed),
       setPaused: (p) => setPaused(p),
+      roadPreview: () => {
+        const rp = interaction.roadPreview;
+        return rp ? { node: rp.node, valid: rp.valid, hasPath: rp.path !== null } : null;
+      },
     };
     rebuildStatics();
   }
@@ -504,7 +526,7 @@ async function boot(): Promise<void> {
 
   // --- Interaction ----------------------------------------------------------
 
-  new Interaction({
+  const interaction = new Interaction({
     canvas,
     root,
     session: () => {
@@ -517,6 +539,42 @@ async function boot(): Promise<void> {
       status.hidden = text.length === 0;
     },
     suppressClick: () => draggedFar,
+  });
+
+  // --- Save / load ----------------------------------------------------------
+
+  // Brief feedback toast (reuses the .status-toast look, offset below the road
+  // hint so the two never overlap). Auto-dismisses; only the latest is shown.
+  let saveToastEl: HTMLElement | null = null;
+  let saveToastTimer = 0;
+  function saveToast(text: string): void {
+    if (saveToastEl) saveToastEl.remove();
+    const toast = el('div', { class: 'status-toast save-toast', text });
+    gameRoot.append(toast);
+    saveToastEl = toast;
+    window.clearTimeout(saveToastTimer);
+    saveToastTimer = window.setTimeout(() => {
+      toast.remove();
+      if (saveToastEl === toast) saveToastEl = null;
+    }, 2200);
+  }
+
+  const saveMenu = new SaveMenu({
+    root,
+    session: () => session,
+    mapName: () => currentMap,
+    mapTitle: () => currentMapTitle,
+    toast: saveToast,
+  });
+  menuButton.addEventListener('click', () => saveMenu.toggle());
+  window.addEventListener('keydown', (ev) => {
+    if (ev.key === 'F5') {
+      ev.preventDefault();
+      saveMenu.quicksave();
+    } else if (ev.key === 'F9') {
+      ev.preventDefault();
+      void saveMenu.quickload();
+    }
   });
 
   // --- Render loop ----------------------------------------------------------
@@ -573,7 +631,24 @@ async function boot(): Promise<void> {
 
     renderer.resize();
     renderer.render(camera);
-    if (session) roads.render(camera, roadSegments(session.world, session.geom));
+    if (session) {
+      roads.render(camera, roadSegments(session.world, session.geom));
+      // Live road-build preview: translucent path + an end marker (green when a
+      // road can be built to the hovered node, red when it cannot).
+      const preview = interaction.roadPreview;
+      if (preview && preview.node >= 0) {
+        if (preview.valid && preview.path) {
+          roads.render(
+            camera,
+            pathSegments(session.world, session.geom, preview.path),
+            [0.5, 0.8, 1.0, 0.5],
+          );
+          roads.render(camera, nodeMarkerSegments(session.world, preview.node), [0.4, 1.0, 0.5, 0.85]);
+        } else {
+          roads.render(camera, nodeMarkerSegments(session.world, preview.node), [1.0, 0.3, 0.3, 0.85]);
+        }
+      }
+    }
 
     const waveFrame = Math.floor(now / ANIM_FRAME_MS);
     const walkFrame = Math.floor(now / WALK_FRAME_MS);

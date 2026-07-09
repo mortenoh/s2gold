@@ -16,6 +16,7 @@
  */
 
 import {
+  BUILDING_DEFS,
   DIRECTIONS,
   TICKS,
   type Building,
@@ -33,14 +34,17 @@ import type { BobAtlas } from './bob-atlas';
 export const BUILDING_ARCHIVE = 'rom_z';
 export const BOB_ARCHIVE = 'carrier';
 
-/** s25 BuildingType id per engine building name (drives the rom_z sprite index). */
-export const BUILDING_TYPE_ID: Readonly<Record<BuildingType, number>> = {
-  headquarters: 0,
-  woodcutter: 17,
-  quarry: 19,
-  forester: 20,
-  sawmill: 33,
-};
+/**
+ * s25 BuildingType id per engine building name (drives the rom_z sprite index
+ * via the stride-5 rule: sprite = 250 + 5 * id). Derived from the engine's
+ * {@link BUILDING_DEFS} so every economy building (farm, mill, bakery, well,
+ * mines, smelter, mint, ...) gets its sprite automatically as the table grows;
+ * verified visually for the P4 economy set. Unknown/future building kinds map to
+ * `undefined` and are skipped defensively by {@link buildingSprite}.
+ */
+export const BUILDING_TYPE_ID: Readonly<Record<BuildingType, number>> = Object.fromEntries(
+  Object.entries(BUILDING_DEFS).map(([type, def]) => [type, def.id]),
+);
 
 const FLAG_SPRITE_BASE = 100;
 const FLAG_SHADOW_BASE = 110;
@@ -84,12 +88,18 @@ export interface RenderAtlases {
   readonly objectArchive: string;
 }
 
-/** Resolve the {sprite, shadow} rom_z index for a building in a given state. */
+/**
+ * Resolve the {sprite, shadow} rom_z index for a building in a given state, or
+ * null for an unknown building type (a kind the engine grew that we have no
+ * sprite id for) so the caller can skip it rather than draw a garbage sprite.
+ */
 export function buildingSprite(type: BuildingType, state: 'site' | 'working'): {
   sprite: number;
   shadow: number;
-} {
-  const base = 250 + 5 * BUILDING_TYPE_ID[type];
+} | null {
+  const id = BUILDING_TYPE_ID[type];
+  if (id === undefined) return null;
+  const base = 250 + 5 * id;
   if (state === 'site' && type !== 'headquarters') {
     return { sprite: base + 2, shadow: base + 3 };
   }
@@ -196,6 +206,7 @@ export function buildDynamics(
     const a = nodeAnchor(world, b.node);
     if (b.state === 'site' && b.type !== 'headquarters') {
       const site = buildingSprite(b.type, 'site');
+      if (!site) continue; // unknown building kind: skip rather than draw garbage
       out.push({
         worldX: a.x,
         worldY: a.y,
@@ -206,7 +217,7 @@ export function buildDynamics(
       });
       const done = buildingSprite(b.type, 'working');
       const reveal = b.buildTicks > 0 ? Math.max(0, Math.min(1, b.buildProgress / b.buildTicks)) : 0;
-      if (reveal > 0.02) {
+      if (done && reveal > 0.02) {
         out.push({
           worldX: a.x,
           worldY: a.y + 0.01, // draw just after the skeleton at the same depth
@@ -218,7 +229,9 @@ export function buildDynamics(
       }
       continue;
     }
-    const { sprite, shadow } = buildingSprite(b.type, b.state);
+    const finished = buildingSprite(b.type, b.state);
+    if (!finished) continue; // unknown building kind: skip
+    const { sprite, shadow } = finished;
     out.push({
       worldX: a.x,
       worldY: a.y,
@@ -345,20 +358,47 @@ export function roadSegments(world: World, geom: Geometry): RoadSegment[] {
   const out: RoadSegment[] = [];
   for (const road of world.roads.items) {
     if (!road) continue;
-    for (let i = 0; i + 1 < road.path.length; i++) {
-      const a = road.path[i];
-      const b = road.path[i + 1];
-      const fx = a % world.width;
-      const fy = Math.floor(a / world.width);
-      const dir = dirIndexBetween(geom, a, b);
-      if (dir < 0) continue;
-      const np = unwrappedNeighbour(fx, fy, dir);
-      const from = nodeWorldPos({ x: fx, y: fy }, world.heightMap[a] ?? 0);
-      const to = nodeWorldPos(np, world.heightMap[geom.index(np.x, np.y)] ?? 0);
-      out.push({ x0: from.x, y0: from.y, x1: to.x, y1: to.y });
-    }
+    pathSegments(world, geom, road.path, out);
   }
   return out;
+}
+
+/**
+ * Seam-correct world-pixel segments for a single node path (each consecutive
+ * pair becomes one edge). Reused for committed roads and the live road-build
+ * preview. Appends into `out` when given, else returns a fresh array.
+ */
+export function pathSegments(
+  world: World,
+  geom: Geometry,
+  path: readonly number[],
+  out: RoadSegment[] = [],
+): RoadSegment[] {
+  for (let i = 0; i + 1 < path.length; i++) {
+    const a = path[i];
+    const b = path[i + 1];
+    const fx = a % world.width;
+    const fy = Math.floor(a / world.width);
+    const dir = dirIndexBetween(geom, a, b);
+    if (dir < 0) continue;
+    const np = unwrappedNeighbour(fx, fy, dir);
+    const from = nodeWorldPos({ x: fx, y: fy }, world.heightMap[a] ?? 0);
+    const to = nodeWorldPos(np, world.heightMap[geom.index(np.x, np.y)] ?? 0);
+    out.push({ x0: from.x, y0: from.y, x1: to.x, y1: to.y });
+  }
+  return out;
+}
+
+/**
+ * A small "X" of segments centred on a node's ground anchor, used to mark the
+ * hovered road-build destination (drawn via the road renderer with a colour).
+ */
+export function nodeMarkerSegments(world: World, node: number, size = 7): RoadSegment[] {
+  const a = nodeAnchor(world, node);
+  return [
+    { x0: a.x - size, y0: a.y - size, x1: a.x + size, y1: a.y + size },
+    { x0: a.x - size, y0: a.y + size, x1: a.x + size, y1: a.y - size },
+  ];
 }
 
 /** Resolve the carrier overlay sprite key for a ware type + BOB direction. */

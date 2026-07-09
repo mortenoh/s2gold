@@ -165,6 +165,15 @@ body {
   display: none;
 }
 
+/* Save/load feedback toast: sits a little lower than the road hint so both can
+   show at once, and reads green to distinguish it from the road-mode hint. */
+.status-toast.save-toast {
+  top: 88px;
+  color: #a8f0b4;
+  border-color: #3fb06a;
+  font-style: normal;
+}
+
 /* Node context menu (place flag / build / demolish / road). */
 .ctx-menu {
   position: absolute;
@@ -200,6 +209,178 @@ body {
   padding: 4px 9px;
   font-size: 11px;
   color: #999;
+}
+
+/* The build menu can list many buildings across size classes: cap its height
+   and scroll rather than overflowing the viewport. */
+.ctx-menu.ctx-menu-build {
+  max-height: 70vh;
+  overflow-y: auto;
+  min-width: 170px;
+}
+
+.ctx-menu .ctx-category {
+  margin-top: 2px;
+  color: #ffd479;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  border-top: 1px solid #33333c;
+}
+
+.ctx-menu .ctx-category:first-child {
+  border-top: none;
+  margin-top: 0;
+}
+
+/* Save / load overlay panel. */
+.save-panel {
+  position: absolute;
+  top: 52px;
+  left: 8px;
+  z-index: 30;
+  width: 300px;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 10px 12px;
+  background: rgba(20, 20, 24, 0.97);
+  border: 1px solid #4a4a55;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+  color: #ddd;
+  font-size: 13px;
+}
+
+.save-panel[hidden] {
+  display: none;
+}
+
+.save-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.save-panel-title {
+  font-weight: 700;
+  color: #fff;
+  font-size: 14px;
+}
+
+.save-panel-head button {
+  background: transparent;
+  color: #aaa;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+}
+
+.save-section {
+  margin-top: 8px;
+}
+
+.save-section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #9aa;
+  margin-bottom: 5px;
+}
+
+.save-row {
+  display: flex;
+  gap: 6px;
+}
+
+.save-panel input.save-name {
+  flex: 1;
+  min-width: 0;
+  background: #14141a;
+  color: #eee;
+  border: 1px solid #4a4a55;
+  border-radius: 4px;
+  padding: 4px 7px;
+  font-size: 12px;
+}
+
+.save-panel button {
+  background: #2a2a32;
+  color: #eee;
+  border: 1px solid #4a4a55;
+  border-radius: 4px;
+  padding: 4px 9px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.save-panel button:hover:not(:disabled) {
+  background: #3f6fb0;
+  border-color: #6f9fe0;
+}
+
+.save-panel button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.save-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.save-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px;
+  background: #1c1c22;
+  border: 1px solid #33333c;
+  border-radius: 4px;
+}
+
+.save-item-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.save-item-name {
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.save-item-tick {
+  font-size: 11px;
+  color: #9aa;
+  font-variant-numeric: tabular-nums;
+}
+
+.save-item-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.save-panel button.save-del {
+  border-color: #6a3a3a;
+  color: #e6a6a6;
+}
+
+.save-panel button.save-del:hover {
+  background: #7a2a2a;
+  border-color: #b06f6f;
+}
+
+.save-empty {
+  color: #888;
+  font-style: italic;
+  padding: 4px 2px;
 }
 
 .minimap-box {
