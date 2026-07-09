@@ -55,6 +55,10 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
+    // Keep build chunks off /assets, which the FastAPI server reserves for the
+    // converted game art (public/assets). Emitting to dist/app/ avoids the mount
+    // collision that otherwise 404s the app bundle in production.
+    assetsDir: 'app',
     rollupOptions: {
       input: {
         main: resolve(import.meta.dirname, 'index.html'),
