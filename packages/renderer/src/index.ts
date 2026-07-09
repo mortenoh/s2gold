@@ -64,3 +64,5 @@ export {
 } from './scene';
 
 export { SpriteRenderer, type AtlasPage, type SpriteDrawStats } from './sprites';
+
+export { RoadRenderer, type RoadSegment } from './roads';

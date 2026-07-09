@@ -76,6 +76,65 @@ body {
   color: #8f8;
 }
 
+.hud-top button.active {
+  background: #3f6fb0;
+  border-color: #6f9fe0;
+  color: #fff;
+}
+
+.hud-top .resources {
+  font-variant-numeric: tabular-nums;
+  color: #ffd479;
+  font-weight: 600;
+}
+
+.hud-top .tick {
+  font-variant-numeric: tabular-nums;
+  color: #bbb;
+}
+
+.hud-top .build-status {
+  color: #9fd0ff;
+  font-style: italic;
+}
+
+/* Node context menu (place flag / build / demolish / road). */
+.ctx-menu {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 120px;
+  padding: 4px;
+  gap: 2px;
+  background: rgba(20, 20, 24, 0.96);
+  border: 1px solid #4a4a55;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.ctx-menu button {
+  background: #2a2a32;
+  color: #eee;
+  border: 1px solid #4a4a55;
+  border-radius: 4px;
+  padding: 5px 9px;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ctx-menu button:hover {
+  background: #3f6fb0;
+  border-color: #6f9fe0;
+}
+
+.ctx-menu .ctx-label {
+  padding: 4px 9px;
+  font-size: 11px;
+  color: #999;
+}
+
 .minimap-box {
   position: absolute;
   right: 12px;

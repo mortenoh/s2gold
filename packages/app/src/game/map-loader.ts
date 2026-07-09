@@ -7,6 +7,7 @@
  * layers; the rest are decoded lazily by later phases.
  */
 
+import type { MapJson as EngineMapJson } from '@s2gold/engine';
 import type { LandscapeSet, TerrainMapData } from '@s2gold/renderer';
 import { assetUrl, fetchJson } from '../lib/manifest';
 
@@ -34,6 +35,8 @@ export interface LoadedMap {
   readonly objectType: Uint8Array;
   /** Object variant/state plane (row-major width*height). */
   readonly objectIndex: Uint8Array;
+  /** The raw parsed map (base64 layers) for the deterministic engine. */
+  readonly engineMap: EngineMapJson;
 }
 
 interface MapJson {
@@ -90,6 +93,7 @@ export async function loadMap(entry: MapIndexEntry): Promise<LoadedMap> {
     hqY: raw.hq_y ?? [],
     objectType: layer('object_type'),
     objectIndex: layer('object_index'),
+    engineMap: raw,
     data: {
       width: raw.width,
       height: raw.height,

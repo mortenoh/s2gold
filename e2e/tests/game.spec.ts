@@ -14,6 +14,10 @@ const SCREENSHOT_DIR =
   '/private/tmp/claude-502/-Users-morteoh-dev-local-s2gold/' +
   'bb77c315-f7af-4a5f-a4d3-fe7955aadc74/scratchpad/p2';
 
+const P2FINAL_DIR =
+  '/private/tmp/claude-502/-Users-morteoh-dev-local-s2gold/' +
+  'bb77c315-f7af-4a5f-a4d3-fe7955aadc74/scratchpad/p2final';
+
 async function readDebug(page: Page): Promise<S2Debug> {
   return page.evaluate(() => {
     const dbg = (window as unknown as { __s2debug?: S2Debug }).__s2debug;
@@ -158,6 +162,189 @@ test('switching maps keeps rendering', async ({ page }) => {
   expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);
 });
 
+// --- P2 gate: play the wood/plank economy through the real UI ---------------
+
+interface P2Counters {
+  treesFelled: number;
+  trunksProduced: number;
+  planksProduced: number;
+  buildingsCompleted: number;
+  waresDelivered: number;
+}
+
+/** Read the P2 debug view (counters + entity tallies). */
+async function readGame(page: Page): Promise<{
+  tick: number;
+  flags: number;
+  buildings: number;
+  roads: number;
+  settlers: number;
+  counters: P2Counters;
+}> {
+  return page.evaluate(() => {
+    const d = (window as unknown as { __s2debug?: Record<string, unknown> }).__s2debug;
+    if (!d) throw new Error('window.__s2debug missing');
+    return {
+      tick: d.tick as number,
+      flags: d.flags as number,
+      buildings: d.buildings as number,
+      roads: d.roads as number,
+      settlers: d.settlers as number,
+      counters: d.counters as unknown as P2Counters,
+    };
+  });
+}
+
+/** CSS-px position (relative to the canvas) of a lattice node's ground anchor. */
+async function nodeScreen(page: Page, node: number): Promise<{ x: number; y: number }> {
+  return page.evaluate((n) => {
+    const d = (window as unknown as { __s2debug?: { nodeToScreen(n: number): { x: number; y: number } } }).__s2debug;
+    if (!d) throw new Error('no debug');
+    return d.nodeToScreen(n);
+  }, node);
+}
+
+/** Click the canvas at a node's screen position (real pointer path). */
+async function clickNode(page: Page, node: number): Promise<void> {
+  const pos = await nodeScreen(page, node);
+  await page.getByTestId('game-canvas').click({ position: pos });
+}
+
+test('P2 gate: build a wood/plank economy via the UI and watch it run', async ({ page }) => {
+  test.skip(!(await assetsPresent(page)), 'converted assets not installed');
+  const errors = collectErrors(page);
+
+  await page.goto('/game.html?map=maps_miss200');
+  await expect(page.locator('body[data-map-ready]')).toBeAttached({ timeout: 15_000 });
+  await expect(page.locator('body')).toHaveAttribute('data-map-ready', 'maps_miss200');
+
+  // Pause the sim while we lay out buildings so placement stays deterministic.
+  await page.getByTestId('pause-toggle').click();
+  await expect(page.getByTestId('pause-toggle')).toHaveText('Resume');
+
+  // Choose valid sites near the HQ using the exposed query helpers, then place
+  // everything by clicking the map and its context menus (the real UI path).
+  const plan = await page.evaluate(() => {
+    const d = (
+      window as unknown as {
+        __s2debug: {
+          hqNode: number;
+          nodeOf(x: number, y: number): number;
+          flagNodeOf(node: number): number;
+          canBuild(node: number, type: string): boolean;
+          canFlag(node: number): boolean;
+        };
+      }
+    ).__s2debug;
+    const W = 64;
+    const hq = d.hqNode;
+    const hx = hq % W;
+    const hy = Math.floor(hq / W);
+    const firstBuildable = (type: string, cx: number, cy: number, r: number): number => {
+      for (let rr = 2; rr <= r; rr++) {
+        for (let dy = -rr; dy <= rr; dy++) {
+          for (let dx = -rr; dx <= rr; dx++) {
+            const node = d.nodeOf(cx + dx, cy + dy);
+            if (node !== hq && d.canBuild(node, type)) return node;
+          }
+        }
+      }
+      return -1;
+    };
+    const wcNode = firstBuildable('woodcutter', hx - 3, hy - 1, 5);
+    const smNode = firstBuildable('sawmill', hx - 1, hy + 1, 5);
+    // A free flag near the HQ (the "place a flag near HQ" step).
+    let nearFlag = -1;
+    for (let rr = 2; rr <= 4 && nearFlag < 0; rr++) {
+      for (let dx = 2; dx <= rr && nearFlag < 0; dx++) {
+        const node = d.nodeOf(hx + dx, hy);
+        if (node !== wcNode && node !== smNode && d.canFlag(node)) nearFlag = node;
+      }
+    }
+    return {
+      hqFlag: d.flagNodeOf(hq),
+      wcNode,
+      smNode,
+      wcFlag: d.flagNodeOf(wcNode),
+      smFlag: d.flagNodeOf(smNode),
+      nearFlag,
+    };
+  });
+  expect(plan.wcNode, 'a woodcutter site exists near HQ').toBeGreaterThanOrEqual(0);
+  expect(plan.smNode, 'a sawmill site exists near HQ').toBeGreaterThanOrEqual(0);
+  expect(plan.nearFlag, 'a free flag spot exists near HQ').toBeGreaterThanOrEqual(0);
+
+  // 1) Place a flag near the HQ via the context menu.
+  await clickNode(page, plan.nearFlag);
+  await page.getByTestId('ctx-flag').click();
+
+  // 2) Road HQ flag -> the new flag (real road mode: menu action, then click).
+  await clickNode(page, plan.hqFlag);
+  await page.getByTestId('ctx-build').click(); // "Build road"
+  await clickNode(page, plan.nearFlag);
+
+  // 3) Place the woodcutter and the sawmill via their build menus.
+  await clickNode(page, plan.wcNode);
+  await page.getByTestId('ctx-woodcutter').click();
+  await clickNode(page, plan.smNode);
+  await page.getByTestId('ctx-sawmill').click();
+
+  // Let the placement commands apply so the auto-flags exist for roading.
+  await page.getByTestId('pause-toggle').click(); // resume
+  await page.waitForFunction(
+    () => (window as unknown as { __s2debug: { flags: number } }).__s2debug.flags >= 4,
+    undefined,
+    { timeout: 5000 },
+  );
+
+  // 4) Road the network together: near-flag -> sawmill -> woodcutter.
+  await clickNode(page, plan.nearFlag);
+  await page.getByTestId('ctx-build').click();
+  await clickNode(page, plan.smFlag);
+  await clickNode(page, plan.smFlag);
+  await page.getByTestId('ctx-build').click();
+  await clickNode(page, plan.wcFlag);
+
+  await page.waitForFunction(
+    () => (window as unknown as { __s2debug: { roads: number } }).__s2debug.roads >= 3,
+    undefined,
+    { timeout: 5000 },
+  );
+
+  // 5) Run at 10x and watch the economy loop close.
+  await page.getByTestId('speed-10').click();
+  await expect(page.getByTestId('speed-10')).toHaveClass(/active/);
+
+  await page.waitForFunction(
+    () => {
+      const c = (window as unknown as { __s2debug: { counters: P2Counters } }).__s2debug.counters;
+      return (
+        c.treesFelled >= 1 &&
+        c.trunksProduced >= 1 &&
+        c.planksProduced >= 1 &&
+        c.buildingsCompleted >= 2
+      );
+    },
+    undefined,
+    { timeout: 45_000 },
+  );
+
+  const game = await readGame(page);
+  expect(game.counters.treesFelled, 'a tree was felled').toBeGreaterThanOrEqual(1);
+  expect(game.counters.trunksProduced, 'a trunk was produced').toBeGreaterThanOrEqual(1);
+  expect(game.counters.planksProduced, 'a plank reached the sawmill and was cut').toBeGreaterThanOrEqual(1);
+  expect(game.counters.buildingsCompleted, 'construction sites completed').toBeGreaterThanOrEqual(2);
+  expect(game.settlers, 'carriers/workers are active').toBeGreaterThan(0);
+
+  // Mid-game screenshot showing buildings + carriers on roads.
+  await page.getByTestId('game-canvas').screenshot({ path: `${P2FINAL_DIR}/p2-economy-1x.png` });
+  await page.getByTestId('zoom-toggle').click();
+  await page.waitForTimeout(400);
+  await page.getByTestId('game-canvas').screenshot({ path: `${P2FINAL_DIR}/p2-economy-2x.png` });
+
+  expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);
+});
+
 test('MISS200 scene contains trees and granite, rendered over terrain', async ({ page }) => {
   test.skip(!(await assetsPresent(page)), 'converted assets not installed');
   const errors = collectErrors(page);
@@ -173,12 +360,17 @@ test('MISS200 scene contains trees and granite, rendered over terrain', async ({
   expect(dbg.staticObjects, 'objects should be registered for drawing').toBeGreaterThan(0);
 
   // Let a few animation frames run, then confirm sprites are actually drawn in
-  // the viewport (camera starts over player 1's HQ, which is surrounded by
-  // trees) with the expected single-atlas draw-call batching.
+  // the viewport (camera starts over player 0's HQ, surrounded by trees). Since
+  // P2 adds the HQ + flag (rom_z) and settler (carrier) atlases on top of the
+  // map objects (mapbobs), the scene now spans a few atlas pages that painter's
+  // order interleaves; batching still collapses the hundreds of tree quads into
+  // far fewer draw calls than quads.
   await page.waitForTimeout(500);
   const drawn = await readDebug(page);
   expect(drawn.spriteQuads, 'sprites visible near the HQ').toBeGreaterThan(0);
-  expect(drawn.spriteDrawCalls, 'one draw call per atlas page').toBeLessThanOrEqual(2);
+  expect(drawn.spriteDrawCalls, 'draw calls batched well below quad count').toBeLessThan(
+    Math.max(16, drawn.spriteQuads / 4),
+  );
 
   // Save a reference screenshot of terrain WITH trees/granite.
   await page.getByTestId('game-canvas').screenshot({

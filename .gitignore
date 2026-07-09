@@ -24,3 +24,4 @@ coverage/
 
 # Claude Code runtime state
 .claude/
+.playwright-mcp/

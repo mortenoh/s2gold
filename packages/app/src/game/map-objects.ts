@@ -114,8 +114,8 @@ function pushTree(
 export function buildStaticObjects(
   width: number,
   height: number,
-  objectType: Uint8Array,
-  objectIndex: Uint8Array,
+  objectType: ArrayLike<number>,
+  objectIndex: ArrayLike<number>,
   landscape: LandscapeSet,
 ): BuiltObjects {
   const archive = objectAtlasForLandscape(landscape);
