@@ -149,8 +149,9 @@ function zeroCounters(): GameCounters {
   };
 }
 
-/** Supported simulation speeds (tick-rate multipliers). */
-export const SPEEDS = [1, 3, 10] as const;
+/** Supported simulation speeds (tick-rate multipliers). 25x/50x are for quickly
+ * fast-forwarding while testing; the per-frame step cap keeps them from spiralling. */
+export const SPEEDS = [1, 3, 10, 25, 50] as const;
 export type Speed = (typeof SPEEDS)[number];
 
 /** A running game over one map for a single local player (player 0). */
