@@ -321,15 +321,18 @@ test('P2 gate: build a wood/plank economy via the UI and watch it run', async ({
   await page.getByTestId('ctx-build').click(); // "Build road"
   await clickNode(page, plan.nearFlag);
 
-  // 3) Place the woodcutter and the sawmill via their build menus. Placing a
-  // building auto-enters road mode from the new site's flag (original
-  // behavior); this scripted flow builds its roads explicitly below, so exit
-  // road mode with Escape after each placement.
+  // 3) Place the woodcutter and the sawmill via their build menus: open the
+  // size-class flyout, then pick the building. Placing a building auto-enters
+  // road mode from the new site's flag (original behavior); this scripted flow
+  // builds its roads explicitly below, so exit road mode with Escape after
+  // each placement.
   await clickNode(page, plan.wcNode);
+  await page.getByTestId('ctx-cat-huts').click();
   await page.getByTestId('ctx-woodcutter').click();
   await page.waitForTimeout(300);
   await page.keyboard.press('Escape');
   await clickNode(page, plan.smNode);
+  await page.getByTestId('ctx-cat-houses').click();
   await page.getByTestId('ctx-sawmill').click();
   await page.waitForTimeout(300);
   await page.keyboard.press('Escape');
@@ -480,7 +483,7 @@ test('P4: expanded build menu lists buildings by size class with costs', async (
   const node = await buildableNode(page);
   expect(node, 'a house-size build site exists near HQ').toBeGreaterThanOrEqual(0);
 
-  // Open the node context menu (the expanded, grouped build menu).
+  // Open the node context menu (the grouped build menu with category flyouts).
   const pos = await page.evaluate((n) => {
     const d = (window as unknown as { __s2debug: { nodeToScreen(n: number): { x: number; y: number } } }).__s2debug;
     return d.nodeToScreen(n);
@@ -490,18 +493,30 @@ test('P4: expanded build menu lists buildings by size class with costs', async (
   const menu = page.getByTestId('ctx-menu');
   await expect(menu).toBeVisible();
 
-  // Category headers from the size classes are present.
-  await expect(menu.locator('.ctx-category', { hasText: 'Huts' })).toBeVisible();
-  await expect(menu.locator('.ctx-category', { hasText: 'Houses' })).toBeVisible();
+  // Size-class categories are offered as flyout triggers.
+  await expect(menu.getByTestId('ctx-cat-huts')).toBeVisible();
+  await expect(menu.getByTestId('ctx-cat-houses')).toBeVisible();
 
-  // Every building button shows a cost like "(2b 2s)"; more than 10 are offered.
-  const buttons = menu.locator('button[data-testid^="ctx-"]');
-  const labels = await buttons.allTextContents();
-  const withCost = labels.filter((t) => /\(\d+b/.test(t));
+  // Open every category flyout and collect the building labels. The submenu is
+  // a separate floating element (data-testid ctx-submenu), replaced on each
+  // trigger click so only one is visible at a time.
+  const triggers = menu.locator('.ctx-cat-trigger');
+  const labels: string[] = [];
+  for (let i = 0; i < (await triggers.count()); i++) {
+    await triggers.nth(i).click();
+    const submenu = page.getByTestId('ctx-submenu');
+    await expect(submenu).toBeVisible();
+    labels.push(...(await submenu.locator('button[data-testid^="ctx-"]').allTextContents()));
+  }
+
+  // Every building shows a cost like "(2 boards, 3 stone)"; more than 10 offered.
+  const withCost = labels.filter((t) => /\(\d+ (board|stone)/.test(t));
   expect(withCost.length, `build menu lists many buildings: ${labels.join(', ')}`).toBeGreaterThan(10);
 
-  // The classic P2 buildings are still there (keeps the flat-menu tests valid).
+  // The classic P2 buildings live in their size-class flyouts.
+  await menu.getByTestId('ctx-cat-huts').click();
   await expect(page.getByTestId('ctx-woodcutter')).toBeVisible();
+  await menu.getByTestId('ctx-cat-houses').click();
   await expect(page.getByTestId('ctx-sawmill')).toBeVisible();
 
   await page.getByTestId('game-canvas').screenshot({ path: `${P4_DIR}/build-submenu.png` });
