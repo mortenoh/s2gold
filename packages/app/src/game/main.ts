@@ -256,7 +256,7 @@ async function boot(): Promise<void> {
       tickLabel,
       fps,
     ),
-    status, // transient hint toast, floats below the bar (see .build-status)
+    status, // transient hint toast, floats below the bar (see .status-toast)
     el('div', { class: 'minimap-box' }, minimapCanvas),
   );
 
@@ -514,6 +514,7 @@ async function boot(): Promise<void> {
     camera: () => camera,
     onStatus: (text) => {
       status.textContent = text;
+      status.hidden = text.length === 0;
     },
     suppressClick: () => draggedFar,
   });
@@ -605,11 +606,16 @@ async function boot(): Promise<void> {
     return n;
   }
 
+  /** Right-align a count into a fixed 4-char cell so the bar never reflows. */
+  const pad4 = (n: number): string => String(Math.min(n, 9999)).padStart(4, ' ');
+
   function updateHud(quads: number, drawCalls: number): void {
     if (!session) return;
     const inv = session.inventory;
-    resources.textContent = `Trunk ${inv.trunk}  Plank ${inv.plank}  Stone ${inv.stone}`;
-    tickLabel.textContent = `tick ${session.world.tick}`;
+    // Fixed-width cells (white-space: pre in CSS) keep the bar from reflowing
+    // as counts grow.
+    resources.textContent = `Trunk${pad4(inv.trunk)} Plank${pad4(inv.plank)} Stone${pad4(inv.stone)}`;
+    tickLabel.textContent = `tick ${String(session.world.tick).padStart(7, ' ')}`;
     const dbg = window.__s2debug;
     if (dbg) {
       dbg.spriteQuads = quads;

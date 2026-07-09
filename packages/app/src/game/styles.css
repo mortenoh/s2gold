@@ -62,12 +62,19 @@ body {
   text-decoration: none;
 }
 
+/* The middle (title + map picker) shrinks with an ellipsis when the window
+   narrows instead of pushing the bar onto two lines. */
+.hud-top .map-title,
+.hud-top select {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .hud-top .map-title {
   font-weight: 600;
   color: #fff;
-  flex-shrink: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
   max-width: 220px;
 }
 
@@ -126,15 +133,18 @@ body {
   font-variant-numeric: tabular-nums;
   color: #ffd479;
   font-weight: 600;
+  /* Counts are padded into fixed-width cells; preserve the pad spaces. */
+  white-space: pre;
 }
 
 .hud-top .tick {
   font-variant-numeric: tabular-nums;
   color: #bbb;
+  white-space: pre;
 }
 
 /* Transient hint (road mode etc.): floating toast below the bar, not in it. */
-.build-status {
+.status-toast {
   position: absolute;
   top: 52px;
   left: 50%;
@@ -150,7 +160,8 @@ body {
   white-space: nowrap;
 }
 
-.build-status:empty {
+.status-toast:empty,
+.status-toast[hidden] {
   display: none;
 }
 
