@@ -90,6 +90,29 @@ function isAttackTarget(b: Building): boolean {
   return kind === 'military' || kind === 'hq';
 }
 
+/**
+ * The pool a building draws its defenders from. A military building fights from
+ * its own garrison; an HQ has no garrison of its own and instead defends with
+ * the owner's idle reserve (`Player.soldiers`) as its last stand (MILITARY.md §4).
+ * Returns the same array shape (counts per rank) either way, so the existing
+ * duel machinery operates on it unchanged. Falls back to the garrison when the
+ * owning player is somehow missing.
+ */
+function defenderPool(world: World, b: Building): number[] {
+  if (buildingDef(b.type)?.kind === 'hq') {
+    const owner = world.players[b.player];
+    if (owner) return owner.soldiers;
+  }
+  return b.garrison;
+}
+
+/** Total defenders available to a building (garrison, or reserve for an HQ). */
+function defenderCount(world: World, b: Building): number {
+  let n = 0;
+  for (const c of defenderPool(world, b)) n += c;
+  return n;
+}
+
 // --- Recruitment (MILITARY.md §6 / CONSTANTS.md §7) ------------------------
 
 /** Unmet garrison demand across a player's military buildings. */
@@ -189,8 +212,9 @@ function hitOpponent(s: Settler): void {
 
 /** Begin a duel between the marching attacker and the building's weakest defender. */
 function startDuel(world: World, events: EventSink, s: Settler, b: Building): void {
-  const defRank = weakestRank(b.garrison);
-  b.garrison[defRank]--; // the defender comes out to fight
+  const pool = defenderPool(world, b);
+  const defRank = weakestRank(pool);
+  pool[defRank]--; // the defender comes out to fight (garrison, or HQ reserve)
   s.state = 'soldierFight';
   s.oppRank = defRank;
   s.oppHp = SOLDIER_HITPOINTS[defRank] ?? 3;
@@ -367,7 +391,7 @@ function stepMarch(
     storeFree(world.settlers, s.id);
     return;
   }
-  if (garrisonCount(b) > 0) startDuel(world, events, s, b);
+  if (defenderCount(world, b) > 0) startDuel(world, events, s, b);
   // else: wait at the flag; resolveCaptures() finishes the job this tick.
 }
 
@@ -398,7 +422,7 @@ function stepFight(world: World, events: EventSink, s: Settler): void {
   if (s.oppHp <= 0) {
     // Defender died; the attacker wins this duel.
     events.emit({ type: 'SoldierDied', node: s.node, player: b.player, rank: s.oppRank });
-    if (garrisonCount(b) > 0) {
+    if (defenderCount(world, b) > 0) {
       startDuel(world, events, s, b); // next defender comes out
       s.fightTimer = FIGHT_DEATH_GF; // brief death-sequence pause (§5.5)
     } else {
@@ -411,9 +435,10 @@ function stepFight(world: World, events: EventSink, s: Settler): void {
     return;
   }
   if (s.hp <= 0) {
-    // Attacker died; the surviving defender returns to the garrison.
+    // Attacker died; the surviving defender returns to its pool (garrison, or
+    // the HQ's reserve).
     events.emit({ type: 'SoldierDied', node: s.node, player: s.player, rank: s.rank });
-    b.garrison[s.oppRank]++;
+    defenderPool(world, b)[s.oppRank]++;
     storeFree(world.settlers, s.id);
     return;
   }
@@ -440,7 +465,7 @@ function resolveCaptures(
     if (s.state !== 'soldierMarch' || s.rank < 0) continue;
     if (!walkDone(s)) continue; // still en route
     const b = world.buildings.items[s.attackTargetId];
-    if (!b || b.player === s.player || garrisonCount(b) > 0) continue;
+    if (!b || b.player === s.player || defenderCount(world, b) > 0) continue;
     if (fightOngoing(world, b.id)) continue; // defenders still out fighting
     const list = waiting.get(b.id) ?? [];
     list.push(s.id);

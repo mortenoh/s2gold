@@ -216,6 +216,90 @@ describe('attacking a headquarters (MILITARY.md §4)', () => {
   });
 });
 
+describe('headquarters reserve defense (MILITARY.md §4)', () => {
+  /** Attack player 1's HQ with p0's fortress; p1 defends only from its reserve. */
+  function hqSiege(
+    seed: number,
+    reserve: number[],
+    fortGarrison: number[],
+    attackers: number,
+  ): { world: ReturnType<typeof createWorld>; hqId: number } {
+    const world = createWorld(makeFlatMap2(60, 20, [5, 10], [50, 10]), { seed });
+    const geom = worldGeometry(world);
+    world.players[0].soldiers = [0, 0, 0, 0, 0];
+    world.players[0].wares.sword = 0; // no recruitment to perturb counts
+    world.players[1].wares.sword = 0;
+    world.players[1].soldiers = reserve.slice(); // the HQ's only defenders
+    const fort = spawnBuilding(world, geom, geom.index(44, 10), 'fortress', 0, false);
+    garrisonBuilding(fort, fortGarrison);
+    const hqId = world.players[1].hqBuildingId;
+    applyCommand(world, { player: 0, type: 'attack', targetBuildingId: hqId, soldiers: attackers });
+    return { world, hqId };
+  }
+
+  it('defends an attacked HQ from the reserve, one defender per fight', () => {
+    // 3 reserve privates vs 6 strong attackers: the HQ fights its whole reserve
+    // out before it can be razed.
+    const { world, hqId } = hqSiege(7, [3, 0, 0, 0, 0], [3, 3, 3, 0, 0], 6);
+    const parts: string[] = [];
+    let razedAt = -1;
+    for (let i = 0; i < 800; i++) {
+      for (const e of tickWorld(world)) {
+        if (e.type === 'SoldierDied' && e.player === 1) parts.push('def');
+        if (e.type === 'BuildingCaptured' && e.burned && razedAt < 0) razedAt = parts.length;
+      }
+    }
+    // All 3 reserve defenders died (came out one by one) and the HQ was razed
+    // only after the reserve was exhausted.
+    const defDeaths = parts.filter((p) => p === 'def').length;
+    expect(defDeaths).toBe(3);
+    expect(razedAt).toBe(3); // raze happened after the 3rd defender death
+    expect(world.players[1].soldiers.reduce((a, c) => a + c, 0)).toBe(0);
+    expect(world.players[1].hqBuildingId).toBe(-1);
+    expect(world.buildings.items[hqId]).toBeNull();
+  });
+
+  it('survives the attack when its reserve defenders win', () => {
+    // 2 lone privates vs a deep reserve of generals: the attackers are wiped out
+    // and the HQ stands. Winning defenders return to the reserve.
+    const { world, hqId } = hqSiege(7, [0, 0, 0, 0, 20], [3, 0, 0, 0, 0], 2);
+    const events = runTicks(world, 800);
+    const capturedByP0 = events.some((e) => e.type === 'BuildingCaptured' && e.toPlayer === 0);
+    expect(capturedByP0).toBe(false);
+    expect(world.players[1].hqBuildingId).toBe(hqId);
+    expect(world.buildings.items[hqId]).not.toBeNull();
+    // Both attackers died; the reserve only shrank by defender casualties.
+    const p0deaths = events.filter((e) => e.type === 'SoldierDied' && e.player === 0).length;
+    expect(p0deaths).toBe(2);
+    const p1deaths = events.filter((e) => e.type === 'SoldierDied' && e.player === 1).length;
+    expect(world.players[1].soldiers.reduce((a, c) => a + c, 0)).toBe(20 - p1deaths);
+  });
+
+  it('an HQ with an empty reserve falls to the first attacker with no fight', () => {
+    const { world, hqId } = hqSiege(7, [0, 0, 0, 0, 0], [3, 0, 0, 0, 0], 2);
+    const events = runTicks(world, 800);
+    // No defender ever died (there were none) yet the HQ was razed.
+    expect(events.some((e) => e.type === 'SoldierDied' && e.player === 1)).toBe(false);
+    expect(events.some((e) => e.type === 'BuildingCaptured' && e.burned)).toBe(true);
+    expect(world.buildings.items[hqId]).toBeNull();
+  });
+
+  it('is deterministic: same seed -> identical outcome and state hash', () => {
+    const sig = (seed: number): string => {
+      const { world } = hqSiege(seed, [2, 1, 0, 0, 0], [3, 3, 0, 0, 0], 4);
+      const parts: string[] = [];
+      for (let i = 0; i < 800; i++) {
+        for (const e of tickWorld(world)) {
+          if (e.type === 'SoldierDied') parts.push(`d${e.player}:${e.rank}`);
+          if (e.type === 'BuildingCaptured') parts.push(`cap${e.toPlayer}`);
+        }
+      }
+      return `${parts.join('|')}#${hashWorld(world)}`;
+    };
+    expect(sig(313)).toBe(sig(313));
+  });
+});
+
 describe('capture reinforcement is capped at maxTroops (MILITARY.md §4)', () => {
   it('caps a captured building at its capacity; excess attackers do not vanish', () => {
     const world = createWorld(makeFlatMap2(60, 20, [5, 10], [50, 10]), { seed: 11 });
