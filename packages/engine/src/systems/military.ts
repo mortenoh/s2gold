@@ -113,6 +113,21 @@ function defenderCount(world: World, b: Building): number {
   return n;
 }
 
+/**
+ * True when a live enemy soldier is marching on or fighting at this player's HQ.
+ * Derived purely from settler state (no stored flag), so it stays deterministic
+ * and needs no serialization. Used to hold the reserve back for HQ defense (§4).
+ */
+function hqUnderSiege(world: World, player: Player): boolean {
+  const hqId = player.hqBuildingId;
+  if (hqId < 0) return false;
+  for (const s of storeLive(world.settlers)) {
+    if (s.rank < 0 || s.player === player.index || s.attackTargetId !== hqId) continue;
+    if (s.state === 'soldierMarch' || s.state === 'soldierFight') return true;
+  }
+  return false;
+}
+
 // --- Recruitment (MILITARY.md §6 / CONSTANTS.md §7) ------------------------
 
 /** Unmet garrison demand across a player's military buildings. */
@@ -172,10 +187,17 @@ function runOccupation(
   rules: TerrainRules,
   _events: EventSink,
 ): void {
+  // While a player's HQ is besieged, its idle reserve (Player.soldiers) is the
+  // HQ's last-stand defense (§4). Hold that reserve back rather than let the last
+  // soldiers stroll off to garrison distant buildings mid-siege; occupation for
+  // that player resumes once no attackers remain on the HQ. Only the besieged
+  // owner's draws pause — everyone else occupies normally.
+  const besieged = world.players.map((p) => hqUnderSiege(world, p));
   for (const b of storeLive(world.buildings)) {
     if (b.state !== 'working' || !isMilitary(b)) continue;
     const player = world.players[b.player];
     if (!player) continue;
+    if (besieged[b.player]) continue; // reserve held for HQ defense
     const cap = buildingDef(b.type)?.maxTroops ?? 0;
     let have = garrisonCount(b) + b.incoming;
     while (have < cap) {

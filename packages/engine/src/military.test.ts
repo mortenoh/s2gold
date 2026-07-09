@@ -284,6 +284,81 @@ describe('headquarters reserve defense (MILITARY.md §4)', () => {
     expect(world.buildings.items[hqId]).toBeNull();
   });
 
+  /**
+   * Like hqSiege, but also gives p1 an empty guardhouse near its HQ that wants
+   * troops. Without the siege pause, occupation would drain p1's reserve into
+   * this guardhouse on the very first tick — before the attackers arrive.
+   */
+  function hqSiegeWithGuardhouse(
+    seed: number,
+    reserve: number[],
+    fortGarrison: number[],
+    attackers: number,
+  ): {
+    world: ReturnType<typeof createWorld>;
+    hqId: number;
+    gh: ReturnType<typeof spawnBuilding>;
+  } {
+    const world = createWorld(makeFlatMap2(60, 20, [5, 10], [50, 10]), { seed });
+    const geom = worldGeometry(world);
+    world.players[0].soldiers = [0, 0, 0, 0, 0];
+    world.players[0].wares.sword = 0;
+    world.players[1].wares.sword = 0;
+    world.players[1].soldiers = reserve.slice();
+    const fort = spawnBuilding(world, geom, geom.index(44, 10), 'fortress', 0, false);
+    garrisonBuilding(fort, fortGarrison);
+    // Empty guardhouse right next to p1's HQ: reachable, understaffed, wants 3.
+    const gh = spawnBuilding(world, geom, geom.index(54, 10), 'guardhouse', 1, false);
+    const hqId = world.players[1].hqBuildingId;
+    applyCommand(world, { player: 0, type: 'attack', targetBuildingId: hqId, soldiers: attackers });
+    return { world, hqId, gh };
+  }
+
+  it('holds the reserve for HQ defense instead of occupying while besieged', () => {
+    // 3 reserve generals + an empty guardhouse that wants 3. If occupation kept
+    // running, the generals would walk off to the guardhouse and the HQ would be
+    // razed with no fight. Pausing keeps them home to defend and win.
+    const { world, hqId, gh } = hqSiegeWithGuardhouse(7, [0, 0, 0, 0, 3], [3, 0, 0, 0, 0], 2);
+
+    // Mid-siege: attackers are still on the HQ, and the reserve has NOT drained
+    // into the guardhouse (occupation is paused for this owner).
+    let sieged = false;
+    for (let i = 0; i < 120; i++) {
+      tickWorld(world);
+      if (world.settlers.items.some((s) => s && s.rank >= 0 && s.attackTargetId === hqId)) {
+        sieged = true;
+        expect(gh.garrison.reduce((a, c) => a + c, 0)).toBe(0);
+        expect(gh.incoming).toBe(0);
+      }
+    }
+    expect(sieged).toBe(true); // the scenario actually put the HQ under siege
+
+    // Let the fight finish: the HQ survives (reserve defended it).
+    runTicks(world, 800);
+    expect(world.players[1].hqBuildingId).toBe(hqId);
+    expect(world.buildings.items[hqId]).not.toBeNull();
+
+    // Siege over: occupation resumes and the guardhouse now fills from the reserve.
+    runTicks(world, 1200);
+    expect(gh.garrison.reduce((a, c) => a + c, 0)).toBeGreaterThan(0);
+  });
+
+  it('is deterministic with a besieged HQ and a pending occupation', () => {
+    const sig = (seed: number): string => {
+      const { world } = hqSiegeWithGuardhouse(seed, [1, 1, 0, 0, 1], [3, 3, 0, 0, 0], 4);
+      const parts: string[] = [];
+      for (let i = 0; i < 1500; i++) {
+        for (const e of tickWorld(world)) {
+          if (e.type === 'SoldierDied') parts.push(`d${e.player}:${e.rank}`);
+          if (e.type === 'BuildingCaptured') parts.push(`cap${e.toPlayer}`);
+          if (e.type === 'MilitaryOccupied') parts.push(`occ${e.player}`);
+        }
+      }
+      return `${parts.join('|')}#${hashWorld(world)}`;
+    };
+    expect(sig(909)).toBe(sig(909));
+  });
+
   it('is deterministic: same seed -> identical outcome and state hash', () => {
     const sig = (seed: number): string => {
       const { world } = hqSiege(seed, [2, 1, 0, 0, 0], [3, 3, 0, 0, 0], 4);
