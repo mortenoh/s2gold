@@ -13,6 +13,7 @@ import { Geometry } from './geometry';
 import { GREENLAND_RULES, type TerrainRules } from './terrain';
 import { runCarriers } from './systems/carriers';
 import { runConstruction } from './systems/construction';
+import { runPopulation } from './systems/recruit';
 import { runProduction } from './systems/production';
 import { runDispatch } from './systems/dispatch';
 import { runMilitary, garrisonCount } from './systems/military';
@@ -116,6 +117,7 @@ export function tickWorld(world: World, rules: TerrainRules = GREENLAND_RULES): 
   const geom = worldGeometry(world);
   const events = new EventSink();
   runDueCommands(world, geom, rules, events); // 1. commands
+  runPopulation(world); // 1b. HQ population growth (tops up the Helper pool)
   runConstruction(world, geom, rules, events); // 2. construction (+ builder steps)
   runProduction(world, geom, rules, events); // 3. production (+ worker steps)
   runMilitary(world, geom, rules, events); // 4. military (occupy/fight/promote/catapult)

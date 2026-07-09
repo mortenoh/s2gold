@@ -12,6 +12,29 @@ import { JOB, JOB_TOOL, type JobType } from '../constants';
 import type { EventSink } from '../events';
 import type { Player, World } from '../world';
 
+/** Idle Helpers the HQ keeps on hand; drawn on by new roads + worker recruiting. */
+const HELPER_BUFFER = 8;
+/** Ticks between adding one Helper toward the buffer (HQ population growth). */
+const HELPER_GROWTH_TICKS = 40;
+
+/**
+ * Population growth: the HQ tops the Helper pool back up to a small buffer over
+ * time, so expanding (which spends Helpers on road carriers and new workers)
+ * never permanently runs dry — the original keeps producing settlers, and
+ * without this a large settlement deadlocks once the fixed starting pool is
+ * spent (new roads get no carrier, so the buildings they serve never build).
+ */
+export function runPopulation(world: World): void {
+  if (world.tick % HELPER_GROWTH_TICKS !== 0) return;
+  for (const player of world.players) {
+    const hq = player.hqBuildingId >= 0 ? world.buildings.items[player.hqBuildingId] : null;
+    if (!hq || hq.state !== 'working') continue; // new settlers come from the HQ
+    if ((player.workers[JOB.carrier] ?? 0) < HELPER_BUFFER) {
+      player.workers[JOB.carrier] = (player.workers[JOB.carrier] ?? 0) + 1;
+    }
+  }
+}
+
 /**
  * Ensure the player has at least one idle worker of `job` available, recruiting
  * one from a Helper (+ the job's tool) if the pool is empty. Returns true when a
