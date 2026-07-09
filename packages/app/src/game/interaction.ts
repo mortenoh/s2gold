@@ -152,6 +152,8 @@ export class Interaction {
   private previewValid = false;
   private pendingMove: { x: number; y: number } | null = null;
   private hoverRafScheduled = false;
+  /** Bumped by cancel(); aborts any pending auto-road-mode poll. */
+  private cancelGeneration = 0;
 
   constructor(private readonly deps: InteractionDeps) {
     const { canvas } = deps;
@@ -303,7 +305,25 @@ export class Interaction {
           items.push(
             this.action(
               `${name} (${costText(type)})`,
-              () => session.placeBuilding(node, type),
+              () => {
+                session.placeBuilding(node, type);
+                // Like the original: drop straight into road mode from the new
+                // site's flag so the player connects it to the network. The
+                // command is queued, so poll a few frames for the flag to land;
+                // Escape/right-click (cancel) aborts the pending poll.
+                const flagNode = session.geom.neighbour(node, 'SE');
+                const generation = this.cancelGeneration;
+                const tryStart = (attempts: number): void => {
+                  if (this.cancelGeneration !== generation) return;
+                  const s = this.deps.session();
+                  if (s.flagIdAt(flagNode) >= 0) {
+                    if (!this.roadMode && !this.menu) this.startRoad(flagNode);
+                    return;
+                  }
+                  if (attempts > 0) requestAnimationFrame(() => tryStart(attempts - 1));
+                };
+                tryStart(120);
+              },
               `ctx-${type}`,
             ),
           );
@@ -357,6 +377,7 @@ export class Interaction {
   }
 
   private cancel(): void {
+    this.cancelGeneration++;
     this.closeMenu();
     if (this.roadMode) {
       this.roadStartFlagNode = -1;

@@ -321,11 +321,18 @@ test('P2 gate: build a wood/plank economy via the UI and watch it run', async ({
   await page.getByTestId('ctx-build').click(); // "Build road"
   await clickNode(page, plan.nearFlag);
 
-  // 3) Place the woodcutter and the sawmill via their build menus.
+  // 3) Place the woodcutter and the sawmill via their build menus. Placing a
+  // building auto-enters road mode from the new site's flag (original
+  // behavior); this scripted flow builds its roads explicitly below, so exit
+  // road mode with Escape after each placement.
   await clickNode(page, plan.wcNode);
   await page.getByTestId('ctx-woodcutter').click();
+  await page.waitForTimeout(300);
+  await page.keyboard.press('Escape');
   await clickNode(page, plan.smNode);
   await page.getByTestId('ctx-sawmill').click();
+  await page.waitForTimeout(300);
+  await page.keyboard.press('Escape');
 
   // Let the placement commands apply so the auto-flags exist for roading.
   await page.getByTestId('pause-toggle').click(); // resume

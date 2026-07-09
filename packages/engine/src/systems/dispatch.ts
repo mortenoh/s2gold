@@ -17,7 +17,7 @@
 import { buildingDef, WARE, WARE_TYPES, type WareType } from '../constants';
 import type { EventSink } from '../events';
 import type { Geometry } from '../geometry';
-import { buildSeaContext, chooseWareRoute } from './seafaring';
+import { buildSeaContext, chooseWareRoute, type SeaContext } from './seafaring';
 import {
   getBuilding,
   getFlag,
@@ -175,7 +175,7 @@ function priorityOrder(world: World, player: number): WareType[] {
 }
 
 /** Emit warehouse-stored wares toward buildings that still need them. */
-function runWarehouseSupply(world: World, geom: Geometry): void {
+function runWarehouseSupply(world: World, geom: Geometry, seaCtx: SeaContext): void {
   for (const player of world.players) {
     const order = priorityOrder(world, player.index);
     for (const wh of storeLive(world.buildings)) {
@@ -185,6 +185,15 @@ function runWarehouseSupply(world: World, geom: Geometry): void {
         while (player.wares[wareType] > 0 && whFlag.wares.length < 8) {
           const target = findNeeder(world, geom, player.index, wareType, whFlag.node);
           if (target < 0) break;
+          // A ware only leaves the warehouse when it can actually travel: either
+          // the target uses this very flag, or a road/sea route exists. Without
+          // this check the ware would freeze at the flag (and its slot) forever
+          // when the player has not yet connected the target's flag.
+          const targetBuilding = getBuilding(world, target);
+          if (targetBuilding.flagId !== whFlag.id) {
+            const route = chooseWareRoute(seaCtx, whFlag.id, target);
+            if (route.nextFlag < 0 && !route.useSea) break;
+          }
           const wid = storeAlloc(world.wares, (id) => ({
             id,
             type: wareType,
@@ -203,10 +212,9 @@ function runWarehouseSupply(world: World, geom: Geometry): void {
 
 /** Run the full dispatch pass for one tick. */
 export function runDispatch(world: World, geom: Geometry, events: EventSink): void {
-  runWarehouseSupply(world, geom);
-
   // Shared land-vs-sea routing context (harbors + road graphs + water links).
   const seaCtx = buildSeaContext(world, geom);
+  runWarehouseSupply(world, geom, seaCtx);
 
   for (const flag of storeLive(world.flags)) {
     // Iterate over a copy: delivery mutates flag.wares.

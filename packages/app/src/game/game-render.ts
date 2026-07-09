@@ -11,8 +11,8 @@
  *   ids: headquarters 0, quarry 19, woodcutter 17, forester 20, sawmill 33.
  * Flags (rom_z): 8 waving frames at 100..107, shadows 110..117 (player-colored).
  * Carrier wares (carrier BOB job/GoodType id): trunk 22, plank 23, stone 24.
- * BOB directions are {W,NW,NE,E,SE,SW} = 0..5, so engine dir E/SE/SW/W/NW/NE
- * (index 0..5) maps to BOB dir (index + 3) % 6.
+ * BOB direction slots line up with the engine's E/SE/SW/W/NW/NE order directly
+ * (see bobDir below; verified in-game against travel direction).
  */
 
 import {
@@ -131,9 +131,17 @@ export function buildingSprite(type: BuildingType, state: 'site' | 'working'): {
   return { sprite: base, shadow: base + 1 };
 }
 
-/** BOB direction index (0..5) for an engine direction index (0..5). */
+/**
+ * BOB direction index (0..5) for an engine direction index (0..5).
+ *
+ * Verified in-game against travel direction (a woodcutter walking west must
+ * face west): the archive's direction slots line up with the engine's
+ * E/SE/SW/W/NW/NE order directly. The previous (index + 3) % 6 shift rendered
+ * every settler facing 180 degrees away from its travel direction; body and
+ * overlay share the axis, so the composite looked coherent but mirrored.
+ */
 export function bobDir(engineDirIndex: number): number {
-  return (engineDirIndex + 3) % 6;
+  return engineDirIndex;
 }
 
 /** World-pixel anchor (ground point) of a node, raised by its elevation. */
