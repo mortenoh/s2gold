@@ -201,6 +201,19 @@ function showMessage(root: HTMLElement, testid: string, html: string): void {
   root.append(el('div', { class: 'game-message', html, attrs: { 'data-testid': testid } }));
 }
 
+/**
+ * True when a key event targets an editable field (text/number inputs, textarea,
+ * select, or a contenteditable). Global game shortcuts (pan/zoom/pause) must skip
+ * these so typing in the save-name and attack-count inputs is not swallowed.
+ * Duck-typed on `tagName`/`isContentEditable` so it also holds up outside a DOM.
+ */
+export function isEditableTarget(target: EventTarget | null): boolean {
+  const el = target as { tagName?: string; isContentEditable?: boolean } | null;
+  if (!el || typeof el.tagName !== 'string') return false;
+  const tag = el.tagName.toUpperCase();
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable === true;
+}
+
 async function boot(): Promise<void> {
   const root = document.querySelector<HTMLElement>('#game');
   if (!root) return;
@@ -717,6 +730,7 @@ async function boot(): Promise<void> {
   const held = new Set<string>();
   const panKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
   window.addEventListener('keydown', (ev) => {
+    if (isEditableTarget(ev.target)) return;
     if (panKeys.includes(ev.key)) {
       held.add(ev.key);
       ev.preventDefault();
@@ -728,6 +742,9 @@ async function boot(): Promise<void> {
       ev.preventDefault();
     }
   });
+  // keyup is unconditional (no editable-target guard): a pan key held while the
+  // game had focus and released after focus moved into an input must still clear,
+  // or the camera would keep panning. Removing a key never in the set is a no-op.
   window.addEventListener('keyup', (ev) => held.delete(ev.key));
   window.addEventListener('blur', () => held.clear());
 
@@ -1043,4 +1060,6 @@ async function boot(): Promise<void> {
   requestAnimationFrame(frame);
 }
 
-void boot();
+// Guard on `document` so the module can be imported in a non-DOM test env
+// (unit tests exercise the exported helpers without running the game).
+if (typeof document !== 'undefined') void boot();
