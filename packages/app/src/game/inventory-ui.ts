@@ -118,18 +118,20 @@ export class GoodsPanel {
     closeButton.addEventListener('click', () => this.close());
 
     this.body = el('div', { class: 'goods-body' });
+    const head = el(
+      'div',
+      { class: 'goods-panel-head' },
+      el('span', { class: 'goods-panel-title', text: 'Goods' }),
+      closeButton,
+    );
     this.panel = el(
       'div',
       { class: 'goods-panel', attrs: { 'data-testid': 'goods-panel' } },
-      el(
-        'div',
-        { class: 'goods-panel-head' },
-        el('span', { class: 'goods-panel-title', text: 'Goods' }),
-        closeButton,
-      ),
+      head,
       this.body,
     );
     this.deps.root.append(this.panel);
+    makeDraggable(this.panel, head, closeButton);
     this.render();
     this.refreshTimer = window.setInterval(() => this.render(), 500);
   }
@@ -163,4 +165,34 @@ export class GoodsPanel {
       );
     }
   }
+}
+
+/**
+ * Let the user drag `panel` by its `handle`. On first drag the panel switches to
+ * absolute left/top pixels (dropping any centering transform) and is clamped to
+ * the viewport. Dragging is ignored when it starts on `ignore` (the close button).
+ */
+function makeDraggable(panel: HTMLElement, handle: HTMLElement, ignore: HTMLElement): void {
+  handle.style.cursor = 'move';
+  handle.addEventListener('pointerdown', (ev) => {
+    if (ignore.contains(ev.target as Node)) return;
+    ev.preventDefault();
+    const rect = panel.getBoundingClientRect();
+    const dx = ev.clientX - rect.left;
+    const dy = ev.clientY - rect.top;
+    panel.style.transform = 'none';
+    const move = (e: PointerEvent): void => {
+      const margin = 4;
+      const left = Math.max(margin, Math.min(e.clientX - dx, window.innerWidth - rect.width - margin));
+      const top = Math.max(margin, Math.min(e.clientY - dy, window.innerHeight - rect.height - margin));
+      panel.style.left = `${left}px`;
+      panel.style.top = `${top}px`;
+    };
+    const up = (): void => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  });
 }

@@ -941,10 +941,12 @@ async function boot(): Promise<void> {
       const disc = disconnectedBuildingMarkers(session.world, session.localPlayer);
       if (disc.length > 0) roads.render(camera, disc, [1.0, 0.55, 0.0, 0.95], false);
       // Geologist survey signs, coloured by the ore found (or a faint X for none).
+      // Drawn on-ground (depth-tested) so buildings and trees on the mountain
+      // occlude them instead of the signs floating over everything.
       const hasSigns = session.world.signs.length > 0;
       for (const [res, color] of SIGN_COLORS) {
         const marks = signMarkers(session.world, res);
-        if (marks.length > 0) roads.render(camera, marks, color, false);
+        if (marks.length > 0) roads.render(camera, marks, color, true);
       }
       signLegend.style.display = hasSigns ? 'block' : 'none';
       // Live road-build preview on top: translucent path + an end marker (green

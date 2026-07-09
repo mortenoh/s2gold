@@ -658,6 +658,9 @@ export function signMarkers(world: World, res: number): RoadSegment[] {
   const out: RoadSegment[] = [];
   for (const sign of world.signs) {
     if (sign.res !== res) continue;
+    // Once a building (a mine) sits on the spot, drop its sign — it's served its
+    // purpose and would otherwise clutter the building.
+    if (world.buildingAtNode[sign.node] >= 0) continue;
     const a = nodeAnchor(world, sign.node);
     const cy = a.y - 6; // float just above the ground node
     const s = 4;
