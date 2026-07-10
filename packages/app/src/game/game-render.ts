@@ -618,25 +618,59 @@ export function nodeMarkerSegments(world: World, node: number, size = 7): RoadSe
 }
 
 /**
- * Small player-coloured posts marking a territory's border ring. The original
- * dots the frontier with little stones in the owner's colour; the exact nation
- * sprite index was not confidently isolated from the converted archive, so these
- * are drawn as compact flat markers (an upright post + base) via the flat-quad
- * overlay in the player colour — a clean-room-safe stand-in. Fog-aware: a border
- * node that is not currently visible is skipped.
+ * mapbobs frontier "boundary stone" bob (a stone tablet on a wooden post with a
+ * player-colour gem) + its ground shadow, per landscape object archive. The S2
+ * boundary stone is a single player-recoloured image; the `player`-kind bobs sit
+ * at consecutive entries — colour groups (red/yellow/black/white) plus the blue
+ * default-ramp master and a gem-free neutral stone — in greenland's mapbobs
+ * around 600..615 and, offset by +80, in the wasteland/winter atlases
+ * (mapbobs0/mapbobs1). The canonical stone whose gem is stored in the default
+ * (blue) player ramp is 612 (shadow 619) for greenland and 692 (shadow 699) for
+ * wasteland/winter; that is the one the original retints per player, so it is the
+ * one we draw.
+ *
+ * These converted mapbobs sprites carry no per-sprite `pmask` flag (unlike the
+ * rom_z flag bobs, which do), so the renderer's player-tint path is inert for
+ * them and the gem renders in its baked default-blue for every player. We still
+ * pass the owner's `player` on the sprite: it is a harmless no-op today and lights
+ * up the correct per-player gem automatically if these archives are ever
+ * reconverted with the pmask flag the flag sprites already ship.
  */
-export function borderStoneSegments(
+const BORDER_STONE_SPRITE: Readonly<Record<string, { sprite: number; shadow: number }>> = {
+  mapbobs: { sprite: 612, shadow: 619 }, // greenland
+  mapbobs0: { sprite: 692, shadow: 699 }, // wasteland
+  mapbobs1: { sprite: 692, shadow: 699 }, // winter
+};
+
+/**
+ * Border-stone sprites for a territory's frontier ring: the real mapbobs boundary
+ * stone at each border node, carrying the owner's `player` (see
+ * {@link BORDER_STONE_SPRITE}). Fog-aware: a frontier node that is not currently
+ * visible is skipped. Open-water nodes are skipped too — the original runs a
+ * coastal border along the land nodes rather than dotting the sea, so a frontier
+ * that clips a water tile leaves it bare instead of floating a stone on the waves.
+ */
+export function borderStoneSprites(
   world: World,
   nodes: readonly number[],
+  player: number,
+  objectArchive: string,
   visibility: Uint8Array | null = null,
-): RoadSegment[] {
-  const out: RoadSegment[] = [];
+): DynamicSprite[] {
+  const idx = BORDER_STONE_SPRITE[objectArchive] ?? BORDER_STONE_SPRITE.mapbobs;
+  const out: DynamicSprite[] = [];
   for (const node of nodes) {
     if (visibility !== null && visibility[node] !== 2) continue;
+    if (isWaterNode(world, node)) continue;
     const a = nodeAnchor(world, node);
-    // A short vertical post with a small base cross-bar reads as a border stone.
-    out.push({ x0: a.x, y0: a.y - 6, x1: a.x, y1: a.y + 1 });
-    out.push({ x0: a.x - 3, y0: a.y, x1: a.x + 3, y1: a.y });
+    out.push({
+      worldX: a.x,
+      worldY: a.y,
+      archive: objectArchive,
+      spriteIndex: idx.sprite,
+      shadowIndex: idx.shadow,
+      player,
+    });
   }
   return out;
 }

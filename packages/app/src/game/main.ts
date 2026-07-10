@@ -15,6 +15,7 @@ import {
   TR_H,
   TR_W,
   unpackColor,
+  type DynamicSprite,
   type LandscapeSet,
 } from '@s2gold/renderer';
 import { clear, el } from '../lib/dom';
@@ -26,7 +27,7 @@ import { MinimapView } from './minimap-view';
 import { GameSession, SPEEDS, type Speed } from './session';
 import {
   buildDynamics,
-  borderStoneSegments,
+  borderStoneSprites,
   depletedMineMarkers,
   disconnectedBuildingMarkers,
   garrisonDotSegments,
@@ -919,20 +920,12 @@ async function boot(): Promise<void> {
     renderer.resize();
     renderer.render(camera);
     if (session) {
-      const vis = session.fogEnabled ? session.visibility : null;
       roads.render(camera, roadSegments(session.world, session.geom));
-      // Territory border stones, drawn in each player's colour over the terrain.
-      for (let p = 0; p < session.playerCount; p++) {
-        const stones = borderStoneSegments(session.world, borderCache[p] ?? [], vis);
-        if (stones.length === 0) continue;
-        const [r, g, b] = unpackColor(PLAYER_COLORS[p % PLAYER_COLORS.length] ?? 0xffffff);
-        roads.render(camera, stones, [r, g, b, 1]);
-      }
     }
 
     const waveFrame = Math.floor(now / ANIM_FRAME_MS);
     const walkFrame = Math.floor(now / WALK_FRAME_MS);
-    const dynamics =
+    const dynamics: DynamicSprite[] =
       session && carrier
         ? buildDynamics(
             session.world,
@@ -942,6 +935,18 @@ async function boot(): Promise<void> {
             session.fogEnabled ? session.visibility : null,
           )
         : [];
+    // Territory border stones: real mapbobs boundary-stone sprites merged into the
+    // dynamic sprite pass so they depth-sort with buildings/trees (a tree in front
+    // occludes the stone) instead of overprinting as flat overlays. Fog-aware.
+    if (session) {
+      const vis = session.fogEnabled ? session.visibility : null;
+      const objectArchive = objectAtlasForLandscape(landscape);
+      for (let p = 0; p < session.playerCount; p++) {
+        for (const s of borderStoneSprites(session.world, borderCache[p] ?? [], p, objectArchive, vis)) {
+          dynamics.push(s);
+        }
+      }
+    }
     const stats = sprites.render(camera, waveFrame, dynamics);
     // Compact garrison markers, above each occupied military building, on top of
     // the sprite layer so they are never hidden by the building.

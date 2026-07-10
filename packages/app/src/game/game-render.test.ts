@@ -1,6 +1,6 @@
 import { JOB, JOB_TYPES, type Building, type Settler, type World } from '@s2gold/engine';
 import { describe, expect, it } from 'vitest';
-import { HELPER_BOB_ID, JOB_BOB_ID, workerIsIndoors } from './game-render';
+import { borderStoneSprites, HELPER_BOB_ID, JOB_BOB_ID, workerIsIndoors } from './game-render';
 
 /** jobs.bob has 93 job entries; a job id must land inside that range. */
 const JOBS_BOB_JOB_COUNT = 93;
@@ -59,6 +59,41 @@ function waterWorld(size: number, waterNodes: readonly number[]): World {
   } as unknown as World;
 }
 
+describe('borderStoneSprites', () => {
+  it('draws the real greenland boundary-stone sprite + shadow per frontier node', () => {
+    const world = waterWorld(4, []);
+    const stones = borderStoneSprites(world, [0, 1, 2], 2, 'mapbobs');
+    expect(stones).toHaveLength(3);
+    for (const s of stones) {
+      expect(s.archive).toBe('mapbobs');
+      expect(s.spriteIndex).toBe(612); // player-ramp boundary stone
+      expect(s.shadowIndex).toBe(619);
+      expect(s.player).toBe(2); // carries the owner so a future pmask tints it
+    }
+  });
+
+  it('uses the +80 wasteland/winter offset for their object archives', () => {
+    const world = waterWorld(2, []);
+    for (const arc of ['mapbobs0', 'mapbobs1']) {
+      const [s] = borderStoneSprites(world, [0], 0, arc);
+      expect(s.spriteIndex).toBe(692);
+      expect(s.shadowIndex).toBe(699);
+    }
+  });
+
+  it('skips open-water frontier nodes (no stone floating on the sea)', () => {
+    const world = waterWorld(4, [1, 3]);
+    const stones = borderStoneSprites(world, [0, 1, 2, 3], 0, 'mapbobs');
+    expect(stones).toHaveLength(2); // only the two land nodes 0 and 2
+  });
+
+  it('skips nodes hidden by fog (visibility !== 2)', () => {
+    const world = waterWorld(3, []);
+    const vis = new Uint8Array([2, 0, 1]); // only node 0 currently visible
+    const stones = borderStoneSprites(world, [0, 1, 2], 0, 'mapbobs', vis);
+    expect(stones).toHaveLength(1);
+  });
+});
 
 /** Minimal world holding a single building at `buildingNode`. */
 function worldWith(buildingNode: number): World {
