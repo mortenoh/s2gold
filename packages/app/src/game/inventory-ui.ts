@@ -74,6 +74,8 @@ const GROUPS: readonly GoodsGroup[] = [
 export interface GoodsPanelDeps {
   readonly root: HTMLElement;
   session(): GameSession | null;
+  /** Notified on open/close so the HUD bar button can reflect the state. */
+  onVisibility?(open: boolean): void;
 }
 
 export class GoodsPanel {
@@ -81,19 +83,15 @@ export class GoodsPanel {
   private refreshTimer = 0;
   private body: HTMLElement | null = null;
 
-  constructor(private readonly deps: GoodsPanelDeps) {
-    document.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Escape') this.close();
-    });
-  }
+  constructor(private readonly deps: GoodsPanelDeps) {}
 
   get isOpen(): boolean {
     return this.panel !== null;
   }
 
-  toggle(): void {
-    if (this.panel) this.close();
-    else this.open();
+  /** The live panel element (null while closed). */
+  get element(): HTMLElement | null {
+    return this.panel;
   }
 
   close(): void {
@@ -106,9 +104,10 @@ export class GoodsPanel {
       this.panel = null;
     }
     this.body = null;
+    this.deps.onVisibility?.(false);
   }
 
-  private open(): void {
+  open(): void {
     if (!this.deps.session()) return;
     this.close();
     const closeButton = el('button', {
@@ -134,6 +133,7 @@ export class GoodsPanel {
     makeDraggable(this.panel, head, closeButton);
     this.render();
     this.refreshTimer = window.setInterval(() => this.render(), 500);
+    this.deps.onVisibility?.(true);
   }
 
   private render(): void {

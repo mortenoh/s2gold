@@ -48,6 +48,7 @@ import { SaveMenu } from './save-ui';
 import { StatsPanel } from './stats-ui';
 import { GoodsPanel } from './inventory-ui';
 import { createDropdown } from '../ui/dropdown';
+import { syncHudPanelButton, wireHudPanel } from './hud-panel';
 import { AudioEngine, positional } from './audio';
 import { CampaignController } from './campaign-ui';
 import { chapterById } from '../menu/campaign-data';
@@ -253,8 +254,8 @@ async function boot(): Promise<void> {
     attrs: { 'data-testid': 'pause-toggle', type: 'button' },
   });
   const menuButton = el('button', {
-    text: 'Menu',
-    attrs: { 'data-testid': 'menu-toggle', type: 'button', title: 'Save / load (F5 / F9)' },
+    text: 'Game',
+    attrs: { 'data-testid': 'menu-toggle', type: 'button', title: 'Save / load / exit (F5 / F9)' },
   });
   const fogButton = el('button', {
     text: 'Fog: on',
@@ -291,9 +292,15 @@ async function boot(): Promise<void> {
   status.hidden = true;
   const minimapCanvas = el('canvas', { attrs: { 'data-testid': 'minimap' } });
 
-  const speedButtons = SPEEDS.map((s) =>
-    el('button', { text: `${s}x`, attrs: { 'data-testid': `speed-${s}`, type: 'button' } }),
+  // Game speed as a compact dropdown (five buttons crowded the bar). setSpeed
+  // is a hoisted function declaration, so referencing it here is safe.
+  const speedSelect = createDropdown(
+    SPEEDS.map((s) => ({ value: String(s), label: `${s}x` })),
+    '1',
+    (value) => setSpeed(Number(value) as Speed),
+    { 'data-testid': 'speed-select', title: 'Game speed' },
   );
+  speedSelect.element.classList.add('speed-select');
 
   // One page-lived audio engine (survives map switches); unlocked on first
   // gesture per the browser autoplay policy. The music element is attached to
@@ -380,21 +387,109 @@ async function boot(): Promise<void> {
     })),
   );
 
+  // --- Debug-readout visibility (tick counter + FPS) ------------------------
+  // Both live in the Settings panel as fog-style toggles and default off; the
+  // choice is persisted like the fog pref so it survives a reload. Read
+  // defensively — storage may be unavailable (private mode).
+  const TICK_LS_KEY = 's2gold.view.tick';
+  const FPS_LS_KEY = 's2gold.view.fps';
+  const readVisPref = (key: string): boolean => {
+    try {
+      return localStorage.getItem(key) === '1';
+    } catch {
+      return false;
+    }
+  };
+  const writeVisPref = (key: string, on: boolean): void => {
+    try {
+      localStorage.setItem(key, on ? '1' : '0');
+    } catch {
+      /* storage may be unavailable (private mode) — ignore. */
+    }
+  };
+  let showTick = readVisPref(TICK_LS_KEY);
+  let showFps = readVisPref(FPS_LS_KEY);
+  // When hidden the elements are removed from layout (not just blanked) so they
+  // take no space, and the per-frame text updates are skipped (see the loop).
+  const applyTickVis = (): void => {
+    tickLabel.hidden = !showTick;
+  };
+  const applyFpsVis = (): void => {
+    fps.hidden = !showFps;
+  };
+  applyTickVis();
+  applyFpsVis();
+
+  // --- Settings panel (seldom-used controls, tucked off the bar) -------------
+  const settingsButton = el('button', {
+    text: 'Settings',
+    attrs: { 'data-testid': 'settings-toggle', type: 'button', title: 'Settings' },
+  });
+  const tickToggle = el('button', {
+    attrs: { 'data-testid': 'tick-toggle', type: 'button', title: 'Show the tick counter' },
+  });
+  const applyTickToggle = (): void => {
+    tickToggle.textContent = showTick ? 'Tick: on' : 'Tick: off';
+    tickToggle.classList.toggle('active', showTick);
+  };
+  applyTickToggle();
+  tickToggle.addEventListener('click', () => {
+    showTick = !showTick;
+    writeVisPref(TICK_LS_KEY, showTick);
+    applyTickVis();
+    applyTickToggle();
+  });
+  const fpsToggle = el('button', {
+    attrs: { 'data-testid': 'fps-toggle', type: 'button', title: 'Show the FPS counter' },
+  });
+  const applyFpsToggle = (): void => {
+    fpsToggle.textContent = showFps ? 'FPS: on' : 'FPS: off';
+    fpsToggle.classList.toggle('active', showFps);
+  };
+  applyFpsToggle();
+  fpsToggle.addEventListener('click', () => {
+    showFps = !showFps;
+    writeVisPref(FPS_LS_KEY, showFps);
+    applyFpsVis();
+    applyFpsToggle();
+  });
+  const settingsPanel = el(
+    'div',
+    { class: 'settings-panel', attrs: { 'data-testid': 'settings-panel' } },
+    el(
+      'div',
+      { class: 'settings-row' },
+      el('span', { class: 'settings-label', text: 'Map' }),
+      mapSelect.element,
+    ),
+    el('div', { class: 'settings-row' }, fogButton, tickToggle, fpsToggle),
+    audioControls,
+  );
+  settingsPanel.hidden = true;
+  wireHudPanel(settingsButton, {
+    isOpen: () => !settingsPanel.hidden,
+    open: () => {
+      settingsPanel.hidden = false;
+    },
+    close: () => {
+      settingsPanel.hidden = true;
+    },
+    element: () => settingsPanel,
+  });
+
   const hudTop = el(
     'div',
     { class: 'hud-top' },
     el('a', { href: '/', text: 's2gold' }),
     mapTitle,
-    mapSelect.element,
-    zoomButton,
     pauseButton,
     menuButton,
-    fogButton,
     statsButton,
     goodsButton,
-    ...speedButtons,
-    audioControls,
+    speedSelect.element,
     resources,
+    zoomButton,
+    settingsButton,
     tickLabel,
     fps,
   );
@@ -419,6 +514,7 @@ async function boot(): Promise<void> {
   root.append(
     canvas,
     hudTop,
+    settingsPanel, // floating panel anchored under the Settings button
     status, // transient hint toast, floats below the bar (see .status-toast)
     signLegend,
     el('div', { class: 'minimap-box' }, minimapCanvas),
@@ -650,9 +746,9 @@ async function boot(): Promise<void> {
 
   function setSpeed(speed: Speed): void {
     if (session) session.speed = speed;
-    speedButtons.forEach((btn, i) => btn.classList.toggle('active', SPEEDS[i] === speed));
+    // Programmatic changes (__s2debug, initial setSpeed(1)) must show too.
+    speedSelect.setValue(String(speed));
   }
-  speedButtons.forEach((btn, i) => btn.addEventListener('click', () => setSpeed(SPEEDS[i])));
 
   /** Push the session's fog state to the terrain renderer + update the button. */
   function applyFog(): void {
@@ -833,20 +929,47 @@ async function boot(): Promise<void> {
     }, 3000);
   }
 
+  // Menu/Stats/Goods share the anchored-panel mechanics with Settings. The
+  // panels can also close themselves (close button, load-and-close), so they
+  // report visibility back to keep the bar buttons in sync.
   const saveMenu = new SaveMenu({
     root,
     session: () => session,
     mapName: () => currentMap,
     mapTitle: () => currentMapTitle,
     toast: saveToast,
+    onVisibility: (open) => syncHudPanelButton(menuButton, open),
   });
-  menuButton.addEventListener('click', () => saveMenu.toggle());
+  wireHudPanel(menuButton, {
+    isOpen: () => saveMenu.isOpen,
+    open: () => saveMenu.open(),
+    close: () => saveMenu.close(),
+    element: () => saveMenu.element,
+  });
 
   // In-game statistics panel (per-player time-series charts).
-  const statsPanel = new StatsPanel({ root, session: () => session });
-  statsButton.addEventListener('click', () => statsPanel.toggle());
-  const goodsPanel = new GoodsPanel({ root, session: () => session });
-  goodsButton.addEventListener('click', () => goodsPanel.toggle());
+  const statsPanel = new StatsPanel({
+    root,
+    session: () => session,
+    onVisibility: (open) => syncHudPanelButton(statsButton, open),
+  });
+  wireHudPanel(statsButton, {
+    isOpen: () => statsPanel.isOpen,
+    open: () => statsPanel.open(),
+    close: () => statsPanel.close(),
+    element: () => statsPanel.element,
+  });
+  const goodsPanel = new GoodsPanel({
+    root,
+    session: () => session,
+    onVisibility: (open) => syncHudPanelButton(goodsButton, open),
+  });
+  wireHudPanel(goodsButton, {
+    isOpen: () => goodsPanel.isOpen,
+    open: () => goodsPanel.open(),
+    close: () => goodsPanel.close(),
+    element: () => goodsPanel.element,
+  });
   window.addEventListener('keydown', (ev) => {
     if (ev.key === 'F5') {
       ev.preventDefault();
@@ -997,7 +1120,7 @@ async function boot(): Promise<void> {
 
     frames++;
     if (now - fpsWindowStart >= 500) {
-      fps.textContent = `${Math.round((frames * 1000) / (now - fpsWindowStart))} fps`;
+      if (showFps) fps.textContent = `${Math.round((frames * 1000) / (now - fpsWindowStart))} fps`;
       frames = 0;
       fpsWindowStart = now;
     }
@@ -1021,7 +1144,7 @@ async function boot(): Promise<void> {
     // Build materials only (full inventory is the Goods panel). Names follow the
     // original S2 UI: Wood (raw log), Boards (sawn), Stone.
     resources.textContent = `Wood${pad4(inv.trunk)} Boards${pad4(inv.plank)} Stone${pad4(inv.stone)}`;
-    tickLabel.textContent = `tick ${String(session.world.tick).padStart(7, ' ')}`;
+    if (showTick) tickLabel.textContent = `tick ${String(session.world.tick).padStart(7, ' ')}`;
     const dbg = window.__s2debug;
     if (dbg) {
       dbg.spriteQuads = quads;
@@ -1062,7 +1185,9 @@ async function boot(): Promise<void> {
   if (chapter) {
     document.title = `s2gold — ${chapter.title}`;
     const campaign = new CampaignController({ root, session: () => session, chapter });
-    hudTop.append(campaign.button);
+    // Insert before the (optional, default-hidden) tick/FPS readouts so the
+    // campaign button stays with the main controls rather than trailing them.
+    hudTop.insertBefore(campaign.button, tickLabel);
     campaign.start();
   }
 

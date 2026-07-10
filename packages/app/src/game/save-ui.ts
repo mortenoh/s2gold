@@ -1,5 +1,5 @@
 /**
- * Save / load UI: a compact "Menu" overlay panel backed by the server's
+ * Save / load UI: a compact "Game" menu panel backed by the server's
  * `/api/saves` CRUD. Serialization goes through the engine (via
  * {@link GameSession.serialize}); loading swaps the live world in place so the
  * tick loop keeps running and the camera is untouched.
@@ -45,6 +45,8 @@ export interface SaveMenuDeps {
   mapTitle(): string;
   /** Brief user feedback, reusing the HUD toast. */
   toast(text: string): void;
+  /** Notified on open/close so the HUD bar button can reflect the state. */
+  onVisibility?(open: boolean): void;
 }
 
 const API_BASE = '/api/saves';
@@ -87,7 +89,7 @@ export class SaveMenu {
   private readonly nameInput: HTMLInputElement;
   private readonly saveButton: HTMLButtonElement;
   private readonly listBox: HTMLElement;
-  private open = false;
+  private visible = false;
   private busy = false;
 
   constructor(private readonly deps: SaveMenuDeps) {
@@ -112,13 +114,22 @@ export class SaveMenu {
     });
     closeButton.addEventListener('click', () => this.close());
 
+    const exitButton = el('button', {
+      class: 'menu-exit',
+      text: 'Exit to title',
+      attrs: { type: 'button', 'data-testid': 'menu-exit' },
+    });
+    exitButton.addEventListener('click', () => {
+      window.location.href = '/';
+    });
+
     this.panel = el(
       'div',
       { class: 'save-panel', attrs: { 'data-testid': 'save-panel' } },
       el(
         'div',
         { class: 'save-panel-head' },
-        el('span', { class: 'save-panel-title', text: 'Menu' }),
+        el('span', { class: 'save-panel-title', text: 'Game' }),
         closeButton,
       ),
       el(
@@ -133,31 +144,39 @@ export class SaveMenu {
         el('div', { class: 'save-section-title', text: 'Load game' }),
         this.listBox,
       ),
+      el('div', { class: 'save-section save-section-exit' }, exitButton),
     );
     this.panel.hidden = true;
     deps.root.append(this.panel);
-
-    window.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Escape' && this.open) this.close();
-    });
   }
 
-  /** Toggle the panel; opening refreshes the save list and default name. */
-  toggle(): void {
-    if (this.open) this.close();
-    else void this.show();
+  /** True when the panel is open. */
+  get isOpen(): boolean {
+    return this.visible;
+  }
+
+  /** The panel element (persistent; visibility via `hidden`). */
+  get element(): HTMLElement {
+    return this.panel;
+  }
+
+  /** Open the panel; refreshes the save list and default name. */
+  open(): void {
+    void this.show();
   }
 
   private async show(): Promise<void> {
-    this.open = true;
+    this.visible = true;
     this.panel.hidden = false;
+    this.deps.onVisibility?.(true);
     this.nameInput.value = `${this.deps.mapTitle()} quicksave`;
     await this.refresh();
   }
 
   close(): void {
-    this.open = false;
+    this.visible = false;
     this.panel.hidden = true;
+    this.deps.onVisibility?.(false);
   }
 
   // --- Operations -----------------------------------------------------------
@@ -195,7 +214,7 @@ export class SaveMenu {
       };
       await api<SaveGame>('PUT', `/${makeSaveId(name)}`, payload);
       this.deps.toast(`Saved "${name}"`);
-      if (this.open) await this.refresh();
+      if (this.visible) await this.refresh();
     } catch {
       this.deps.toast('Save failed (API offline)');
     } finally {
@@ -225,7 +244,7 @@ export class SaveMenu {
     try {
       await api<void>('DELETE', `/${id}`);
       this.deps.toast(`Deleted "${name}"`);
-      if (this.open) await this.refresh();
+      if (this.visible) await this.refresh();
     } catch {
       this.deps.toast('Delete failed');
     } finally {

@@ -36,6 +36,8 @@ const PAD = { top: 8, right: 8, bottom: 8, left: 30 };
 export interface StatsPanelDeps {
   readonly root: HTMLElement;
   session(): GameSession | null;
+  /** Notified on open/close so the HUD bar button can reflect the state. */
+  onVisibility?(open: boolean): void;
 }
 
 /** CSS `rgb()` for a player index from the shared renderer palette. */
@@ -50,21 +52,16 @@ export class StatsPanel {
   private readonly canvases = new Map<keyof StatsSeries, HTMLCanvasElement>();
   private legend: HTMLElement | null = null;
 
-  constructor(private readonly deps: StatsPanelDeps) {
-    window.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Escape') this.close();
-    });
-  }
+  constructor(private readonly deps: StatsPanelDeps) {}
 
   /** True when the panel is open. */
   get isOpen(): boolean {
     return this.panel !== null;
   }
 
-  /** Open the panel if closed, close it if open. */
-  toggle(): void {
-    if (this.panel) this.close();
-    else this.open();
+  /** The live panel element (null while closed). */
+  get element(): HTMLElement | null {
+    return this.panel;
   }
 
   close(): void {
@@ -78,9 +75,10 @@ export class StatsPanel {
     }
     this.canvases.clear();
     this.legend = null;
+    this.deps.onVisibility?.(false);
   }
 
-  private open(): void {
+  open(): void {
     if (!this.deps.session()) return;
     this.close();
     const closeButton = el('button', {
@@ -130,6 +128,7 @@ export class StatsPanel {
     this.render();
     // Redraw while open so the lines and legend track the running economy.
     this.refreshTimer = window.setInterval(() => this.render(), 500);
+    this.deps.onVisibility?.(true);
   }
 
   private render(): void {

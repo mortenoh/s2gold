@@ -98,6 +98,13 @@ async function disableFog(page: Page): Promise<void> {
   });
 }
 
+/** Pick a game speed via the HUD speed dropdown (custom dropdown, not a select). */
+async function setGameSpeed(page: Page, speed: number): Promise<void> {
+  await page.getByTestId('speed-select').click();
+  await page.locator(`.speed-select .dropdown-list [data-value="${speed}"]`).click();
+  await expect(page.getByTestId('speed-select')).toHaveText(`${speed}x`);
+}
+
 test('game page renders MISS200 terrain without errors', async ({ page }) => {
   test.skip(!(await assetsPresent(page)), 'converted assets not installed');
   const errors = collectErrors(page);
@@ -174,7 +181,9 @@ test('switching maps keeps rendering', async ({ page }) => {
   await page.goto('/game.html');
   await expect(page.locator('body[data-map-ready]')).toBeAttached({ timeout: 15_000 });
 
-  // Pick a different map than the default campaign one (custom dropdown).
+  // Pick a different map than the default campaign one (custom dropdown; the
+  // map picker now lives inside the Settings panel).
+  await page.getByTestId('settings-toggle').click();
   await page.getByTestId('map-select').click();
   const options = page.locator('.dropdown-list [role="option"]');
   const values = await options.evaluateAll((opts) =>
@@ -375,8 +384,7 @@ test('P2 gate: build a wood/plank economy via the UI and watch it run', async ({
   expect(await page.locator('audio').count(), 'a music audio element exists').toBeGreaterThan(0);
 
   // 5) Run at 10x and watch the economy loop close.
-  await page.getByTestId('speed-10').click();
-  await expect(page.getByTestId('speed-10')).toHaveClass(/active/);
+  await setGameSpeed(page, 10);
 
   await page.waitForFunction(
     () => {
@@ -693,7 +701,7 @@ test('P4: two-player battle — borders, garrison panel, attack, capture', async
 
   // Run and wait for both garrisons to fill and territory to establish.
   await page.getByTestId('pause-toggle').click();
-  await page.getByTestId('speed-10').click();
+  await setGameSpeed(page, 10);
   await page.waitForFunction(
     (p) => {
       const d = (window as unknown as { __s2debug: S2Military }).__s2debug;
@@ -807,8 +815,7 @@ test('P6: setup selects a computer opponent that seeds and expands', async ({ pa
 
   // Run fast and watch the computer player build beyond its starting HQ.
   await disableFog(page);
-  await page.getByTestId('speed-10').click();
-  await expect(page.getByTestId('speed-10')).toHaveClass(/active/);
+  await setGameSpeed(page, 10);
   await page.waitForFunction(
     () => (window as unknown as { __s2debug: S2Ai }).__s2debug.buildingsOf(1) >= 2,
     undefined,
@@ -834,7 +841,7 @@ test('P6: statistics panel opens and charts per-player series', async ({ page })
   await disableFog(page);
 
   // Let the economy (and the AI) run so the series accumulate and diverge.
-  await page.getByTestId('speed-10').click();
+  await setGameSpeed(page, 10);
   await page.waitForFunction(
     () => (window as unknown as { __s2debug: S2Ai }).__s2debug.buildingsOf(1) >= 2,
     undefined,
@@ -1010,7 +1017,7 @@ test('P7: seafaring — harbor + ship + expedition founds a harbor on another is
 
   // Run until the expedition kit finishes assembling (ExpeditionReady).
   await page.getByTestId('pause-toggle').click();
-  await page.getByTestId('speed-10').click();
+  await setGameSpeed(page, 10);
   await page.waitForFunction(
     (h) => (window as unknown as { __s2debug: S2Sea }).__s2debug.expeditionReady(h),
     harborId,

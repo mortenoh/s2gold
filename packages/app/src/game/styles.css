@@ -115,6 +115,17 @@ body {
   color: #9aa;
 }
 
+/* Speed picker: labels are at most "50x", so it stays much narrower than the
+   map picker and never yields space when the bar squeezes. */
+.dropdown.speed-select {
+  min-width: 58px;
+  flex-shrink: 0;
+}
+
+.speed-select .dropdown-list {
+  min-width: 58px;
+}
+
 .dropdown-list {
   /* Fixed so the popup escapes the HUD bar's overflow: hidden clip box;
      coordinates are set from the button rect when opening. */
@@ -151,18 +162,17 @@ body {
 }
 
 .hud-top .fps {
-  margin-left: auto;
   font-variant-numeric: tabular-nums;
   color: #8f8;
 }
 
-.hud-top .audio-controls {
+.audio-controls {
   display: inline-flex;
   align-items: center;
   gap: 10px;
 }
 
-.hud-top .audio-group {
+.audio-group {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -171,31 +181,88 @@ body {
   border-radius: 4px;
 }
 
-.hud-top .audio-label {
+.audio-label {
   font-size: 11px;
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: #9aa;
 }
 
-.hud-top .audio-controls input[type='range'] {
+.audio-controls input[type='range'] {
   width: 60px;
   cursor: pointer;
   accent-color: #6f9fe0;
 }
 
-.hud-top button.active {
+.hud-top button.active,
+.settings-panel button.active {
   background: #3f6fb0;
   border-color: #6f9fe0;
   color: #fff;
 }
 
+/* The right-aligned readout cluster (counts + optional zoom/settings/tick/fps)
+   is pushed to the far end of the bar. */
 .hud-top .resources {
+  margin-left: auto;
   font-variant-numeric: tabular-nums;
   color: #ffd479;
   font-weight: 600;
   /* Counts are padded into fixed-width cells; preserve the pad spaces. */
   white-space: pre;
+}
+
+/* Floating Settings panel: seldom-used controls anchored under the Settings
+   button. Fixed positioning (like the dropdown list) escapes the bar's overflow
+   clip; coordinates are set from the button rect on open. */
+.settings-panel {
+  position: fixed;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 220px;
+  padding: 10px;
+  background: rgba(20, 20, 24, 0.96);
+  border: 1px solid #4a4a55;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  color: #ddd;
+  font-size: 12px;
+}
+
+.settings-panel[hidden] {
+  display: none;
+}
+
+.settings-panel .settings-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-panel .settings-label {
+  min-width: 44px;
+  color: #9aa;
+}
+
+.settings-panel .settings-row .dropdown {
+  flex: 1;
+  max-width: none;
+}
+
+.settings-panel button {
+  background: #2a2a32;
+  color: #ddd;
+  border: 1px solid #4a4a55;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.settings-panel .audio-controls {
+  flex-wrap: wrap;
 }
 
 .hud-top .tick {
@@ -449,11 +516,10 @@ body {
   justify-content: flex-end;
 }
 
-/* Save / load overlay panel. */
+/* Game menu (save/load/exit) panel, anchored under the Menu button
+   (top/left set by the hud-panel helper). */
 .save-panel {
-  position: absolute;
-  top: 52px;
-  left: 8px;
+  position: fixed;
   z-index: 30;
   width: 300px;
   max-height: 80vh;
@@ -541,6 +607,16 @@ body {
   cursor: not-allowed;
 }
 
+/* Exit item: separated from the save/load sections by a rule. */
+.save-section-exit {
+  border-top: 1px solid #33333c;
+  padding-top: 8px;
+}
+
+.save-panel button.menu-exit {
+  width: 100%;
+}
+
 .save-list {
   display: flex;
   flex-direction: column;
@@ -601,12 +677,10 @@ body {
 
 /* --- Statistics panel ----------------------------------------------------- */
 
+/* Anchored under their bar buttons (top/left set by the hud-panel helper). */
 .stats-panel,
 .goods-panel {
-  position: absolute;
-  top: 52px;
-  left: 50%;
-  transform: translateX(-50%);
+  position: fixed;
   z-index: 30;
   max-height: 85vh;
   overflow-y: auto;
