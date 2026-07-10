@@ -9,6 +9,79 @@ import { buildMinimapPixels, type Camera, type TerrainMapData } from '@s2gold/re
 /** Maximum on-screen size of the minimap (CSS pixels). */
 const MAX_SIZE = 256;
 
+/** A single line of the viewport outline, in minimap pixels. */
+export interface MinimapSegment {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+/** Wrap a value into [0, period). */
+function wrapInto(value: number, period: number): number {
+  return ((value % period) + period) % period;
+}
+
+/** Sub-intervals of [start, start + len) that fit within [0, period). */
+function seamSpans(start: number, len: number, period: number): Array<[number, number]> {
+  const end = start + len;
+  if (end <= period) return [[start, end]];
+  return [
+    [start, period],
+    [0, end - period],
+  ];
+}
+
+/**
+ * Line segments (minimap pixels) outlining the camera viewport on the torus
+ * minimap. The top-left (rx, ry) is normalised into [0,mw)×[0,mh) and the
+ * width/height are clamped to the minimap size. Each edge is split where it
+ * crosses the wrap seam, so a viewport straddling the map edge draws as two
+ * short pieces rather than a streak spanning the whole minimap. A dimension the
+ * view fully spans emits no perpendicular edges — otherwise the left/right (or
+ * top/bottom) edges collapse onto the seam as a spurious full-length line.
+ */
+export function viewportRectSegments(
+  rx: number,
+  ry: number,
+  rw: number,
+  rh: number,
+  mw: number,
+  mh: number,
+): MinimapSegment[] {
+  const segments: MinimapSegment[] = [];
+  if (mw <= 0 || mh <= 0) return segments;
+
+  const w = Math.min(Math.max(rw, 0), mw);
+  const h = Math.min(Math.max(rh, 0), mh);
+  const x = wrapInto(rx, mw);
+  const y = wrapInto(ry, mh);
+  const fullW = w >= mw;
+  const fullH = h >= mh;
+
+  // Top/bottom edges exist unless the view spans the full map height.
+  if (!fullH) {
+    const yTop = y;
+    const yBot = wrapInto(y + h, mh);
+    for (const [a, b] of seamSpans(x, w, mw)) {
+      segments.push({ x1: a, y1: yTop, x2: b, y2: yTop });
+      segments.push({ x1: a, y1: yBot, x2: b, y2: yBot });
+    }
+  }
+
+  // Left/right edges exist unless the view spans the full map width.
+  if (!fullW) {
+    const xLeft = x;
+    const xRight = wrapInto(x + w, mw);
+    for (const [a, b] of seamSpans(y, h, mh)) {
+      segments.push({ x1: xLeft, y1: a, x2: xLeft, y2: b });
+      segments.push({ x1: xRight, y1: a, x2: xRight, y2: b });
+    }
+  }
+
+  return segments;
+}
+
 export class MinimapView {
   private readonly base: HTMLCanvasElement;
   /** Owner-tint overlay (one pixel per node; transparent where unowned). */
@@ -89,18 +162,19 @@ export class MinimapView {
     ctx.drawImage(this.base, 0, 0, mw, mh);
     ctx.drawImage(this.owners, 0, 0, mw, mh);
 
-    // Viewport rectangle in minimap pixels, drawn at all wrap offsets.
+    // Viewport outline in minimap pixels, split at the torus wrap seam.
     const rx = (camera.x / this.worldW) * mw;
     const ry = (camera.y / this.worldH) * mh;
-    const rw = Math.min(mw, (viewportW / camera.zoom / this.worldW) * mw);
-    const rh = Math.min(mh, (viewportH / camera.zoom / this.worldH) * mh);
+    const rw = (viewportW / camera.zoom / this.worldW) * mw;
+    const rh = (viewportH / camera.zoom / this.worldH) * mh;
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 1;
-    for (const ox of [0, -mw]) {
-      for (const oy of [0, -mh]) {
-        ctx.strokeRect(rx + ox + 0.5, ry + oy + 0.5, rw - 1, rh - 1);
-      }
+    ctx.beginPath();
+    for (const seg of viewportRectSegments(rx, ry, rw, rh, mw, mh)) {
+      ctx.moveTo(seg.x1 + 0.5, seg.y1 + 0.5);
+      ctx.lineTo(seg.x2 + 0.5, seg.y2 + 0.5);
     }
+    ctx.stroke();
   }
 
   private moveTo(ev: PointerEvent): void {
