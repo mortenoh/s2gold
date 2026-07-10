@@ -76,6 +76,35 @@ def test_graphics_converter_schema_and_output(tmp_path: Path) -> None:
 
 
 @_skip
+def test_graphics_converter_cbob_work_animations(tmp_path: Path) -> None:
+    palettes.run(EXTRACTED_DIR, tmp_path)
+    graphics.run(EXTRACTED_DIR, tmp_path)
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    # The CBOB work-animation archive is namespaced so it does not collide with the
+    # MBOB building-graphics archive that keeps the bare `rom_bobs` name.
+    assert "cbob_rom_bobs" in manifest["categories"]["graphics"]
+    assert "rom_bobs" in manifest["categories"]["graphics"]
+
+    cbob_dir = tmp_path / "graphics" / "cbob_rom_bobs"
+    atlas_json = json.loads((cbob_dir / "atlas.json").read_text())
+    assert atlas_json["archive"] == "cbob_rom_bobs"
+    # Every item in this archive is a player-colour figure, so it carries masks.
+    assert atlas_json["pmasks"]
+    assert len(atlas_json["sprites"]) > 1000
+    # Spot-check the work-animation frames the renderer indexes (woodcutter chop 16,
+    # fisher 108, farmer 132); all are player-colour bitmaps.
+    for idx in ("16", "108", "132"):
+        assert idx in atlas_json["sprites"]
+        assert atlas_json["sprites"][idx]["kind"] == "player"
+
+    # Distinct output from the MBOB rom_bobs building archive (different sprite counts).
+    mbob = json.loads((tmp_path / "graphics" / "rom_bobs" / "atlas.json").read_text())
+    assert mbob["archive"] == "rom_bobs"
+    assert len(mbob["sprites"]) != len(atlas_json["sprites"])
+
+
+@_skip
 def test_graphics_converter_player_masks(tmp_path: Path) -> None:
     palettes.run(EXTRACTED_DIR, tmp_path)
     graphics.run(EXTRACTED_DIR, tmp_path)

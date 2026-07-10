@@ -29,15 +29,25 @@ from s2gold.formats.palette import Palette
 STANDARD_PALETTE = "PAL5.BBM"
 
 
-def _archive_paths(extracted: Path) -> list[Path]:
-    """Collect every graphics LST archive in a stable order."""
+def _archive_paths(extracted: Path) -> list[tuple[Path, str]]:
+    """Collect every graphics LST archive with its output archive name, in a stable order.
+
+    Most archives take their bare lowercased stem. The ``DATA/CBOB`` directory ships a
+    *second* ``ROM_BOBS.LST`` — the settler *work* animations (chopping, sawing, fishing,
+    sowing, planting, ...), distinct from the ``DATA/MBOB`` ``ROM_BOBS.LST`` building
+    graphics — so it is namespaced ``cbob_rom_bobs`` to avoid colliding with the MBOB
+    archive that keeps the bare ``rom_bobs`` name.
+    """
     data = extracted / "DATA"
-    paths = sorted((data).glob("*.LST"))
-    paths += sorted((data / "MBOB").glob("*.LST"))
+    entries: list[tuple[Path, str]] = [(p, p.stem.lower()) for p in sorted(data.glob("*.LST"))]
+    entries += [(p, p.stem.lower()) for p in sorted((data / "MBOB").glob("*.LST"))]
+    cbob = data / "CBOB" / "ROM_BOBS.LST"
+    if cbob.exists():
+        entries.append((cbob, "cbob_rom_bobs"))
     boat = data / "BOBS" / "BOAT.LST"
     if boat.exists():
-        paths.append(boat)
-    return paths
+        entries.append((boat, boat.stem.lower()))
+    return entries
 
 
 def run(extracted: Path, assets: Path) -> None:
@@ -49,8 +59,7 @@ def run(extracted: Path, assets: Path) -> None:
     """
     standard = Palette.from_bbm(extracted / "GFX" / "PALETTE" / STANDARD_PALETTE)
     index: dict[str, object] = {}
-    for path in _archive_paths(extracted):
-        name = path.stem.lower()
+    for path, name in _archive_paths(extracted):
         info = _convert_archive(path, standard, assets / "graphics" / name)
         index[name] = f"graphics/{name}/atlas.json"
         print(
