@@ -1,6 +1,13 @@
 import { JOB, JOB_TYPES, type Building, type Settler, type World } from '@s2gold/engine';
 import { describe, expect, it } from 'vitest';
-import { borderStoneSprites, HELPER_BOB_ID, JOB_BOB_ID, workerIsIndoors } from './game-render';
+import {
+  borderStoneSprites,
+  HELPER_BOB_ID,
+  JOB_BOB_ID,
+  WORK_ANIM,
+  workerIsIndoors,
+  workSprite,
+} from './game-render';
 
 /** jobs.bob has 93 job entries; a job id must land inside that range. */
 const JOBS_BOB_JOB_COUNT = 93;
@@ -130,5 +137,41 @@ describe('workerIsIndoors', () => {
   it('never hides a soldier', () => {
     const world = worldWith(42);
     expect(workerIsIndoors(world, worker({ rank: 2, node: 42 }))).toBe(false);
+  });
+});
+
+describe('workSprite', () => {
+  it('returns null for jobs without an action animation (walk-cycle fallback)', () => {
+    expect(workSprite(JOB.carrier, 0)).toBeNull();
+    expect(workSprite(JOB.miner, 3)).toBeNull();
+    expect(workSprite(JOB.stonemason, 0)).toBeNull();
+  });
+
+  it('maps the verified outdoor jobs to their CBOB frame runs', () => {
+    // Frame 0 lands on each block's first frame (empirically verified: woodcutter
+    // axe swing, forester planting, fisher rod cast, farmer scythe).
+    expect(workSprite(JOB.woodcutter, 0)).toBe(16);
+    expect(workSprite(JOB.forester, 0)).toBe(48);
+    expect(workSprite(JOB.fisher, 0)).toBe(108);
+    expect(workSprite(JOB.farmer, 0)).toBe(132);
+  });
+
+  it('loops each run within its own frame range', () => {
+    for (const [job, range] of Object.entries(WORK_ANIM)) {
+      if (!range) continue;
+      for (const frame of [0, 1, range.frames - 1, range.frames, range.frames * 3 + 2]) {
+        const idx = workSprite(job, frame);
+        expect(idx).not.toBeNull();
+        expect(idx).toBeGreaterThanOrEqual(range.start);
+        expect(idx).toBeLessThan(range.start + range.frames);
+      }
+    }
+  });
+
+  it('wraps at the loop boundary (frame count returns to the first frame)', () => {
+    const wc = WORK_ANIM.woodcutter;
+    if (!wc) throw new Error('woodcutter work anim expected');
+    expect(workSprite(JOB.woodcutter, wc.frames)).toBe(workSprite(JOB.woodcutter, 0));
+    expect(workSprite(JOB.woodcutter, wc.frames - 1)).toBe(wc.start + wc.frames - 1);
   });
 });

@@ -39,6 +39,7 @@ import {
   BUILDING_ARCHIVE,
   BOB_ARCHIVE,
   SHIP_ARCHIVE,
+  WORK_ARCHIVE,
 } from './game-render';
 import { Interaction } from './interaction';
 import { MilitaryPanel } from './military-ui';
@@ -442,6 +443,9 @@ async function boot(): Promise<void> {
   // Ship sprites (boot_z) are nation-independent; register once alongside rom_z.
   const shipAtlas = await loadAtlas(SHIP_ARCHIVE);
   if (shipAtlas) sprites.registerAtlas(shipAtlas.meta, shipAtlas.pages, shipAtlas.pmaskPages);
+  // Settler work-animation sprites (CBOB rom_bobs): nation-independent, register once.
+  const workAtlas = await loadAtlas(WORK_ARCHIVE);
+  if (workAtlas) sprites.registerAtlas(workAtlas.meta, workAtlas.pages, workAtlas.pmaskPages);
   const carrier: BobAtlas | null = await loadBobAtlas('carrier', BOB_ARCHIVE);
   if (carrier) sprites.registerAtlas(carrier.meta, carrier.pages, carrier.pmaskPages);
   const jobs: BobAtlas | null = await loadBobAtlas('jobs', JOBS_ARCHIVE);
@@ -930,7 +934,7 @@ async function boot(): Promise<void> {
         ? buildDynamics(
             session.world,
             session.geom,
-            { carrier, jobs, objectArchive: objectAtlasForLandscape(landscape) },
+            { carrier, jobs, objectArchive: objectAtlasForLandscape(landscape), workAvailable: sprites.hasAtlas(WORK_ARCHIVE) },
             { waveFrame, walkFrame, alpha },
             session.fogEnabled ? session.visibility : null,
           )

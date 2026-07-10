@@ -40,6 +40,46 @@ export const BUILDING_ARCHIVE = 'rom_z';
 export const BOB_ARCHIVE = 'carrier';
 /** Ship-sprite archive (converted BOOT_Z.LST): the big sailing ship + shadows. */
 export const SHIP_ARCHIVE = 'boot_z';
+/**
+ * Settler *work*-animation archive (converted DATA/CBOB/ROM_BOBS.LST — the file
+ * RttR loads as "rom_bobs" for job actions, distinct from the MBOB building
+ * graphics that keep the bare `rom_bobs` name). These are self-contained,
+ * single-direction, player-coloured action figures (axe swing, rod cast, scythe,
+ * planting) with their tool + head baked into one sprite, drawn with the sprite's
+ * native anchor so the figure works *beside* the object rather than centred on it.
+ */
+export const WORK_ARCHIVE = 'cbob_rom_bobs';
+
+/**
+ * Per-job work-animation frame ranges within {@link WORK_ARCHIVE}, as
+ * `{ start, frames }` (an inclusive run `start .. start+frames-1`). Each is a
+ * single-direction, in-place action loop the figure plays while at its outdoor
+ * work spot (engine settler `state === 'working'`).
+ *
+ * Verified empirically by decoding the converted atlas and compositing
+ * anchor-aligned filmstrips (the S2 job outfits confirm each block): woodcutter
+ * red cap swinging an axe (16..31), forester green cap kneeling to plant saplings
+ * (48..83), fisher casting a rod over the water (108..131), farmer wide-brim hat
+ * swinging a scythe (132..159). Jobs absent here keep the walk-cycle fallback.
+ */
+export const WORK_ANIM: Partial<Readonly<Record<JobType, { start: number; frames: number }>>> = {
+  woodcutter: { start: 16, frames: 16 },
+  forester: { start: 48, frames: 36 },
+  fisher: { start: 108, frames: 24 },
+  farmer: { start: 132, frames: 28 },
+};
+
+/**
+ * {@link WORK_ARCHIVE} sprite index for a job's work animation at animation
+ * `frame`, or null when the job has no action frames (caller falls back to the
+ * walk cycle). `frame` is taken modulo the loop length, so any monotonically
+ * increasing render-clock counter animates it.
+ */
+export function workSprite(job: JobType, frame: number): number | null {
+  const a = WORK_ANIM[job];
+  if (!a) return null;
+  return a.start + (((frame % a.frames) + a.frames) % a.frames);
+}
 
 /**
  * Ship sprites (boot_z / converted BOOT_Z.LST, clean-room FACTS verified by
@@ -149,6 +189,11 @@ export interface RenderAtlases {
   readonly jobs: BobAtlas | null;
   /** Graphics archive holding the map objects (trees) for the current map. */
   readonly objectArchive: string;
+  /**
+   * Whether the {@link WORK_ARCHIVE} work-animation atlas is registered. When
+   * false, working figures fall back to the walk-cycle-in-place placeholder.
+   */
+  readonly workAvailable: boolean;
 }
 
 /**
@@ -335,7 +380,7 @@ export function buildDynamics(
   anim: SceneAnimation,
   visibility: Uint8Array | null = null,
 ): DynamicSprite[] {
-  const { carrier, jobs, objectArchive } = atlases;
+  const { carrier, jobs, objectArchive, workAvailable } = atlases;
   const out: DynamicSprite[] = [];
   // Fog: a dynamic on a node that is not currently visible is hidden (explored
   // land keeps only its darkened terrain snapshot; unexplored is black). The
@@ -474,6 +519,28 @@ export function buildDynamics(
           spriteIndex: oppBody,
           player: target?.player ?? s.player,
         });
+      }
+    }
+
+    // Real work animation at the outdoor work spot: a stationary worker running
+    // its action timer (state 'working') plays the authentic single-direction
+    // CBOB loop (axe swing / rod cast / scythe / planting) drawn with the
+    // sprite's native anchor, so it works *beside* the tree/field instead of the
+    // walk-cycle-in-place placeholder standing on top of it. Player-coloured like
+    // the other dynamics via the sprite's pmask. Offsetting by settler id keeps a
+    // crew from swinging in lockstep. Jobs without action frames, and workers
+    // walking to/from the spot, fall through to the walk cycle below.
+    if (workAvailable && s.state === 'working') {
+      const wi = workSprite(s.job, anim.walkFrame + s.id);
+      if (wi !== null) {
+        out.push({
+          worldX: pos.x,
+          worldY: pos.y,
+          archive: WORK_ARCHIVE,
+          spriteIndex: wi,
+          player: s.player,
+        });
+        continue;
       }
     }
 
