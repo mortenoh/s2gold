@@ -19,6 +19,7 @@ import {
   BUILDING_DEFS,
   buildingDef,
   DIRECTIONS,
+  isWaterNode,
   resourceAmount,
   resourceType,
   TICKS,
@@ -87,19 +88,54 @@ export const WARE_JOB: Readonly<Record<WareType, number>> = {
 
 /**
  * JOBS.BOB job id per engine worker job, used to select the profession overlay
- * (clothing/tool) layered over the generic walking body. FACTS from RttR
- * `gameData/JobConsts.cpp` JOB_SPRITE_CONSTS `jobBobId` (Job enum order):
- * Woodchopper=5, Tree-planter(forester)=8, Carpenter(sawmill)=6, Stonemason=7,
- * Builder=23. The generic Helper/carrier (0) uses the carrier BOB instead, so
- * it is intentionally absent here.
+ * (clothing + head + tool) layered over the generic *headless* walking body.
+ * FACTS from RttR `gameData/JobConsts.cpp` JOB_SPRITE_CONSTS `jobBobId`.
+ *
+ * The seven outdoor economy jobs were verified visually against the converted
+ * jobs.bob (rendered body+overlay per job): woodcutter 5 (red cap + axe),
+ * sawmiller 6 (saw), stonemason 7 (purple cap + pickaxe), forester 8 (green cap
+ * + shovel), farmer 9 (scythe), fisher 12 (rod), builder 23 (hammer). The
+ * remaining civilian ids are the RttR JOB_SPRITE_CONSTS constants; each is
+ * bounds-checked (< jobs.bob's 93 job entries) and every entry renders a head,
+ * so no civilian ever draws headless. The generic Helper overlay (0) — used for
+ * empty-handed carriers, the wellman and any unmapped civilian — lives in
+ * {@link HELPER_BOB_ID}; the carrier job itself uses the carrier BOB when it is
+ * actually carrying a ware, so it is intentionally absent here.
  */
 export const JOB_BOB_ID: Partial<Readonly<Record<JobType, number>>> = {
+  builder: 23,
   woodcutter: 5,
   forester: 8,
   sawmiller: 6,
   stonemason: 7,
-  builder: 23,
+  fisher: 12,
+  hunter: 13,
+  farmer: 9,
+  miller: 10,
+  baker: 11,
+  butcher: 14,
+  miner: 3,
+  brewer: 18,
+  pigbreeder: 16,
+  donkeybreeder: 15,
+  ironfounder: 20,
+  minter: 21,
+  metalworker: 22,
+  armorer: 19,
+  wellman: 0,
+  scout: 35,
+  shipwright: 24,
+  geologist: 4,
 };
+
+/**
+ * JOBS.BOB job id of the generic Helper figure (plain clothes + head, no tool).
+ * The BOB body sprites are headless torsos — the head only ever ships in an
+ * overlay — and the carrier BOB has no bare-head overlay (all 34 of its job
+ * overlays carry a good). So an empty-handed carrier borrows the Helper overlay
+ * from jobs.bob to get its head back, exactly as the original composes it.
+ */
+export const HELPER_BOB_ID = 0;
 
 /** mapbobs sprite index of the pine (species 0) grown tree + its shadow. */
 const SAPLING_SPRITE = 200;
@@ -222,6 +258,49 @@ function moverAnchor(
     }
   }
   return { x: from.x, y: from.y, dir: idleDir, moving: false };
+}
+
+/**
+ * True when a civilian worker is currently *inside* its workplace and so should
+ * not be drawn: the engine leaves an idle harvester/workshop worker parked on
+ * its building's node, which would otherwise render a figure on the building.
+ * A worker walking in/out (toBuilding/toWork/working/home) has a different state
+ * and stays visible.
+ */
+export function workerIsIndoors(world: World, s: Settler): boolean {
+  if (s.rank >= 0 || s.state !== 'idle' || s.homeBuildingId < 0) return false;
+  const home = world.buildings.items[s.homeBuildingId];
+  return !!home && home.node === s.node;
+}
+
+/**
+ * Push one jobs.bob figure (headless body + profession/head overlay) into the
+ * scene. The overlay carries the head, so every jobs.bob figure has one; when a
+ * cell has no overlay the head would be missing, but jobs.bob links resolve for
+ * every animation cell, so this only ever happens for an out-of-range job id.
+ */
+function pushJobFigure(
+  out: DynamicSprite[],
+  jobs: BobAtlas,
+  jobBob: number,
+  dir: number,
+  step: number,
+  x: number,
+  y: number,
+  player: number,
+): void {
+  const body = jobs.bodyTable[0]?.[dir]?.[step];
+  if (body === undefined) return;
+  out.push({ worldX: x, worldY: y, archive: jobs.archive, spriteIndex: body, player });
+  const link = jobs.links[jobBob]?.[step]?.[0]?.[dir];
+  if (link !== undefined) {
+    out.push({
+      worldX: x,
+      worldY: y + 0.01, // head/tool overlay just in front of the body
+      archive: jobs.archive,
+      spriteIndex: jobs.overlayBase + link,
+    });
+  }
 }
 
 /** Interpolated ground anchor + facing for a settler, `alpha` into the tick. */
@@ -355,15 +434,28 @@ export function buildDynamics(
     }
   }
 
-  // Settlers. Workers walking to/from their site render the generic body plus
-  // their JOBS.BOB profession overlay (axe, saw, shovel, pickaxe, hammer);
-  // carriers keep the carrier body and draw the ware they carry.
+  // Settlers. Workers walking to/from their site render the generic *headless*
+  // body plus their JOBS.BOB profession overlay (which carries the head + tool);
+  // carriers keep the carrier body and draw the ware they carry (its overlay
+  // also carries the head). An empty-handed carrier borrows the Helper overlay
+  // so it is not a headless torso.
   for (const s of world.settlers.items) {
     if (!s) continue;
     if (hidden(s.node)) continue;
+    // A civilian resting inside its workplace is not shown: the engine parks an
+    // idle harvester/workshop worker on its building node, and drawing it would
+    // stick a figure on the building's wall/roof. Outdoor states
+    // (toBuilding/toWork/working/home) still render at ground level.
+    if (workerIsIndoors(world, s)) continue;
+
     const pos = settlerAnchor(world, geom, s, anim.alpha);
     const dir = bobDir(pos.dir);
-    const step = pos.moving ? (anim.walkFrame + s.id) % BOB_WALK_FRAMES : 0;
+    // Animate the walk cycle while travelling and while working: a stationary
+    // worker at its work spot cycles the same 8 overlay steps on the render
+    // clock so the tool bobs (chopping/fishing/sowing read as active). Idle
+    // figures hold step 0. Never keyed off sim state beyond reading `state`.
+    const animating = pos.moving || s.state === 'working';
+    const step = animating ? (anim.walkFrame + s.id) % BOB_WALK_FRAMES : 0;
     const jobBob = JOB_BOB_ID[s.job];
 
     // A duel is fought on the attacking soldier alone (the defender is virtual);
@@ -385,38 +477,23 @@ export function buildDynamics(
       }
     }
 
+    // Mapped civilian profession: jobs.bob body + profession overlay (head+tool).
     if (jobs && jobBob !== undefined) {
-      const body = jobs.bodyTable[0]?.[dir]?.[step];
-      if (body === undefined) continue;
-      out.push({
-        worldX: pos.x,
-        worldY: pos.y,
-        archive: jobs.archive,
-        spriteIndex: body,
-        player: s.player,
-      });
-      const link = jobs.links[jobBob]?.[step]?.[0]?.[dir];
-      if (link !== undefined) {
-        out.push({
-          worldX: pos.x,
-          worldY: pos.y + 0.01, // ware/tool overlay just in front of the body
-          archive: jobs.archive,
-          spriteIndex: jobs.overlayBase + link,
-        });
-      }
+      pushJobFigure(out, jobs, jobBob, dir, step, pos.x, pos.y, s.player);
       continue;
     }
 
-    const bodyKey = carrier.bodyTable[0]?.[dir]?.[step];
-    if (bodyKey === undefined) continue;
-    out.push({
-      worldX: pos.x,
-      worldY: pos.y,
-      archive: BOB_ARCHIVE,
-      spriteIndex: bodyKey,
-      player: s.player,
-    });
+    // Carrier hauling a ware: carrier body + the ware overlay (which has a head).
     if (s.carryingWareId >= 0) {
+      const bodyKey = carrier.bodyTable[0]?.[dir]?.[step];
+      if (bodyKey === undefined) continue;
+      out.push({
+        worldX: pos.x,
+        worldY: pos.y,
+        archive: BOB_ARCHIVE,
+        spriteIndex: bodyKey,
+        player: s.player,
+      });
       const ware = world.wares.items[s.carryingWareId];
       if (ware) {
         const overlay = wareOverlay(carrier, ware.type, dir, step);
@@ -430,7 +507,26 @@ export function buildDynamics(
           });
         }
       }
+      continue;
     }
+
+    // Empty-handed civilian (idle/travelling carrier, wellman, any unmapped
+    // job): draw the Helper figure so it keeps its head. Soldiers have no jobs
+    // overlay yet, so they fall back to the bare carrier body (unchanged).
+    if (jobs && s.rank < 0) {
+      pushJobFigure(out, jobs, HELPER_BOB_ID, dir, step, pos.x, pos.y, s.player);
+      continue;
+    }
+
+    const bodyKey = carrier.bodyTable[0]?.[dir]?.[step];
+    if (bodyKey === undefined) continue;
+    out.push({
+      worldX: pos.x,
+      worldY: pos.y,
+      archive: BOB_ARCHIVE,
+      spriteIndex: bodyKey,
+      player: s.player,
+    });
   }
 
   // Ships gliding over the water lattice (same interpolation as settlers). A
