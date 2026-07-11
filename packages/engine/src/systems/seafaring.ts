@@ -412,6 +412,19 @@ function stepOneShip(ctx: SeaContext, events: EventSink, ship: Ship): void {
     case 'shuttleBack': {
       const arrived = ship.pathIndex >= ship.path.length ? true : stepShip(ship);
       if (!arrived) break;
+      // Cargo that could not be delivered (the destination harbor vanished
+      // mid-voyage) unloads back at home instead of stranding aboard, where
+      // it would inflate dispatch's en-route counts forever. A full home flag
+      // retries next tick; a razed home frees the wares (nowhere to land).
+      if (ship.cargo.length > 0) {
+        const home = world.buildings.items[ship.homeHarborId];
+        if (home && home.type === BUILDING.harbor) {
+          if (!unloadAtDest(world, ship, home)) break;
+        } else {
+          for (const wid of ship.cargo) storeFree(world.wares, wid);
+          ship.cargo.length = 0;
+        }
+      }
       ship.destHarborId = -1;
       ship.state = 'idle';
       events.emit({
@@ -477,10 +490,22 @@ function beginReturnHome(ctx: SeaContext, ship: Ship): void {
 
 /** Draw boards/stones/builder from the player pool into preparing expeditions. */
 function runExpeditionAssembly(world: World, events: EventSink): void {
-  for (const e of world.expeditions) {
-    if (e.ready) continue;
+  for (let i = world.expeditions.length - 1; i >= 0; i--) {
+    const e = world.expeditions[i];
     const player = world.players[e.player];
     if (!player) continue;
+    // The harbor died (demolished/captured) before launch: refund the kit to
+    // the pool and drop the expedition, or it would keep draining materials
+    // and a builder toward a launch that can never happen.
+    const harbor = world.buildings.items[e.harborId];
+    if (!harbor || harbor.type !== BUILDING.harbor || harbor.player !== e.player) {
+      player.wares.plank = (player.wares.plank ?? 0) + e.boards;
+      player.wares.stone = (player.wares.stone ?? 0) + e.stones;
+      if (e.hasBuilder) player.workers[JOB.builder] = (player.workers[JOB.builder] ?? 0) + 1;
+      world.expeditions.splice(i, 1);
+      continue;
+    }
+    if (e.ready) continue;
     while (e.boards < SEA.expeditionBoards && (player.wares.plank ?? 0) > 0) {
       player.wares.plank--;
       e.boards++;

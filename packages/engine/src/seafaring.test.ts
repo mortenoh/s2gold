@@ -23,7 +23,7 @@ import { applyCommand } from './commands';
 import { makeTwoIslandMap, TWO_ISLAND } from './harness';
 import { spawnBuilding, connectBuildings, garrisonBuilding } from './harness-economy';
 import { recalcTerritory } from './systems/territory';
-import { getBuilding, getFlag, storeAlloc, type Ship } from './world';
+import { getBuilding, getFlag, storeAlloc, storeLive, type Ship } from './world';
 
 type Geom = ReturnType<typeof worldGeometry>;
 
@@ -202,6 +202,73 @@ describe('P7 sea ware transport', () => {
     }
     expect(sawCargo).toBe(true); // the ship physically carried the ware across water
     expect(delivered).toBe(true); // it reached the storehouse on the far island
+  });
+
+
+  it('unloads stranded cargo at home when the destination harbor dies mid-voyage', () => {
+    const { world, geom, harborA } = setupTransport(8);
+
+    // Let the ship load and depart, then raze the whole destination island
+    // economy (harbor B and the storehouse the ware is bound for).
+    let sailing = false;
+    for (let i = 0; i < 2000 && !sailing; i++) {
+      tickWorld(world);
+      sailing = shipsOf(world, 0).some((s) => s.cargo.length > 0);
+    }
+    expect(sailing).toBe(true);
+    for (const b of [...harborsOf(world, 0)]) {
+      if (b.id !== harborA) applyCommand(world, { player: 0, type: 'demolish', node: b.node });
+    }
+    const store = [...storeLive(world.buildings)].find((b) => b.type === BUILDING.storehouse);
+    if (store) applyCommand(world, { player: 0, type: 'demolish', node: store.node });
+
+    // Pre-fix the ship returned home and idled with the plank aboard forever
+    // (loc='ship', en-route count inflated). Now it unloads at home.
+    let unloaded = false;
+    for (let i = 0; i < 4000 && !unloaded; i++) {
+      tickWorld(world);
+      const homeFlag = getFlag(world, getBuilding(world, harborA).flagId);
+      const shipEmptyIdle = shipsOf(world, 0).every(
+        (sh) => sh.state === 'idle' && sh.cargo.length === 0,
+      );
+      const plankBack =
+        homeFlag.wares.some((wid) => world.wares.items[wid]?.type === 'plank') ||
+        (world.players[0].wares.plank ?? 0) > 0;
+      unloaded = shipEmptyIdle && plankBack;
+    }
+    expect(unloaded).toBe(true);
+  });
+
+  it('refunds and drops an expedition when its harbor is demolished', () => {
+    const world = createWorld(makeTwoIslandMap(), { seed: 9, players: 1 });
+    const geom = worldGeometry(world);
+    const harborA = spawnBuilding(
+      world,
+      geom,
+      geom.index(TWO_ISLAND.harborA.x, TWO_ISLAND.harborA.y),
+      BUILDING.harbor,
+    );
+    const planks0 = world.players[0].wares.plank ?? 0;
+    const stones0 = world.players[0].wares.stone ?? 0;
+    const builders0 = world.players[0].workers.builder ?? 0;
+
+    applyCommand(world, { player: 0, type: 'prepareExpedition', harborId: harborA.id });
+    let ready = false;
+    for (let i = 0; i < 50 && !ready; i++) {
+      for (const e of tickWorld(world)) if (e.type === 'ExpeditionReady') ready = true;
+    }
+    expect(ready).toBe(true);
+    expect((world.players[0].wares.plank ?? 0)).toBeLessThan(planks0); // kit drawn
+
+    applyCommand(world, { player: 0, type: 'demolish', node: harborA.node });
+    for (let i = 0; i < 5; i++) tickWorld(world);
+
+    // Pre-fix the expedition entry persisted forever with its materials and
+    // builder locked up. Now the kit is refunded and the entry dropped.
+    expect(world.expeditions.length).toBe(0);
+    expect(world.players[0].wares.plank ?? 0).toBe(planks0);
+    expect(world.players[0].wares.stone ?? 0).toBe(stones0);
+    expect(world.players[0].workers.builder ?? 0).toBe(builders0);
   });
 });
 
