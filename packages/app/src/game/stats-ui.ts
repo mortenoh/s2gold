@@ -135,6 +135,13 @@ export class StatsPanel {
    * comparison and still tracks the running economy (robust once the ring buffer
    * saturates and its length stops growing).
    */
+  /** Force the next update to redraw (e.g. after a save load replaced the
+   * world: the newest sample tick may collide with the one last drawn). */
+  invalidate(): void {
+    this.lastSampleTick = -1;
+    this.update();
+  }
+
   update(): void {
     if (!this.panel) return;
     const session = this.deps.session();

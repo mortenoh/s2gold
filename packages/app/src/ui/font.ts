@@ -149,7 +149,7 @@ export class BitmapFont {
 
   /** Fetch `fonts/<name>.json` + its PNG and build a ready-to-draw font. */
   static async load(name: string): Promise<BitmapFont> {
-    const res = await fetch(assetUrl(`fonts/${name}.json`), { cache: 'force-cache' });
+    const res = await fetch(assetUrl(`fonts/${name}.json`), { cache: 'no-cache' });
     if (!res.ok) throw new Error(`font ${name}: HTTP ${String(res.status)}`);
     const json = (await res.json()) as FontJson;
     const image = json.image.includes('/') ? json.image : `fonts/${json.image}`;

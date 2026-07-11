@@ -6,6 +6,7 @@ Converter subcommands are registered by the modules under s2gold.convert as they
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from typing import Annotated
 
@@ -43,9 +44,17 @@ def extract(
     if find_tool("innoextract") is None:
         typer.echo("innoextract not found — install it first (brew install innoextract)", err=True)
         raise typer.Exit(1)
-    dest.mkdir(parents=True, exist_ok=True)
+    # Extract into a sibling temp dir and promote on success, so an interrupted
+    # run never leaves a partial tree that later runs mistake for complete.
+    tmp = dest.with_name(dest.name + ".partial")
+    if tmp.exists():
+        shutil.rmtree(tmp)
+    tmp.mkdir(parents=True)
     typer.echo(f"extracting {installer.name} -> {dest}")
-    run_tool(["innoextract", "-d", str(dest), "-s", str(installer)])
+    run_tool(["innoextract", "-d", str(tmp), "-s", str(installer)])
+    if dest.exists():
+        shutil.rmtree(dest)
+    tmp.replace(dest)
     typer.echo("extraction complete")
 
 

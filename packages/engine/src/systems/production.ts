@@ -17,6 +17,7 @@ import {
   isTreeType,
   OBJ_INDEX_MATURE,
   OBJ_INDEX_SAPLING,
+  FLAG_WARE_CAPACITY,
   OBJ_TYPE,
   OBJ_TYPE_CROP,
   OBJ_TYPE_SAPLING,
@@ -206,7 +207,7 @@ function nearestResource(
 function placeOutput(world: World, events: EventSink, b: Building): void {
   if (b.outputQueue.length === 0) return;
   const flag = getFlag(world, b.flagId);
-  while (b.outputQueue.length > 0 && flag.wares.length < 8) {
+  while (b.outputQueue.length > 0 && flag.wares.length < FLAG_WARE_CAPACITY) {
     const outType = b.outputQueue.shift() as WareType;
     const wid = storeAlloc(world.wares, (id) => ({
       id,

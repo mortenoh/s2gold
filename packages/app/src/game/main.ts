@@ -993,6 +993,16 @@ async function boot(): Promise<void> {
     mapTitle: () => currentMapTitle,
     toast: saveToast,
     onVisibility: (open) => syncHudPanelButton(menuButton, open),
+    onLoaded: () => {
+      // Restored counters are history, not fresh events: sync the toast edge
+      // detectors so loading a save does not fire phantom sea toasts, and
+      // force the stats charts to redraw the restored series.
+      if (session) {
+        prevExpReady = session.counters.expeditionsReady;
+        prevExpLanded = session.counters.expeditionsLanded;
+      }
+      statsPanel.invalidate();
+    },
   });
   // WebGL context loss (GPU reset, driver update, background eviction): the
   // GL resources are gone and nothing rebuilds them, so without handling this

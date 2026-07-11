@@ -47,6 +47,8 @@ export interface SaveMenuDeps {
   toast(text: string): void;
   /** Notified on open/close so the HUD bar button can reflect the state. */
   onVisibility?(open: boolean): void;
+  /** Notified after a save has been loaded into the session (UI re-sync). */
+  onLoaded?(): void;
 }
 
 const API_BASE = '/api/saves';
@@ -229,6 +231,7 @@ export class SaveMenu {
     try {
       const save = await api<SaveGame>('GET', `/${id}`);
       session.loadWorld(save.data);
+      this.deps.onLoaded?.();
       this.deps.toast(`Loaded "${save.name}" (tick ${save.tick})`);
       this.close();
     } catch {

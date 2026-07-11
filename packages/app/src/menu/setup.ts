@@ -214,8 +214,11 @@ export async function renderSetup(root: HTMLElement): Promise<void> {
     previewTitle.textContent = entry.title;
     previewInfo.textContent = `${entry.width} x ${entry.height}  -  ${entry.players} player${entry.players === 1 ? '' : 's'}  -  ${entry.terrain_name}`;
     // Clear stale selectors while the map JSON (which carries hq_x) loads.
+    // Start stays disabled until the slots exist: clicking in the gap would
+    // read zero opponent selectors and launch a solo game on a map that
+    // should default slot 1 to a computer player.
     buildSlots([]);
-    startBtn.disabled = false;
+    startBtn.disabled = true;
     startBtn.dataset.map = entry.name;
 
     const token = ++previewToken;
@@ -227,6 +230,7 @@ export async function renderSetup(root: HTMLElement): Promise<void> {
       const mapData = await fetchJson<{ hq_x?: number[] }>(assetUrl(entry.file));
       if (token !== previewToken) return; // superseded by a newer selection
       buildSlots(opponentSlots(mapData?.hq_x));
+      startBtn.disabled = false;
       const preview = await buildMapPreview(entry.file);
       if (token !== previewToken) return; // superseded by a newer selection
       preview.canvas.className = 'minimap-canvas';

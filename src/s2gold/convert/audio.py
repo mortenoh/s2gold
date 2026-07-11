@@ -12,6 +12,7 @@ failure) when a soundfont, fluidsynth, or ffmpeg is unavailable.
 
 from __future__ import annotations
 
+import http.client
 import struct
 import urllib.request
 from pathlib import Path
@@ -197,23 +198,41 @@ def _resolve_soundfont() -> Path | None:
 
     for candidate_dir in (ASSETS_CACHE, HOMEBREW_SOUNDFONTS):
         if candidate_dir.is_dir():
-            found = sorted(candidate_dir.glob("*.sf2"))
-            if found:
-                return found[0]
+            for found in sorted(candidate_dir.glob("*.sf2")):
+                # Sanity-check the header: a truncated file left by an
+                # interrupted download must not be reused as a cache hit.
+                if _looks_like_sf2(found):
+                    return found
+                print(f"[audio] ignoring invalid soundfont {found}")
 
     # Last resort: download GeneralUser GS (LGPL) into the gitignored cache.
     ASSETS_CACHE.mkdir(parents=True, exist_ok=True)
     dest = ASSETS_CACHE / GENERALUSER_GS_NAME
+    tmp = dest.with_suffix(".sf2.partial")
     try:
         print(f"[audio] downloading soundfont {GENERALUSER_GS_URL}")
         with urllib.request.urlopen(GENERALUSER_GS_URL) as resp:  # noqa: S310 - fixed trusted URL
-            dest.write_bytes(resp.read())
-    except OSError as exc:
+            tmp.write_bytes(resp.read())
+        tmp.replace(dest)
+    except (OSError, http.client.HTTPException) as exc:
+        # IncompleteRead is an HTTPException, not an OSError; either way the
+        # partial file is discarded so it can never poison the cache.
+        tmp.unlink(missing_ok=True)
         print(f"[audio] soundfont download failed: {exc}")
         return None
-    if dest.is_file() and dest.stat().st_size > 0:
+    if _looks_like_sf2(dest):
         return dest
     return None
+
+
+def _looks_like_sf2(path: Path) -> bool:
+    """True when the file carries the RIFF/sfbk header of a real SoundFont."""
+    try:
+        with path.open("rb") as fh:
+            header = fh.read(12)
+    except OSError:
+        return False
+    return len(header) == 12 and header[:4] == b"RIFF" and header[8:12] == b"sfbk"
 
 
 def _convert_music(extracted: Path, assets: Path) -> dict[str, object] | None:

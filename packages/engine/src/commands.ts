@@ -22,6 +22,7 @@ import {
   ownerPlayer,
   TICKS,
   WARE,
+  FLAG_WARE_CAPACITY,
   type BuildingType,
   type WareType,
 } from './constants';
@@ -645,7 +646,7 @@ function execCheatSpawnWare(
   const flag = world.flags.items[flagId];
   if (!flag || flag.player !== player) return;
   const type: WareType = wareType ?? WARE.trunk;
-  for (let i = 0; i < count && flag.wares.length < 8; i++) {
+  for (let i = 0; i < count && flag.wares.length < FLAG_WARE_CAPACITY; i++) {
     const wid = storeAlloc(world.wares, (id) => ({
       id,
       type,

@@ -14,7 +14,7 @@
  * en-route count for the next pick.
  */
 
-import { buildingDef, WARE, WARE_TYPES, type WareType } from '../constants';
+import { buildingDef, FLAG_WARE_CAPACITY, WARE, WARE_TYPES, type WareType } from '../constants';
 import type { EventSink } from '../events';
 import type { Geometry } from '../geometry';
 import { buildSeaContext, chooseWareRoute, type SeaContext } from './seafaring';
@@ -194,7 +194,7 @@ function runWarehouseSupply(world: World, geom: Geometry, seaCtx: SeaContext): v
         // Targets found to be unroutable this pass; skipped so the neediest
         // unconnected site can't starve the reachable ones behind it.
         const skip = new Set<number>();
-        while (player.wares[wareType] > 0 && whFlag.wares.length < 8) {
+        while (player.wares[wareType] > 0 && whFlag.wares.length < FLAG_WARE_CAPACITY) {
           const target = findNeeder(world, geom, player.index, wareType, whFlag.node, skip);
           if (target < 0) break;
           // A ware only leaves the warehouse when it can actually travel: either
