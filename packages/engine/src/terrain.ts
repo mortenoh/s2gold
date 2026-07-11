@@ -2,13 +2,23 @@
  * Terrain-id classification for buildability and walkability.
  *
  * Terrain ids are the low 6 bits of a texture1/texture2 byte (mask 0x3f, per
- * the renderer's TERRAIN_ID_MASK). The semantic groupings below follow the
- * GREENLAND landscape set (the P2 target map MISS200 is greenland); wasteland
- * and winter reuse the same id slots for different materials, so those sets need
- * their own tables later.
+ * the renderer's TERRAIN_ID_MASK). A texture-id *slot* holds a different material
+ * in each landscape set, so the buildable/impassable tables are per-landscape and
+ * selected with {@link rulesForLandscape} from the map's landscape id (matching
+ * the renderer's LandscapeSet: 0 greenland, 1 wasteland, 2 winter).
  *
- * TODO(CONSTANTS): add wasteland/winter classification once needed (P3+). The
- * impassable set is parameterizable so callers can override per landscape.
+ * The classifications are researched facts cross-checked against the RttR terrain
+ * descriptions (data/RTTR/gamedata/world/{greenland,wasteland,winterworld}.lua)
+ * and the per-landscape id semantics already encoded in the renderer's minimap
+ * colour tables (packages/renderer/src/terrain-data.ts). The meadow/steppe/
+ * savannah family (0x00, 0x08-0x0a, 0x0e, 0x0f) is buildable ground in every
+ * landscape; landscapes differ mainly in which slots are impassable hazards:
+ *
+ *  - greenland: swamp (0x03) and snow (0x02) join the shared water/lava set.
+ *  - winter: the desert slots become ICE (0x04, 0x07) and the mountain-meadow
+ *    slot becomes SNOW (0x12) — all unwalkable.
+ *  - wasteland: the mountain-meadow slot becomes dark MOOR (0x12) — unwalkable;
+ *    the desert slots (0x04, 0x07) stay walkable sand.
  */
 
 /** Low-6-bit mask isolating the terrain id from a texture byte (FACT). */
@@ -19,14 +29,18 @@ export function terrainId(textureByte: number): number {
   return textureByte & TERRAIN_ID_MASK;
 }
 
-/** Meadow/grass family — buildable ground for normal buildings (greenland). */
+/**
+ * Meadow/grass family — buildable ground for normal buildings. Shared by all
+ * three landscapes: these slots hold meadow (greenland), tundra/taiga (winter)
+ * and pasture/dry-steppe (wasteland), all of which are walkable, buildable ground.
+ */
 export const BUILDABLE_IDS: ReadonlySet<number> = new Set([
-  0x08, // meadow 1
-  0x09, // meadow 2
-  0x0a, // meadow 3
-  0x0f, // meadow with flowers
+  0x08, // meadow 1 / tundra 1 / pasture 1
+  0x09, // meadow 2 / tundra 2 / pasture 2
+  0x0a, // meadow 3 / tundra 3 / pasture 3
+  0x0f, // meadow with flowers / winter meadow / dry steppe
   0x0e, // steppe
-  0x00, // savannah
+  0x00, // savannah / taiga / dry steppe
 ]);
 
 /** Mountain family — walkable and mineable, but only mines may be built. */
@@ -52,6 +66,30 @@ export const DEFAULT_IMPASSABLE: ReadonlySet<number> = new Set([
   0x16, // lava 4
 ]);
 
+/**
+ * Impassable terrain ids (winter): the shared greenland hazards plus the frozen
+ * slots. In winter the desert slots become ICE (0x04, 0x07) and the greenland
+ * mountain-meadow slot becomes deep SNOW (0x12); all are unwalkable, matching the
+ * ice floes (0x02, 0x03) already carried by the shared set.
+ */
+export const WINTER_IMPASSABLE: ReadonlySet<number> = new Set([
+  ...DEFAULT_IMPASSABLE,
+  0x04, // ice 1
+  0x07, // ice 2
+  0x12, // snow (winter)
+]);
+
+/**
+ * Impassable terrain ids (wasteland): the shared greenland hazards plus the dark
+ * MOOR that occupies the mountain-meadow slot (0x12). Wasteland lava rides the
+ * shared flowing-lava ids (0x10, 0x11, 0x14-0x16); the desert slots (0x04, 0x07)
+ * stay walkable sand, so they are deliberately absent here.
+ */
+export const WASTELAND_IMPASSABLE: ReadonlySet<number> = new Set([
+  ...DEFAULT_IMPASSABLE,
+  0x12, // moor (wasteland)
+]);
+
 /** Configurable terrain semantics used by geometry-aware systems. */
 export interface TerrainRules {
   readonly buildable: ReadonlySet<number>;
@@ -63,6 +101,34 @@ export const GREENLAND_RULES: TerrainRules = {
   buildable: BUILDABLE_IDS,
   impassable: DEFAULT_IMPASSABLE,
 };
+
+/** Rules for the winter landscape set (ice + snow are unwalkable). */
+export const WINTER_RULES: TerrainRules = {
+  buildable: BUILDABLE_IDS,
+  impassable: WINTER_IMPASSABLE,
+};
+
+/** Rules for the wasteland landscape set (lava + moor are unwalkable). */
+export const WASTELAND_RULES: TerrainRules = {
+  buildable: BUILDABLE_IDS,
+  impassable: WASTELAND_IMPASSABLE,
+};
+
+/**
+ * Terrain rules for a map's landscape id, matching the renderer's LandscapeSet
+ * numbering (0 greenland, 1 wasteland, 2 winter). Unknown ids fall back to
+ * greenland so older/partial maps still load.
+ */
+export function rulesForLandscape(landscape: number): TerrainRules {
+  switch (landscape) {
+    case 1:
+      return WASTELAND_RULES;
+    case 2:
+      return WINTER_RULES;
+    default:
+      return GREENLAND_RULES;
+  }
+}
 
 /** True when a texture byte is buildable ground under the given rules. */
 export function isBuildableTexture(textureByte: number, rules: TerrainRules): boolean {

@@ -11,8 +11,11 @@ import { describe, expect, it } from 'vitest';
 import {
   borderStoneSprites,
   BUILDING_ARCHIVE,
+  WINTER_BUILDING_ARCHIVE,
+  buildingArchiveForLandscape,
   HELPER_BOB_ID,
   JOB_BOB_ID,
+  roadSegments,
   signSizeOffset,
   signSprites,
   WORK_ANIM,
@@ -104,6 +107,29 @@ describe('borderStoneSprites', () => {
     const vis = new Uint8Array([2, 0, 1]); // only node 0 currently visible
     const stones = borderStoneSprites(world, [0, 1, 2], 0, vis);
     expect(stones).toHaveLength(1);
+  });
+
+  it('draws border stones from the winter nation archive when given one', () => {
+    const world = waterWorld(3, []);
+    const stones = borderStoneSprites(world, [0, 1, 2], 1, null, WINTER_BUILDING_ARCHIVE);
+    expect(stones).toHaveLength(3);
+    for (const s of stones) {
+      expect(s.archive).toBe(WINTER_BUILDING_ARCHIVE);
+      expect(s.spriteIndex).toBe(0); // parity: same standing-stone index as rom_z
+      expect(s.shadowIndex).toBe(1);
+    }
+  });
+});
+
+describe('buildingArchiveForLandscape', () => {
+  it('uses the summer rom_z archive for greenland and wasteland', () => {
+    expect(buildingArchiveForLandscape(0)).toBe(BUILDING_ARCHIVE); // greenland
+    expect(buildingArchiveForLandscape(1)).toBe(BUILDING_ARCHIVE); // wasteland
+  });
+
+  it('swaps to the winter W* nation archive only for winter maps', () => {
+    expect(buildingArchiveForLandscape(2)).toBe(WINTER_BUILDING_ARCHIVE);
+    expect(WINTER_BUILDING_ARCHIVE).toBe('wrom_z');
   });
 });
 

@@ -22,7 +22,7 @@ import {
   findWalkPath,
   findWaterPath,
   flagAt,
-  GREENLAND_RULES,
+  rulesForLandscape,
   harborDockNode,
   harborsOf,
   militaryView,
@@ -48,6 +48,7 @@ import {
   type MapJson,
   type MilitaryView,
   type Ship,
+  type TerrainRules,
   type World,
 } from '@s2gold/engine';
 import { soundForEvent, type SoundCue } from './audio-map';
@@ -173,7 +174,8 @@ export class GameSession {
   world: World;
   /** Geometry over {@link world}; rebuilt when the world is replaced. */
   geom: Geometry;
-  readonly rules = GREENLAND_RULES;
+  /** Terrain rules selected from the map's landscape (winter/wasteland/greenland). */
+  readonly rules: TerrainRules;
   readonly counters: GameCounters = zeroCounters();
 
   paused = false;
@@ -212,6 +214,7 @@ export class GameSession {
 
   constructor(map: MapJson, seed: number, players?: number, aiPlayers?: readonly number[]) {
     this.world = createWorld(map, { seed, players });
+    this.rules = rulesForLandscape(map.terrain ?? 0);
     this.geom = worldGeometry(this.world);
     this.visibility = new Uint8Array(this.world.width * this.world.height);
     this.recomputeVisibility();

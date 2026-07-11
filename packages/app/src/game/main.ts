@@ -588,6 +588,15 @@ async function boot(): Promise<void> {
     }
     objAtlasReady = sprites.hasAtlas(archive);
 
+    // Winter maps swap the Roman building/flag/border-stone graphics to the W*
+    // nation archive (wrom_z); greenland/wasteland keep the summer rom_z that is
+    // registered once at startup. Load the winter archive lazily on first winter map.
+    const nationArchive = buildingArchiveForLandscape(map.terrain);
+    if (!sprites.hasAtlas(nationArchive)) {
+      const loaded = await loadAtlas(nationArchive);
+      if (loaded) sprites.registerAtlas(loaded.meta, loaded.pages, loaded.pmaskPages);
+    }
+
     // Computer opponents: keep only slot indices this map can seat, then seed
     // enough players to cover the highest AI slot (human is always slot 0).
     const ai = aiPlayers.filter((n) => n > 0 && n < entry.players);
@@ -1053,7 +1062,13 @@ async function boot(): Promise<void> {
         ? buildDynamics(
             session.world,
             session.geom,
-            { carrier, jobs, objectArchive: objectAtlasForLandscape(landscape), workAvailable: sprites.hasAtlas(WORK_ARCHIVE) },
+            {
+              carrier,
+              jobs,
+              buildingArchive: buildingArchiveForLandscape(landscape),
+              objectArchive: objectAtlasForLandscape(landscape),
+              workAvailable: sprites.hasAtlas(WORK_ARCHIVE),
+            },
             { waveFrame, walkFrame, alpha },
             session.fogEnabled ? session.visibility : null,
           )
@@ -1068,8 +1083,9 @@ async function boot(): Promise<void> {
     if (session) {
       const vis = session.fogEnabled ? session.visibility : null;
       const objectArchive = objectAtlasForLandscape(landscape);
+      const nationArchive = buildingArchiveForLandscape(landscape);
       for (let p = 0; p < session.playerCount; p++) {
-        for (const s of borderStoneSprites(session.world, borderCache[p] ?? [], p, vis)) {
+        for (const s of borderStoneSprites(session.world, borderCache[p] ?? [], p, vis, nationArchive)) {
           borderStones.push(s);
         }
       }

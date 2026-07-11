@@ -78,7 +78,12 @@ export { seedRng, nextUint, nextRange, cloneRng } from './rng';
 export type { RngState } from './rng';
 export {
   GREENLAND_RULES,
+  WINTER_RULES,
+  WASTELAND_RULES,
+  rulesForLandscape,
   DEFAULT_IMPASSABLE,
+  WINTER_IMPASSABLE,
+  WASTELAND_IMPASSABLE,
   BUILDABLE_IDS,
   MOUNTAIN_IDS,
   NAVIGABLE_WATER_IDS,

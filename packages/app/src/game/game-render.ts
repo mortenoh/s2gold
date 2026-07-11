@@ -38,6 +38,15 @@ import type { BobAtlas } from './bob-atlas';
 
 /** Archive keys the sprite renderer indexes these layers by. */
 export const BUILDING_ARCHIVE = 'rom_z';
+/**
+ * Winter building/flag/border-stone archive (converted WROM_Z.LST). The W* nation
+ * archives are a separate winter-only family in the original data (extracted
+ * DATA/MBOB has WROM_Z/WAFR_Z/WJAP_Z/WVIK_Z alongside the summer ROM_Z, ...). Its
+ * sprite indices are parity-matched to {@link BUILDING_ARCHIVE} for every index we
+ * use (border stone 0/1, flags 100..117, buildings 250+5*id), so the same index
+ * formulas drive it — only the pixels differ (snow-covered roofs, icy stones).
+ */
+export const WINTER_BUILDING_ARCHIVE = 'wrom_z';
 export const BOB_ARCHIVE = 'carrier';
 /** Ship-sprite archive (converted BOOT_Z.LST): the big sailing ship + shadows. */
 export const SHIP_ARCHIVE = 'boot_z';
@@ -52,6 +61,17 @@ export const SHIP_ARCHIVE = 'boot_z';
 export const WORK_ARCHIVE = 'cbob_rom_bobs';
 
 /**
+ * Building/flag/border-stone archive for a landscape id (renderer LandscapeSet:
+ * 0 greenland, 1 wasteland, 2 winter). Only WINTER maps swap to the W* nation
+ * archive in the original game — greenland AND wasteland both keep the summer
+ * {@link BUILDING_ARCHIVE} (rom_z). Mirrors how {@link objectAtlasForLandscape}
+ * selects the map-object atlas per landscape.
+ */
+export function buildingArchiveForLandscape(landscape: number): string {
+  return landscape === 2 ? WINTER_BUILDING_ARCHIVE : BUILDING_ARCHIVE;
+}
+
+/**
  * Per-job work-animation frame ranges within {@link WORK_ARCHIVE}, as
  * `{ start, frames }` (an inclusive run `start .. start+frames-1`). Each is a
  * single-direction, in-place action loop the figure plays while at its outdoor
@@ -59,12 +79,21 @@ export const WORK_ARCHIVE = 'cbob_rom_bobs';
  *
  * Verified empirically by decoding the converted atlas and compositing
  * anchor-aligned filmstrips (the S2 job outfits confirm each block): woodcutter
- * red cap swinging an axe (16..31), forester green cap kneeling to plant saplings
+ * red cap swinging an axe (16..31), stonemason purple cap swinging a pickaxe with
+ * stone chips flying (40..47), forester green cap kneeling to plant saplings
  * (48..83), fisher casting a rod over the water (108..131), farmer wide-brim hat
  * swinging a scythe (132..159). Jobs absent here keep the walk-cycle fallback.
+ *
+ * The stonemason block (40..47) is the only run in the whole archive that carries
+ * purple-cap pixels — the S2 quarry-worker cap colour, matching the jobs.bob id-7
+ * walking figure's purple cap and its pickaxe. It sits between the woodcutter and
+ * forester blocks (a brown-cap ground-hacking run at 32..39 precedes it); the cap
+ * is baked purple (only the tunic is a player-colour region in the pmask), so it
+ * stays purple under every owner's tint exactly like the original.
  */
 export const WORK_ANIM: Partial<Readonly<Record<JobType, { start: number; frames: number }>>> = {
   woodcutter: { start: 16, frames: 16 },
+  stonemason: { start: 40, frames: 8 },
   forester: { start: 48, frames: 36 },
   fisher: { start: 108, frames: 24 },
   farmer: { start: 132, frames: 28 },
@@ -188,6 +217,12 @@ export interface RenderAtlases {
   readonly carrier: BobAtlas;
   /** JOBS.BOB atlas (profession bodies + overlays), or null when unavailable. */
   readonly jobs: BobAtlas | null;
+  /**
+   * Nation archive for buildings/flags: {@link BUILDING_ARCHIVE} (rom_z) on
+   * greenland/wasteland maps, {@link WINTER_BUILDING_ARCHIVE} (wrom_z) on winter.
+   * Select with {@link buildingArchiveForLandscape}.
+   */
+  readonly buildingArchive: string;
   /** Graphics archive holding the map objects (trees) for the current map. */
   readonly objectArchive: string;
   /**
@@ -381,7 +416,7 @@ export function buildDynamics(
   anim: SceneAnimation,
   visibility: Uint8Array | null = null,
 ): DynamicSprite[] {
-  const { carrier, jobs, objectArchive, workAvailable } = atlases;
+  const { carrier, jobs, buildingArchive, objectArchive, workAvailable } = atlases;
   const out: DynamicSprite[] = [];
   // Fog: a dynamic on a node that is not currently visible is hidden (explored
   // land keeps only its darkened terrain snapshot; unexplored is black). The
@@ -400,7 +435,7 @@ export function buildDynamics(
       out.push({
         worldX: a.x,
         worldY: a.y,
-        archive: BUILDING_ARCHIVE,
+        archive: buildingArchive,
         spriteIndex: site.sprite,
         shadowIndex: site.shadow,
         player: b.player,
@@ -411,7 +446,7 @@ export function buildDynamics(
         out.push({
           worldX: a.x,
           worldY: a.y + 0.01, // draw just after the skeleton at the same depth
-          archive: BUILDING_ARCHIVE,
+          archive: buildingArchive,
           spriteIndex: done.sprite,
           clipBottom: reveal,
           player: b.player,
@@ -425,7 +460,7 @@ export function buildDynamics(
     out.push({
       worldX: a.x,
       worldY: a.y,
-      archive: BUILDING_ARCHIVE,
+      archive: buildingArchive,
       spriteIndex: sprite,
       shadowIndex: shadow,
       player: b.player,
@@ -459,7 +494,7 @@ export function buildDynamics(
     out.push({
       worldX: a.x,
       worldY: a.y,
-      archive: BUILDING_ARCHIVE,
+      archive: buildingArchive,
       spriteIndex: FLAG_SPRITE_BASE + frame,
       shadowIndex: FLAG_SHADOW_BASE + frame,
       player: f.player,
@@ -711,6 +746,7 @@ export function borderStoneSprites(
   nodes: readonly number[],
   player: number,
   visibility: Uint8Array | null = null,
+  buildingArchive: string = BUILDING_ARCHIVE,
 ): DynamicSprite[] {
   const out: DynamicSprite[] = [];
   for (const node of nodes) {
@@ -720,7 +756,7 @@ export function borderStoneSprites(
     out.push({
       worldX: a.x,
       worldY: a.y,
-      archive: BUILDING_ARCHIVE,
+      archive: buildingArchive,
       spriteIndex: BORDER_STONE_SPRITE,
       shadowIndex: BORDER_STONE_SHADOW,
       player,
