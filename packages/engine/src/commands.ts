@@ -611,6 +611,10 @@ function execDemolish(
   if (bId >= 0) {
     const b = world.buildings.items[bId] as Building;
     if (b.player !== player || b.type === BUILDING.headquarters) return;
+    // Return the garrison to the idle soldier pool: garrison entries are
+    // per-rank counts that die with the building object otherwise.
+    const owner = world.players[b.player];
+    if (owner) for (let r = 0; r < b.garrison.length; r++) owner.soldiers[r] += b.garrison[r];
     // Remove the bound worker settler, if any.
     if (b.workerId >= 0 && world.settlers.items[b.workerId]) {
       world.settlers.items[b.workerId] = null;

@@ -18,6 +18,20 @@ import { garrisonBuilding, spawnBuilding } from './harness-economy';
 import { recalcTerritory } from './systems/territory';
 import { storeLive } from './world';
 
+type TestWorld = ReturnType<typeof createWorld>;
+
+/** Every soldier a player owns: idle pool + all garrisons + live soldier settlers. */
+function soldierTotal(world: TestWorld, player: number): number {
+  let n = world.players[player].soldiers.reduce((a, c) => a + c, 0);
+  for (const b of storeLive(world.buildings)) {
+    if (b.player === player) n += b.garrison.reduce((a, c) => a + c, 0);
+  }
+  for (const s of storeLive(world.settlers)) {
+    if (s.player === player && s.rank >= 0) n++;
+  }
+  return n;
+}
+
 function run(world: ReturnType<typeof createWorld>, n: number): GameEvent[] {
   const all: GameEvent[] = [];
   for (let i = 0; i < n; i++) all.push(...tickWorld(world));
@@ -80,5 +94,88 @@ describe('flag ownership is enforced', () => {
     applyCommand(world, { type: 'buildRoad', player: 1, path }); // rightful owner
     tickWorld(world);
     expect([...storeLive(world.roads)].length).toBe(before + 1);
+  });
+});
+
+describe('soldiers are never silently deleted', () => {
+  it('attackers walk home when the target is demolished mid-march', () => {
+    // P0 at (2,2), P1 at (34,10); a P0 guardhouse attacks a nearby P1 one.
+    const world = createWorld(makeFlatMap(48, 20, 2, 2, [{ x: 34, y: 10 }]), {
+      seed: 11,
+      players: 2,
+    });
+    const geom = worldGeometry(world);
+    const src = spawnBuilding(world, geom, geom.index(12, 10), 'guardhouse', 0);
+    garrisonBuilding(src, [5, 0, 0, 0, 0]);
+    const tgt = spawnBuilding(world, geom, geom.index(22, 10), 'guardhouse', 1);
+    garrisonBuilding(tgt, [2, 0, 0, 0, 0]);
+    recalcTerritory(world, geom);
+    const before = soldierTotal(world, 0);
+
+    applyCommand(world, { type: 'attack', player: 0, targetBuildingId: tgt.id, soldiers: 3 });
+    run(world, 5); // attackers are on the road
+    applyCommand(world, { type: 'demolish', player: 1, node: tgt.node });
+    run(world, 3000); // marchers arrive at nothing and must walk home
+
+    // Pre-fix the three marchers were storeFree'd on arrival (total drops to 2).
+    expect(soldierTotal(world, 0)).toBe(before);
+  });
+
+  it('demolishing an own military building returns its garrison to the pool', () => {
+    const world = createWorld(makeFlatMap(30, 30, 2, 2), { seed: 12, players: 1 });
+    const geom = worldGeometry(world);
+    const gh = spawnBuilding(world, geom, geom.index(12, 12), 'guardhouse', 0);
+    garrisonBuilding(gh, [2, 1, 0, 0, 0]);
+    const before = soldierTotal(world, 0);
+    expect(before).toBeGreaterThanOrEqual(3);
+
+    applyCommand(world, { type: 'demolish', player: 0, node: gh.node });
+    run(world, 2);
+
+    // Pre-fix the per-rank garrison counts died with the building object.
+    expect(soldierTotal(world, 0)).toBe(before);
+  });
+});
+
+describe('captures do not absorb rival attackers', () => {
+  it("a third player's waiting soldier is not merged into the capturer's garrison", () => {
+    // P0 owns the contested guardhouse; P1 (close) and P2 (farther) both attack.
+    const world = createWorld(
+      makeFlatMap(48, 24, 2, 2, [
+        { x: 34, y: 12 },
+        { x: 44, y: 20 },
+      ]),
+      { seed: 13, players: 3 },
+    );
+    const geom = worldGeometry(world);
+    const tgt = spawnBuilding(world, geom, geom.index(22, 12), 'guardhouse', 0);
+    garrisonBuilding(tgt, [1, 0, 0, 0, 0]);
+    const src1 = spawnBuilding(world, geom, geom.index(16, 12), 'guardhouse', 1);
+    garrisonBuilding(src1, [2, 0, 0, 0, 0]);
+    const src2 = spawnBuilding(world, geom, geom.index(19, 16), 'guardhouse', 2);
+    garrisonBuilding(src2, [0, 0, 0, 0, 2]);
+    recalcTerritory(world, geom);
+    const before1 = soldierTotal(world, 1);
+    const before2 = soldierTotal(world, 2);
+
+    // One attacker each: after the capture the guardhouse has spare capacity,
+    // so a co-waiting rival soldier would be absorbed pre-fix.
+    applyCommand(world, { type: 'attack', player: 1, targetBuildingId: tgt.id, soldiers: 1 });
+    applyCommand(world, { type: 'attack', player: 2, targetBuildingId: tgt.id, soldiers: 1 });
+
+    const died = [0, 0, 0];
+    for (let i = 0; i < 6000; i++) {
+      for (const e of tickWorld(world)) {
+        if (e.type === 'SoldierDied') died[e.player]++;
+      }
+    }
+
+    // Conservation for BOTH attackers (whichever captures first): every
+    // soldier is in the pool, a garrison of an own building, alive on the
+    // map, or died in a duel (with an event). Pre-fix the co-waiting rival
+    // was silently absorbed into the capturer's garrison, so one side's sum
+    // came up short with no death event.
+    expect(soldierTotal(world, 1) + died[1]).toBe(before1);
+    expect(soldierTotal(world, 2) + died[2]).toBe(before2);
   });
 });

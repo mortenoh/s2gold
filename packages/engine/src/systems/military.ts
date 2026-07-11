@@ -345,8 +345,11 @@ function stepOccupy(world: World, geom: Geometry, events: EventSink, s: Settler)
   if (!arrived) return;
   const b = world.buildings.items[s.homeBuildingId];
   if (!b || b.player !== s.player || !isMilitary(b)) {
-    // Building gone or captured while walking: soldier is lost.
+    // Building gone or captured while walking: rejoin the idle pool rather
+    // than vanish.
     if (b && b.incoming > 0) b.incoming--;
+    const owner = world.players[s.player];
+    if (owner) owner.soldiers[s.rank]++;
     storeFree(world.settlers, s.id);
     return;
   }
@@ -393,7 +396,9 @@ function stepMarch(
   if (!arrived) return;
   const b = world.buildings.items[s.attackTargetId];
   if (!b) {
-    storeFree(world.settlers, s.id); // target vanished
+    // Target vanished (demolished mid-march): walk home instead of being
+    // deleted, or the defender could erase whole armies by razing the hut.
+    sendSoldierHome(world, geom, rules, s);
     return;
   }
   if (b.player === s.player) {
@@ -410,7 +415,7 @@ function stepMarch(
       }
       return;
     }
-    storeFree(world.settlers, s.id);
+    sendSoldierHome(world, geom, rules, s);
     return;
   }
   if (defenderCount(world, b) > 0) startDuel(world, events, s, b);
@@ -418,15 +423,22 @@ function stepMarch(
 }
 
 /** A soldier in a duel: resolve one round every FIGHT_ROUND_GF ticks (§5). */
-function stepFight(world: World, events: EventSink, s: Settler): void {
+function stepFight(
+  world: World,
+  geom: Geometry,
+  rules: TerrainRules,
+  events: EventSink,
+  s: Settler,
+): void {
   if (s.fightTimer > 0) {
     s.fightTimer--;
     if (s.fightTimer > 0) return;
   }
   const b = world.buildings.items[s.attackTargetId];
   if (!b || b.player === s.player) {
-    // Target lost / became ours mid-fight: stop fighting.
-    storeFree(world.settlers, s.id);
+    // Target lost / became ours mid-fight: stop fighting and walk home
+    // (the soldier must not simply vanish).
+    sendSoldierHome(world, geom, rules, s);
     return;
   }
 
@@ -500,6 +512,7 @@ function resolveCaptures(
     const first = world.settlers.items[attackerIds[0]];
     if (!first) continue;
     const isHq = buildingDef(b.type)?.kind === 'hq';
+    const capturer = first.player;
     captureBuilding(world, geom, events, b, first);
     storeFree(world.settlers, first.id);
     // Remaining attackers reinforce the freshly captured building up to its
@@ -509,6 +522,9 @@ function resolveCaptures(
     for (let i = 1; i < attackerIds.length; i++) {
       const s = world.settlers.items[attackerIds[i]];
       if (!s) continue;
+      // A rival attacker (other player) does not merge into the capturer's
+      // garrison: it stays waiting and duels the new owner next tick.
+      if (s.player !== capturer) continue;
       if (survived && garrisonCount(b) < cap) {
         b.garrison[s.rank]++;
         storeFree(world.settlers, s.id);
@@ -535,7 +551,7 @@ function runSoldiers(world: World, geom: Geometry, rules: TerrainRules, events: 
         stepMarch(world, geom, rules, events, s);
         break;
       case 'soldierFight':
-        stepFight(world, events, s);
+        stepFight(world, geom, rules, events, s);
         break;
       default:
         break;
