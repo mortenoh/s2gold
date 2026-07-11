@@ -19,7 +19,7 @@ import type { EventSink } from '../events';
 import type { Geometry } from '../geometry';
 import { findWalkPath } from '../pathfinding';
 import { isMountainTexture, type TerrainRules } from '../terrain';
-import { getBuilding, storeFree, storeLive, type Settler, type World } from '../world';
+import { storeFree, storeLive, type Settler, type World } from '../world';
 import { beginWalk, stepWalk, walkDone } from './movement';
 
 /** True when a node's terrain is mountain (where ore/signs live). */
@@ -62,8 +62,12 @@ function stepGeologist(world: World, geom: Geometry, rules: TerrainRules, g: Set
       g.timer--;
       return;
     }
-    // Head home to rejoin the Helper pool.
-    const hq = g.homeBuildingId >= 0 ? getBuilding(world, g.homeBuildingId) : null;
+    // Head home to rejoin the Helper pool. The home may have been razed or
+    // captured while surveying (and its id even reused by another building),
+    // so look it up leniently instead of getBuilding, which would throw out
+    // of tickWorld and kill the simulation.
+    const home = g.homeBuildingId >= 0 ? (world.buildings.items[g.homeBuildingId] ?? null) : null;
+    const hq = home && home.player === g.player ? home : null;
     if (!hq) {
       retire(world, g);
       return;
