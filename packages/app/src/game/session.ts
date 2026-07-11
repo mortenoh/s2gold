@@ -693,7 +693,17 @@ export class GameSession {
     if (startNode === endNode) return null;
     // blockFlags: a road can't cross another flag, so plan around interior flags
     // — otherwise the path previews as valid but buildRoad silently rejects it.
-    const rest = findWalkPath(this.world, this.geom, this.rules, startNode, endNode, true);
+    // ownedBy: execBuildRoad rejects any node outside the player's territory,
+    // so the preview must plan around foreign land the same way the AI does.
+    const rest = findWalkPath(
+      this.world,
+      this.geom,
+      this.rules,
+      startNode,
+      endNode,
+      true,
+      this.localPlayer,
+    );
     if (!rest || rest.length === 0) return null;
     return [startNode, ...rest];
   }

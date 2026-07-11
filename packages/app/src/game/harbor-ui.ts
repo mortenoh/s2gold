@@ -86,8 +86,8 @@ export class HarborPanel {
     const session = this.deps.session();
     // The harbor may have been demolished/captured while open.
     if (!session.harborAt(this.node) || session.harborAt(this.node)?.id !== this.harborId) {
-      clear(panel);
-      panel.append(el('div', { class: 'mil-title', text: 'Harbor lost' }));
+      // Demolished/captured while open: dismiss instead of a dead shell.
+      this.close();
       return;
     }
     clear(panel);

@@ -91,9 +91,9 @@ export class MilitaryPanel {
     const session = this.deps.session();
     const view = session.militaryAt(this.node);
     if (!view || view.buildingId !== this.buildingId) {
-      // The building was captured/razed while open: reflect it and stop.
-      clear(panel);
-      panel.append(el('div', { class: 'mil-title', text: 'Building lost' }));
+      // The building was captured/razed while open: dismiss the panel (the
+      // refresh interval dies with it) rather than showing a dead shell.
+      this.close();
       return;
     }
     clear(panel);
