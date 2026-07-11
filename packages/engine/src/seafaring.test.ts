@@ -204,9 +204,8 @@ describe('P7 sea ware transport', () => {
     expect(delivered).toBe(true); // it reached the storehouse on the far island
   });
 
-
   it('unloads stranded cargo at home when the destination harbor dies mid-voyage', () => {
-    const { world, geom, harborA } = setupTransport(8);
+    const { world, harborA } = setupTransport(8);
 
     // Let the ship load and depart, then raze the whole destination island
     // economy (harbor B and the storehouse the ware is bound for).
@@ -258,7 +257,7 @@ describe('P7 sea ware transport', () => {
       for (const e of tickWorld(world)) if (e.type === 'ExpeditionReady') ready = true;
     }
     expect(ready).toBe(true);
-    expect((world.players[0].wares.plank ?? 0)).toBeLessThan(planks0); // kit drawn
+    expect(world.players[0].wares.plank ?? 0).toBeLessThan(planks0); // kit drawn
 
     applyCommand(world, { player: 0, type: 'demolish', node: harborA.node });
     for (let i = 0; i < 5; i++) tickWorld(world);

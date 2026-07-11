@@ -14,9 +14,16 @@ import {
   type GameEvent,
 } from './index';
 import { makeFlatMap } from './harness';
-import { claimArea, connectRoad, garrisonBuilding, spawnBuilding } from './harness-economy';
+import {
+  claimArea,
+  connectRoad,
+  connectToHq,
+  garrisonBuilding,
+  placeBuildingAndTick,
+  spawnBuilding,
+} from './harness-economy';
 import { recalcTerritory } from './systems/territory';
-import { storeLive } from './world';
+import { storeAlloc, storeLive } from './world';
 
 type TestWorld = ReturnType<typeof createWorld>;
 
@@ -181,7 +188,7 @@ describe('captures do not absorb rival attackers', () => {
 });
 
 describe('flags do not split foreign roads', () => {
-  it("placing a flag on an ex-enemy road leaves the enemy road intact", () => {
+  it('placing a flag on an ex-enemy road leaves the enemy road intact', () => {
     // P1 builds a road on its own land; the land then changes hands to P0.
     const world = createWorld(makeFlatMap(40, 20, 2, 2, [{ x: 30, y: 10 }]), {
       seed: 21,
@@ -217,4 +224,87 @@ describe('flags do not split foreign roads', () => {
       expect(r.flagB).not.toBe(flagId);
     }
   });
+});
+
+describe('non-contiguous HQ slots', () => {
+  it('seeds every declared HQ slot, not just the first N', () => {
+    const map = makeFlatMap(40, 20, 4, 10);
+    map.hq_x = [4, 0xffff, 34, 0xffff, 0xffff, 0xffff, 0xffff];
+    map.hq_y = [10, 0xffff, 10, 0xffff, 0xffff, 0xffff, 0xffff];
+    const world = createWorld(map, { seed: 31 });
+
+    // Pre-fix: wanted = validHqs.length = 2, so slot 2's real HQ was never
+    // seeded and a phantom HQ-less player 1 took its place.
+    expect(world.players.length).toBe(3);
+    expect(world.players[0].hqBuildingId).toBeGreaterThanOrEqual(0);
+    expect(world.players[2].hqBuildingId).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('coin toggle applies to in-flight coins', () => {
+  it('a coin already at the door flag is rejected after coins are toggled off', () => {
+    const world = createWorld(makeFlatMap(30, 20, 2, 2), { seed: 32, players: 1 });
+    const geom = worldGeometry(world);
+    const gh = spawnBuilding(world, geom, geom.index(12, 10), 'guardhouse', 0);
+    garrisonBuilding(gh, [2, 0, 0, 0, 0]);
+    expect(gh.coinsEnabled).toBe(true);
+
+    // A coin parked on the door flag, already targeted at the guardhouse.
+    const flag = world.flags.items[gh.flagId]!;
+    const wid = storeAlloc(world.wares, (id) => ({
+      id,
+      type: 'coins',
+      loc: 'flag' as const,
+      locId: gh.flagId,
+      targetBuildingId: gh.id,
+      nextFlag: -1,
+    }));
+    flag.wares.push(wid);
+
+    applyCommand(world, { type: 'toggleCoins', player: 0, buildingId: gh.id, enabled: false });
+    run(world, 5);
+
+    // Pre-fix tryDeliver's generic input branch absorbed the coin anyway and
+    // runPromotion later consumed it. Now the toggle is honored end to end.
+    expect(gh.inputStock[0] ?? 0).toBe(0);
+    const w = world.wares.items[wid];
+    if (w) expect(w.targetBuildingId).not.toBe(gh.id);
+  });
+});
+
+describe('harbor completion claims territory', () => {
+  it('recalculates ownership the moment a built harbor starts working', () => {
+    // Flat map with a west water strip; the HQ is far from the harbor spot.
+    const map = makeFlatMap(40, 20, 30, 10);
+    const world = createWorld(map, { seed: 33, players: 1 });
+    const geom = worldGeometry(world);
+    // Paint columns 0..3 water on both triangle layers (0x05 = navigable).
+    for (let y = 0; y < 20; y++) {
+      for (let x = 0; x <= 3; x++) {
+        const i = geom.index(x, y);
+        world.terrain1[i] = 0x05;
+        world.terrain2[i] = 0x05;
+      }
+    }
+    // Hand the build corridor to player 0 (recalc later rederives ownership).
+    claimArea(world, geom, 4, 8, 31, 12, 0);
+    const spot = geom.index(4, 10);
+    placeBuildingAndTick(world, spot, 'harbor');
+    expect(connectToHq(world, geom, spot)).toBeTruthy();
+    tickWorld(world);
+
+    const probe = geom.index(4, 15); // inside HARBOR_RADIUS, outside HQ reach
+    expect(ownerAt(world, probe)).toBe(-1);
+
+    let completedAt = -1;
+    for (let i = 0; i < 20000 && completedAt < 0; i++) {
+      for (const e of tickWorld(world)) {
+        if (e.type === 'BuildingCompleted') completedAt = world.tick;
+      }
+    }
+    expect(completedAt).toBeGreaterThan(0);
+    // Pre-fix nothing recalculated territory on completion, so the harbor
+    // claimed no land until some unrelated event triggered a recalc.
+    expect(ownerAt(world, probe)).toBe(0);
+  }, 60_000);
 });

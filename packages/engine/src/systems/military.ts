@@ -623,7 +623,7 @@ function runCatapults(world: World, geom: Geometry, events: EventSink): void {
     if (candidates.length === 0) continue;
     b.inputStock[0]--; // consume one stone per shot (§7)
     const target = getBuilding(world, candidates[nextRange(world.rng, candidates.length)]);
-    const hit = nextRange(world.rng, 99) < CATAPULT.hitPercent; // 70% (§7)
+    const hit = nextRange(world.rng, 100) < CATAPULT.hitPercent; // 70% (§7)
     if (hit) catapultKill(events, target);
     b.workTimer = CATAPULT.wait; // between-shot wait (original S2 310 GF)
     events.emit({

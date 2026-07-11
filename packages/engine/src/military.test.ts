@@ -418,16 +418,17 @@ describe('catapult attrition (MILITARY.md §7)', () => {
     const geom = worldGeometry(world);
     world.players[1].soldiers = [0, 0, 0, 0, 0]; // no reinforcement for the target
     const cat = spawnBuilding(world, geom, geom.index(16, 10), 'catapult', 0, false);
-    cat.inputStock = [4]; // 4 stones -> up to 4 shots
+    cat.inputStock = [8]; // 8 stones -> up to 8 shots (robust to RNG-stream shifts)
     const gh = spawnBuilding(world, geom, geom.index(22, 10), 'guardhouse', 1, false);
     garrisonBuilding(gh, [3, 0, 0, 0, 0]); // distance 6 < 14 -> in range
 
-    const before = militaryView(world, gh.id)?.troops ?? 0;
-    const events = runTicks(world, 1400); // ~4 shots at 310 GF spacing
+    const events = runTicks(world, 2800); // ~8 shots at 310 GF spacing
 
     expect(events.some((e) => e.type === 'CatapultFired')).toBe(true);
-    const after = militaryView(world, gh.id)?.troops ?? 0;
-    expect(after).toBeLessThan(before); // at least one shot killed a soldier
+    // At least one shot killed a defender. (Asserted via events: over a long
+    // run the HQ recruits replacements, so the final garrison may recover.)
+    const kills = events.filter((e) => e.type === 'SoldierDied' && e.player === 1).length;
+    expect(kills).toBeGreaterThan(0);
   });
 });
 

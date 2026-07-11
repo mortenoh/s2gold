@@ -454,7 +454,10 @@ export function createWorld(map: MapJson, options: CreateWorldOptions): World {
     const hy = map.hq_y[p];
     if (hx !== undefined && hy !== undefined && hx !== 0xffff && hy !== 0xffff) validHqs.push(p);
   }
-  const wanted = options.players ?? validHqs.length;
+  // Default to covering the highest declared HQ slot: maps may leave gaps
+  // (e.g. slots 0 and 2 valid, 1 empty), and counting would drop the last
+  // real player while seeding a phantom HQ-less one.
+  const wanted = options.players ?? (validHqs.length > 0 ? validHqs[validHqs.length - 1] + 1 : 0);
 
   for (let p = 0; p < wanted; p++) {
     const hx = map.hq_x[p];

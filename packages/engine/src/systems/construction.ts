@@ -15,6 +15,7 @@ import { findWalkPath } from '../pathfinding';
 import type { TerrainRules } from '../terrain';
 import { getBuilding, getFlag, storeFree, storeLive, type World } from '../world';
 import { beginWalk, spawnSettler, stepWalk, walkDone } from './movement';
+import { recalcTerritory } from './territory';
 import { ensureWorkerAvailable } from './recruit';
 
 /** Run construction for one tick. */
@@ -68,12 +69,17 @@ export function runConstruction(
     // Builder present: advance the build once all material is on site.
     if (b.deliveredBoards >= b.needBoards && b.deliveredStones >= b.needStones) {
       b.buildProgress++;
-      if (b.buildProgress >= b.buildTicks) completeBuilding(world, events, b.id);
+      if (b.buildProgress >= b.buildTicks) completeBuilding(world, geom, events, b.id);
     }
   }
 }
 
-function completeBuilding(world: World, events: EventSink, buildingId: number): void {
+function completeBuilding(
+  world: World,
+  geom: Geometry,
+  events: EventSink,
+  buildingId: number,
+): void {
   const b = getBuilding(world, buildingId);
   // Return the builder to the HQ pool.
   if (b.workerId >= 0 && world.settlers.items[b.workerId]) {
@@ -92,6 +98,11 @@ function completeBuilding(world: World, events: EventSink, buildingId: number): 
   }
   // Ensure a serving flag lookup stays valid.
   getFlag(world, b.flagId);
+  // A completed harbor projects territory like an HQ-lite; claim it now
+  // rather than waiting for some unrelated event to trigger a recalc.
+  if (b.type === BUILDING.harbor && recalcTerritory(world, geom)) {
+    events.emit({ type: 'TerritoryChanged', player: b.player });
+  }
   events.emit({
     type: 'BuildingCompleted',
     buildingId: b.id,

@@ -154,7 +154,11 @@ function tryDeliver(world: World, events: EventSink, flag: Flag, wareId: number)
   } else {
     const def = buildingDef(b.type);
     const idx = def ? def.inputs.indexOf(w.type) : -1;
-    if (def && idx >= 0 && (b.inputStock[idx] ?? 0) < def.inputCap) {
+    // Same gate as demand(): a military building that is unoccupied or has
+    // coins toggled off also rejects coins already in flight to it.
+    const coinsBlocked =
+      def?.kind === 'military' && w.type === WARE.coins && (!b.occupied || !b.coinsEnabled);
+    if (def && idx >= 0 && !coinsBlocked && (b.inputStock[idx] ?? 0) < def.inputCap) {
       while (b.inputStock.length <= idx) b.inputStock.push(0);
       b.inputStock[idx]++;
       accepted = true;
