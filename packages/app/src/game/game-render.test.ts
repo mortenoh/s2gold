@@ -1,9 +1,20 @@
-import { JOB, JOB_TYPES, type Building, type Settler, type World } from '@s2gold/engine';
+import {
+  JOB,
+  JOB_TYPES,
+  makeResource,
+  RESOURCE,
+  type Building,
+  type Settler,
+  type World,
+} from '@s2gold/engine';
 import { describe, expect, it } from 'vitest';
 import {
   borderStoneSprites,
+  BUILDING_ARCHIVE,
   HELPER_BOB_ID,
   JOB_BOB_ID,
+  signSizeOffset,
+  signSprites,
   WORK_ANIM,
   workerIsIndoors,
   workSprite,
@@ -67,38 +78,116 @@ function waterWorld(size: number, waterNodes: readonly number[]): World {
 }
 
 describe('borderStoneSprites', () => {
-  it('draws the real greenland boundary-stone sprite + shadow per frontier node', () => {
+  it('draws the real nation-archive boundary stone (0/1), not a sign tablet', () => {
     const world = waterWorld(4, []);
-    const stones = borderStoneSprites(world, [0, 1, 2], 2, 'mapbobs');
+    const stones = borderStoneSprites(world, [0, 1, 2], 2);
     expect(stones).toHaveLength(3);
     for (const s of stones) {
-      expect(s.archive).toBe('mapbobs');
-      expect(s.spriteIndex).toBe(612); // player-ramp boundary stone
-      expect(s.shadowIndex).toBe(619);
-      expect(s.player).toBe(2); // carries the owner so a future pmask tints it
-    }
-  });
-
-  it('uses the +80 wasteland/winter offset for their object archives', () => {
-    const world = waterWorld(2, []);
-    for (const arc of ['mapbobs0', 'mapbobs1']) {
-      const [s] = borderStoneSprites(world, [0], 0, arc);
-      expect(s.spriteIndex).toBe(692);
-      expect(s.shadowIndex).toBe(699);
+      // Nation archive (rom_z), so its player-colour cap tints via the same pmask
+      // path as the flags — not the mapbobs 612 sign tablet the old code used.
+      expect(s.archive).toBe(BUILDING_ARCHIVE);
+      expect(s.spriteIndex).toBe(0); // player-coloured standing stone
+      expect(s.spriteIndex).not.toBe(612); // 612 is a geologist sign tablet
+      expect(s.shadowIndex).toBe(1);
+      expect(s.player).toBe(2); // carries the owner so its pmask cap tints per player
     }
   });
 
   it('skips open-water frontier nodes (no stone floating on the sea)', () => {
     const world = waterWorld(4, [1, 3]);
-    const stones = borderStoneSprites(world, [0, 1, 2, 3], 0, 'mapbobs');
+    const stones = borderStoneSprites(world, [0, 1, 2, 3], 0);
     expect(stones).toHaveLength(2); // only the two land nodes 0 and 2
   });
 
   it('skips nodes hidden by fog (visibility !== 2)', () => {
     const world = waterWorld(3, []);
     const vis = new Uint8Array([2, 0, 1]); // only node 0 currently visible
-    const stones = borderStoneSprites(world, [0, 1, 2], 0, 'mapbobs', vis);
+    const stones = borderStoneSprites(world, [0, 1, 2], 0, vis);
     expect(stones).toHaveLength(1);
+  });
+});
+
+/** Minimal world for sign tests: signs on a flat 1-row lattice with per-node ore. */
+function signWorld(
+  size: number,
+  signs: readonly { node: number; res: number; amount: number }[],
+  buildings: readonly number[] = [],
+): World {
+  const resource = new Uint8Array(size);
+  for (const s of signs) {
+    if (s.res !== RESOURCE.none) resource[s.node] = makeResource(s.res, s.amount);
+  }
+  const buildingAtNode = new Int32Array(size).fill(-1) as unknown as number[];
+  for (const n of buildings) buildingAtNode[n] = 0;
+  return {
+    width: size,
+    height: 1,
+    heightMap: new Uint8Array(size),
+    resource,
+    buildingAtNode,
+    signs: signs.map((s) => ({ node: s.node, res: s.res })),
+  } as unknown as World;
+}
+
+describe('signSprites', () => {
+  it('picks the ore triplet by resource kind and sizes it by the current amount', () => {
+    const world = signWorld(8, [
+      { node: 0, res: RESOURCE.iron, amount: 1 }, // small
+      { node: 1, res: RESOURCE.iron, amount: 4 }, // medium
+      { node: 2, res: RESOURCE.iron, amount: 7 }, // large
+      { node: 3, res: RESOURCE.gold, amount: 2 }, // small
+      { node: 4, res: RESOURCE.coal, amount: 5 }, // medium
+      { node: 5, res: RESOURCE.granite, amount: 6 }, // large
+    ]);
+    const s = signSprites(world, 'mapbobs');
+    // Iron 600..602 sized small/med/large by amount.
+    expect(s[0].spriteIndex).toBe(600);
+    expect(s[1].spriteIndex).toBe(601);
+    expect(s[2].spriteIndex).toBe(602);
+    // Gold base 603, coal base 606 (+1 med), granite base 609 (+2 large).
+    expect(s[3].spriteIndex).toBe(603);
+    expect(s[4].spriteIndex).toBe(607);
+    expect(s[5].spriteIndex).toBe(611);
+    for (const d of s) {
+      expect(d.archive).toBe('mapbobs');
+      expect(d.shadowIndex).toBe(619);
+    }
+  });
+
+  it('shows the empty tablet (615) for a surveyed node whose ore is mined out', () => {
+    // Sign recorded coal, but the deposit has since dropped to 0: current res is
+    // nothing, so it must read as the empty tablet, never coal.
+    const world = signWorld(2, [{ node: 0, res: RESOURCE.coal, amount: 0 }]);
+    const [d] = signSprites(world, 'mapbobs');
+    expect(d.spriteIndex).toBe(615);
+  });
+
+  it('maps underground water to the single blue tablet (612, never offset)', () => {
+    const world = signWorld(2, [{ node: 0, res: RESOURCE.water, amount: 7 }]);
+    const [d] = signSprites(world, 'mapbobs');
+    expect(d.spriteIndex).toBe(612);
+  });
+
+  it('drops a sign once a mine sits on its node', () => {
+    const world = signWorld(2, [{ node: 0, res: RESOURCE.coal, amount: 4 }], [0]);
+    expect(signSprites(world, 'mapbobs')).toHaveLength(0);
+  });
+
+  it('skips signs hidden by fog (visibility !== 2)', () => {
+    const world = signWorld(3, [
+      { node: 0, res: RESOURCE.iron, amount: 3 },
+      { node: 2, res: RESOURCE.iron, amount: 3 },
+    ]);
+    const vis = new Uint8Array([2, 0, 0]); // only node 0 currently visible
+    expect(signSprites(world, 'mapbobs', vis)).toHaveLength(1);
+  });
+});
+
+describe('signSizeOffset', () => {
+  it('maps deposit amount to small/medium/large', () => {
+    expect([1, 2].map(signSizeOffset)).toEqual([0, 0]);
+    expect([3, 4, 5].map(signSizeOffset)).toEqual([1, 1, 1]);
+    expect([6, 7].map(signSizeOffset)).toEqual([2, 2]);
   });
 });
 

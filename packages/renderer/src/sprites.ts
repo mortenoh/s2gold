@@ -443,24 +443,66 @@ export class SpriteRenderer {
     });
   }
 
+  /** Emit every torus-wrapped quad for one dynamic sprite into `out`. */
+  private pushDynamic(
+    out: QuadItem[],
+    d: DynamicSprite,
+    ox: number,
+    oy: number,
+    viewW: number,
+    viewH: number,
+  ): void {
+    const ax = d.worldX + ox;
+    const ay = d.worldY + oy;
+    const tint =
+      d.player !== undefined
+        ? unpackColor(PLAYER_COLORS[d.player % PLAYER_COLORS.length] ?? 0xffffff)
+        : NO_TINT;
+    const scale = d.scale ?? 1;
+    const clipBottom = d.clipBottom ?? 1;
+    if (d.shadowIndex !== undefined) {
+      this.pushQuad(out, d.archive, d.shadowIndex, ax, ay, viewW, viewH, d.worldY - 0.5, NO_TINT, scale); // prettier-ignore
+    }
+    this.pushQuad(out, d.archive, d.spriteIndex, ax, ay, viewW, viewH, d.worldY, tint, scale, clipBottom); // prettier-ignore
+  }
+
   /**
    * Render the scene for the given camera. `tick` is the global animation
-   * counter; `dynamics` are per-frame moving sprites (units), empty for now.
+   * counter; `dynamics` are per-frame moving sprites (units) depth-sorted in with
+   * the statics. `overlay` sprites are drawn in a second batched pass *after* the
+   * main one, sharing the same depth buffer.
+   *
+   * Why a second pass: batches flush on every atlas change while walking the
+   * depth-sorted quads, so a handful of `overlay` sprites from a different archive
+   * sprinkled through the depth range (the per-nation border stones dotted around
+   * a frontier ring, interleaving with mapbobs trees) would otherwise split the
+   * long mapbobs tree run into dozens of one-quad draw calls. Pulling them into
+   * their own pass keeps the main run intact and costs one draw call per overlay
+   * archive/page. It is visually correct because sprite occlusion is resolved by
+   * the depth buffer (each quad writes depth from its foot anchor) plus the
+   * shader's alpha discard — not by draw order: a tree in front still writes the
+   * nearer depth and hides the stone, a tree behind fails the depth test, and the
+   * stone shows through the tree's transparent pixels. Cross-pass blend order only
+   * matters where two *semi-transparent* pixels overlap, negligible for the small,
+   * (near-)opaque border stones.
    */
-  render(camera: Camera, tick: number, dynamics: readonly DynamicSprite[] = []): SpriteDrawStats {
-    const gl = this.gl;
-    const cw = gl.drawingBufferWidth;
-    const ch = gl.drawingBufferHeight;
-    const viewW = cw / camera.zoom;
-    const viewH = ch / camera.zoom;
+  render(
+    camera: Camera,
+    tick: number,
+    dynamics: readonly DynamicSprite[] = [],
+    overlay: readonly DynamicSprite[] = [],
+  ): SpriteDrawStats {
     if (this.atlases.size === 0) return { quads: 0, drawCalls: 0 };
+    const gl = this.gl;
+    const viewW = gl.drawingBufferWidth / camera.zoom;
+    const viewH = gl.drawingBufferHeight / camera.zoom;
 
-    const items: QuadItem[] = [];
     const i0 = Math.floor((camera.x - TR_W) / this.worldW) - 1;
     const i1 = Math.floor((camera.x + viewW) / this.worldW) + 1;
     const j0 = Math.floor((camera.y - TR_H) / this.worldH) - 1;
     const j1 = Math.floor((camera.y + viewH + MAX_RAISE) / this.worldH) + 1;
 
+    const items: QuadItem[] = [];
     for (let j = j0; j <= j1; j++) {
       const oy = j * this.worldH - camera.y;
       for (let i = i0; i <= i1; i++) {
@@ -501,49 +543,33 @@ export class SpriteRenderer {
             shade,
           );
         }
-        for (const d of dynamics) {
-          const ax = d.worldX + ox;
-          const ay = d.worldY + oy;
-          const tint =
-            d.player !== undefined
-              ? unpackColor(PLAYER_COLORS[d.player % PLAYER_COLORS.length] ?? 0xffffff)
-              : NO_TINT;
-          const scale = d.scale ?? 1;
-          const clipBottom = d.clipBottom ?? 1;
-          if (d.shadowIndex !== undefined) {
-            this.pushQuad(
-              items,
-              d.archive,
-              d.shadowIndex,
-              ax,
-              ay,
-              viewW,
-              viewH,
-              d.worldY - 0.5,
-              NO_TINT,
-              scale,
-            );
-          }
-          this.pushQuad(
-            items,
-            d.archive,
-            d.spriteIndex,
-            ax,
-            ay,
-            viewW,
-            viewH,
-            d.worldY,
-            tint,
-            scale,
-            clipBottom,
-          );
-        }
+        for (const d of dynamics) this.pushDynamic(items, d, ox, oy, viewW, viewH);
       }
     }
 
-    if (items.length === 0) return { quads: 0, drawCalls: 0 };
-    items.sort((a, b) => a.depth - b.depth || a.page - b.page);
-    return this.drawItems(items, camera);
+    let stats: SpriteDrawStats = { quads: 0, drawCalls: 0 };
+    if (items.length > 0) {
+      items.sort((a, b) => a.depth - b.depth || a.page - b.page);
+      stats = this.drawItems(items, camera);
+    }
+
+    if (overlay.length > 0) {
+      const oitems: QuadItem[] = [];
+      for (let j = j0; j <= j1; j++) {
+        const oy = j * this.worldH - camera.y;
+        for (let i = i0; i <= i1; i++) {
+          const ox = i * this.worldW - camera.x;
+          for (const d of overlay) this.pushDynamic(oitems, d, ox, oy, viewW, viewH);
+        }
+      }
+      if (oitems.length > 0) {
+        oitems.sort((a, b) => a.depth - b.depth || a.page - b.page);
+        const s2 = this.drawItems(oitems, camera);
+        stats = { quads: stats.quads + s2.quads, drawCalls: stats.drawCalls + s2.drawCalls };
+      }
+    }
+
+    return stats;
   }
 
   private drawItems(items: readonly QuadItem[], camera: Camera): SpriteDrawStats {

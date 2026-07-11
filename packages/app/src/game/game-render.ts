@@ -20,6 +20,7 @@ import {
   buildingDef,
   DIRECTIONS,
   isWaterNode,
+  RESOURCE,
   resourceAmount,
   resourceType,
   TICKS,
@@ -685,34 +686,22 @@ export function nodeMarkerSegments(world: World, node: number, size = 7): RoadSe
 }
 
 /**
- * mapbobs frontier "boundary stone" bob (a stone tablet on a wooden post with a
- * player-colour gem) + its ground shadow, per landscape object archive. The S2
- * boundary stone is a single player-recoloured image; the `player`-kind bobs sit
- * at consecutive entries — colour groups (red/yellow/black/white) plus the blue
- * default-ramp master and a gem-free neutral stone — in greenland's mapbobs
- * around 600..615 and, offset by +80, in the wasteland/winter atlases
- * (mapbobs0/mapbobs1). The canonical stone whose gem is stored in the default
- * (blue) player ramp is 612 (shadow 619) for greenland and 692 (shadow 699) for
- * wasteland/winter; that is the one the original retints per player, so it is the
- * one we draw.
- *
- * These converted mapbobs sprites carry no per-sprite `pmask` flag (unlike the
- * rom_z flag bobs, which do), so the renderer's player-tint path is inert for
- * them and the gem renders in its baked default-blue for every player. We still
- * pass the owner's `player` on the sprite: it is a harmless no-op today and lights
- * up the correct per-player gem automatically if these archives are ever
- * reconverted with the pmask flag the flag sprites already ship.
+ * The real S2 boundary stone lives in the *nation* archive ({@link BUILDING_ARCHIVE},
+ * rom_z), not the landscape object archive: index 0 is a small standing stone whose
+ * cap is a player-colour region (bob-type "player" with a real pmask, exactly like
+ * the flag bobs at 100..117), and index 1 is its ground shadow. Because it carries a
+ * pmask, the renderer's player-tint path recolours the cap per owner (blue for the
+ * local player, yellow for the AI), so it needs no per-archive variant. The previous
+ * mapping pointed at mapbobs 612/619, which is a *geologist sign tablet* (the
+ * 600..615 sign set) — that is why frontier rings rendered as survey signs.
  */
-const BORDER_STONE_SPRITE: Readonly<Record<string, { sprite: number; shadow: number }>> = {
-  mapbobs: { sprite: 612, shadow: 619 }, // greenland
-  mapbobs0: { sprite: 692, shadow: 699 }, // wasteland
-  mapbobs1: { sprite: 692, shadow: 699 }, // winter
-};
+const BORDER_STONE_SPRITE = 0;
+const BORDER_STONE_SHADOW = 1;
 
 /**
- * Border-stone sprites for a territory's frontier ring: the real mapbobs boundary
- * stone at each border node, carrying the owner's `player` (see
- * {@link BORDER_STONE_SPRITE}). Fog-aware: a frontier node that is not currently
+ * Border-stone sprites for a territory's frontier ring: the real nation-archive
+ * boundary stone at each border node, carrying the owner's `player` so its pmask
+ * cap tints to the owner's colour. Fog-aware: a frontier node that is not currently
  * visible is skipped. Open-water nodes are skipped too — the original runs a
  * coastal border along the land nodes rather than dotting the sea, so a frontier
  * that clips a water tile leaves it bare instead of floating a stone on the waves.
@@ -721,10 +710,8 @@ export function borderStoneSprites(
   world: World,
   nodes: readonly number[],
   player: number,
-  objectArchive: string,
   visibility: Uint8Array | null = null,
 ): DynamicSprite[] {
-  const idx = BORDER_STONE_SPRITE[objectArchive] ?? BORDER_STONE_SPRITE.mapbobs;
   const out: DynamicSprite[] = [];
   for (const node of nodes) {
     if (visibility !== null && visibility[node] !== 2) continue;
@@ -733,9 +720,9 @@ export function borderStoneSprites(
     out.push({
       worldX: a.x,
       worldY: a.y,
-      archive: objectArchive,
-      spriteIndex: idx.sprite,
-      shadowIndex: idx.shadow,
+      archive: BUILDING_ARCHIVE,
+      spriteIndex: BORDER_STONE_SPRITE,
+      shadowIndex: BORDER_STONE_SHADOW,
       player,
     });
   }
@@ -853,36 +840,76 @@ export function currentSignRes(world: World, node: number): number {
 }
 
 /**
- * Geologist survey-sign markers for one resource kind: a small mark on every
- * surveyed mountain node that holds that resource (`res` is a RESOURCE.* value;
- * 0 = nothing). Ore signs are a filled diamond, "nothing" a small X, both in the
- * caller's colour. Draw one call per resource kind (each has its own colour).
+ * Object-archive sign-tablet base index per surveyed RESOURCE kind (the small
+ * variant; +1 medium, +2 large — see {@link signSizeOffset}). Verified by decoding
+ * the mapbobs 600..615 sign set: iron 600..602 (reddish ore), gold 603..605
+ * (yellow), coal 606..608 (dark), granite 609..611 (pale). Water 612 and the empty
+ * "nothing" tablet 615 ship a single size only. Present identically in all three
+ * landscape object atlases (mapbobs/mapbobs0/mapbobs1).
  */
-export function signMarkers(world: World, res: number): RoadSegment[] {
-  const out: RoadSegment[] = [];
+const SIGN_BASE: Readonly<Record<number, number>> = {
+  [RESOURCE.iron]: 600,
+  [RESOURCE.gold]: 603,
+  [RESOURCE.coal]: 606,
+  [RESOURCE.granite]: 609,
+  [RESOURCE.water]: 612,
+  [RESOURCE.fish]: 612,
+};
+/** First sign base that has no small/medium/large variants (water 612 up). */
+const SIGN_SIZED_MAX = 612;
+/** Empty "nothing found" tablet. */
+const SIGN_EMPTY = 615;
+/** Shared sign-post ground shadow. */
+const SIGN_SHADOW = 619;
+
+/**
+ * Size variant offset (0 small, 1 medium, 2 large) for a deposit `amount` (0..7).
+ * The geologist writes a fresh sign the moment a node is surveyed, so the size
+ * tracks the *current* deposit and shrinks as the ore is mined out.
+ */
+export function signSizeOffset(amount: number): number {
+  if (amount >= 6) return 2;
+  if (amount >= 3) return 1;
+  return 0;
+}
+
+/**
+ * Geologist survey-sign sprites: the real mapbobs sign tablet on each surveyed
+ * mountain node, picked by the node's CURRENT resource (so a mined-out deposit
+ * shows the empty tablet, not its old ore) and sized by the remaining amount. Fog-
+ * aware, and dropped once a mine sits on the node (it has served its purpose and
+ * would otherwise clutter the building). Emitted as dynamics so they depth-sort
+ * with buildings/trees on the mountain instead of overprinting them.
+ */
+export function signSprites(
+  world: World,
+  objectArchive: string,
+  visibility: Uint8Array | null = null,
+): DynamicSprite[] {
+  const out: DynamicSprite[] = [];
   for (const sign of world.signs) {
-    // Read the CURRENT resource, not the survey-time snapshot, so a deposit
-    // that has since been mined out shows as nothing (X) rather than its old ore.
-    if (currentSignRes(world, sign.node) !== res) continue;
-    // Once a building (a mine) sits on the spot, drop its sign — it's served its
-    // purpose and would otherwise clutter the building.
+    if (visibility !== null && visibility[sign.node] !== 2) continue;
     if (world.buildingAtNode[sign.node] >= 0) continue;
-    const a = nodeAnchor(world, sign.node);
-    const cy = a.y - 6; // float just above the ground node
-    const s = 4;
-    if (res === 0) {
-      // Nothing here: a small X.
-      out.push({ x0: a.x - s, y0: cy - s, x1: a.x + s, y1: cy + s });
-      out.push({ x0: a.x - s, y0: cy + s, x1: a.x + s, y1: cy - s });
+    const res = currentSignRes(world, sign.node);
+    let spriteIndex: number;
+    if (res === RESOURCE.none) {
+      spriteIndex = SIGN_EMPTY;
     } else {
-      // A filled diamond (drawn as edges + an inner cross to read as solid).
-      out.push({ x0: a.x, y0: cy - s, x1: a.x + s, y1: cy });
-      out.push({ x0: a.x + s, y0: cy, x1: a.x, y1: cy + s });
-      out.push({ x0: a.x, y0: cy + s, x1: a.x - s, y1: cy });
-      out.push({ x0: a.x - s, y0: cy, x1: a.x, y1: cy - s });
-      out.push({ x0: a.x, y0: cy - s, x1: a.x, y1: cy + s });
-      out.push({ x0: a.x - s, y0: cy, x1: a.x + s, y1: cy });
+      const base = SIGN_BASE[res];
+      if (base === undefined) continue;
+      spriteIndex =
+        base < SIGN_SIZED_MAX
+          ? base + signSizeOffset(resourceAmount(world.resource[sign.node]))
+          : base;
     }
+    const a = nodeAnchor(world, sign.node);
+    out.push({
+      worldX: a.x,
+      worldY: a.y,
+      archive: objectArchive,
+      spriteIndex,
+      shadowIndex: SIGN_SHADOW,
+    });
   }
   return out;
 }

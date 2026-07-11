@@ -31,7 +31,7 @@ import {
   depletedMineMarkers,
   disconnectedBuildingMarkers,
   garrisonDotSegments,
-  signMarkers,
+  signSprites,
   nodeAnchor,
   nodeMarkerSegments,
   pathSegments,
@@ -67,24 +67,17 @@ const WALK_FRAME_MS = 90;
 const GAME_SEED = 0x5eed;
 
 /**
- * Geologist survey-sign colours by resource kind (RESOURCE.*): coal 3, iron 1,
- * gold 2, granite 4, nothing 0. Each is drawn in its own overlay pass.
+ * Legend rows for the geologist signs: [css gem colour, label]. The swatch colours
+ * are sampled from the real sign-tablet gems (mapbobs 600..615) so the legend reads
+ * the same as the tablets now drawn on the mountain: iron a reddish ore, gold
+ * yellow, coal near-black, granite pale stone; the empty tablet means nothing found.
  */
-const SIGN_COLORS: readonly (readonly [number, readonly [number, number, number, number]])[] = [
-  [3, [0.1, 0.1, 0.12, 0.98]], // coal — black
-  [1, [0.95, 0.45, 0.1, 0.98]], // iron — orange
-  [2, [1.0, 0.85, 0.1, 0.98]], // gold — yellow
-  [4, [0.35, 0.6, 1.0, 0.98]], // granite — blue (kept well clear of coal/nothing greys)
-  [0, [0.6, 0.6, 0.6, 0.8]], // nothing — grey X
-];
-
-/** Legend rows for the geologist signs: [css colour, label], sign-colour order. */
 const SIGN_LEGEND: readonly (readonly [string, string])[] = [
-  ['rgb(26,26,31)', 'Coal'],
-  ['rgb(242,115,26)', 'Iron'],
-  ['rgb(255,217,26)', 'Gold'],
-  ['rgb(89,153,255)', 'Granite'],
-  ['rgb(153,153,153)', 'Nothing'],
+  ['rgb(159,99,71)', 'Iron'],
+  ['rgb(230,205,90)', 'Gold'],
+  ['rgb(45,45,50)', 'Coal'],
+  ['rgb(205,205,198)', 'Granite'],
+  ['rgb(150,132,110)', 'Nothing'],
 ];
 
 /** BOB archive keys registered once for the settler layers. */
@@ -1062,19 +1055,24 @@ async function boot(): Promise<void> {
             session.fogEnabled ? session.visibility : null,
           )
         : [];
-    // Territory border stones: real mapbobs boundary-stone sprites merged into the
-    // dynamic sprite pass so they depth-sort with buildings/trees (a tree in front
-    // occludes the stone) instead of overprinting as flat overlays. Fog-aware.
+    // Territory border stones + geologist survey signs: real sprites drawn with a
+    // depth test (a tree in front occludes them) instead of overprinting as flat
+    // overlays. Both are fog-aware. Signs are mapbobs, so they batch with the tree
+    // statics; border stones are nation-archive (rom_z) and would, sprinkled around
+    // the frontier ring, split the mapbobs run into a draw call per stone — so they
+    // ride the renderer's separate `overlay` pass (still depth-tested, one batch).
+    const borderStones: DynamicSprite[] = [];
     if (session) {
       const vis = session.fogEnabled ? session.visibility : null;
       const objectArchive = objectAtlasForLandscape(landscape);
       for (let p = 0; p < session.playerCount; p++) {
-        for (const s of borderStoneSprites(session.world, borderCache[p] ?? [], p, objectArchive, vis)) {
-          dynamics.push(s);
+        for (const s of borderStoneSprites(session.world, borderCache[p] ?? [], p, vis)) {
+          borderStones.push(s);
         }
       }
+      for (const s of signSprites(session.world, objectArchive, vis)) dynamics.push(s);
     }
-    const stats = sprites.render(camera, waveFrame, dynamics);
+    const stats = sprites.render(camera, waveFrame, dynamics, borderStones);
     // Compact garrison markers, above each occupied military building, on top of
     // the sprite layer so they are never hidden by the building.
     if (session) {
@@ -1093,15 +1091,9 @@ async function boot(): Promise<void> {
       // Exhausted mines: a red bar so the player knows to rebuild on fresh ore.
       const dry = depletedMineMarkers(session.world, session.geom, session.localPlayer);
       if (dry.length > 0) roads.render(camera, dry, [1.0, 0.2, 0.2, 0.95], false);
-      // Geologist survey signs, coloured by the ore found (or a faint X for none).
-      // Drawn on-ground (depth-tested) so buildings and trees on the mountain
-      // occlude them instead of the signs floating over everything.
-      const hasSigns = session.world.signs.length > 0;
-      for (const [res, color] of SIGN_COLORS) {
-        const marks = signMarkers(session.world, res);
-        if (marks.length > 0) roads.render(camera, marks, color, true);
-      }
-      signLegend.style.display = hasSigns ? 'block' : 'none';
+      // Geologist survey signs are drawn as real sign-tablet sprites in the dynamic
+      // pass above (depth-sorted with the terrain); here we only toggle the legend.
+      signLegend.style.display = session.world.signs.length > 0 ? 'block' : 'none';
       // Live road-build preview on top: translucent path + an end marker (green
       // when a road can be built to the hovered node, red when it cannot).
       const preview = interaction.roadPreview;
