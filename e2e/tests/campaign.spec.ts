@@ -7,9 +7,7 @@ import { expect, test, type Page } from '@playwright/test';
  * unlocks the next chapter.
  */
 
-const SCREENSHOT_DIR =
-  '/private/tmp/claude-502/-Users-morteoh-dev-local-s2gold/' +
-  'bb77c315-f7af-4a5f-a4d3-fe7955aadc74/scratchpad/p7camp';
+const SCREENSHOT_DIR = 'test-results/shots/p7camp';
 
 const PROGRESS_KEY = 's2gold.campaign.progress';
 
@@ -24,7 +22,6 @@ async function assetsPresent(page: Page): Promise<boolean> {
 test('campaign menu lists ten chapters with only chapter I selectable initially', async ({
   page,
 }) => {
-
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(String(err)));
 

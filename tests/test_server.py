@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from s2gold.server.app import create_app
@@ -10,7 +11,7 @@ from s2gold.server.config import Settings
 
 
 @pytest.fixture
-def app(tmp_path: Path):
+def app(tmp_path: Path) -> FastAPI:
     settings = Settings(
         saves_dir=tmp_path / "saves",
         assets_dir=tmp_path / "missing-assets",
@@ -20,7 +21,7 @@ def app(tmp_path: Path):
 
 
 @pytest.fixture
-async def client(app):
+async def client(app: FastAPI):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         yield client
 

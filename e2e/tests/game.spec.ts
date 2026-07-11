@@ -10,33 +10,19 @@ interface S2Debug {
   spriteDrawCalls: number;
 }
 
-const SCREENSHOT_DIR =
-  '/private/tmp/claude-502/-Users-morteoh-dev-local-s2gold/' +
-  'bb77c315-f7af-4a5f-a4d3-fe7955aadc74/scratchpad/p2';
+const SCREENSHOT_DIR = 'test-results/shots/p2';
 
-const P2FINAL_DIR =
-  '/private/tmp/claude-502/-Users-morteoh-dev-local-s2gold/' +
-  'bb77c315-f7af-4a5f-a4d3-fe7955aadc74/scratchpad/p2final';
+const P2FINAL_DIR = 'test-results/shots/p2final';
 
-const P3_DIR =
-  '/private/tmp/claude-502/-Users-morteoh-dev-local-s2gold/' +
-  'bb77c315-f7af-4a5f-a4d3-fe7955aadc74/scratchpad/p3';
+const P3_DIR = 'test-results/shots/p3';
 
-const P4_DIR =
-  '/private/tmp/claude-502/-Users-morteoh-dev-local-s2gold/' +
-  'bb77c315-f7af-4a5f-a4d3-fe7955aadc74/scratchpad/p4app';
+const P4_DIR = 'test-results/shots/p4app';
 
-const P4UI_DIR =
-  '/private/tmp/claude-502/-Users-morteoh-dev-local-s2gold/' +
-  'bb77c315-f7af-4a5f-a4d3-fe7955aadc74/scratchpad/p4ui';
+const P4UI_DIR = 'test-results/shots/p4ui';
 
-const P6UI_DIR =
-  '/private/tmp/claude-502/-Users-morteoh-dev-local-s2gold/' +
-  'bb77c315-f7af-4a5f-a4d3-fe7955aadc74/scratchpad/p6ui';
+const P6UI_DIR = 'test-results/shots/p6ui';
 
-const P7_DIR =
-  '/private/tmp/claude-502/-Users-morteoh-dev-local-s2gold/' +
-  'bb77c315-f7af-4a5f-a4d3-fe7955aadc74/scratchpad/p7sea';
+const P7_DIR = 'test-results/shots/p7sea';
 
 async function readDebug(page: Page): Promise<S2Debug> {
   return page.evaluate(() => {
@@ -241,7 +227,9 @@ async function readGame(page: Page): Promise<{
 /** CSS-px position (relative to the canvas) of a lattice node's ground anchor. */
 async function nodeScreen(page: Page, node: number): Promise<{ x: number; y: number }> {
   return page.evaluate((n) => {
-    const d = (window as unknown as { __s2debug?: { nodeToScreen(n: number): { x: number; y: number } } }).__s2debug;
+    const d = (
+      window as unknown as { __s2debug?: { nodeToScreen(n: number): { x: number; y: number } } }
+    ).__s2debug;
     if (!d) throw new Error('no debug');
     return d.nodeToScreen(n);
   }, node);
@@ -370,7 +358,9 @@ test('P2 gate: build a wood/plank economy via the UI and watch it run', async ({
 
   // P3: construction sites (skeleton + rising building) with builders/workers
   // walking to them, wearing their profession overlays.
-  await page.getByTestId('game-canvas').screenshot({ path: `${P3_DIR}/p3-construction-workers.png` });
+  await page
+    .getByTestId('game-canvas')
+    .screenshot({ path: `${P3_DIR}/p3-construction-workers.png` });
 
   // P3: enabling audio via a real click unlocks the AudioContext. The clicks
   // above already dispatched pointerdown, so the context should be live.
@@ -403,17 +393,21 @@ test('P2 gate: build a wood/plank economy via the UI and watch it run', async ({
   const game = await readGame(page);
   expect(game.counters.treesFelled, 'a tree was felled').toBeGreaterThanOrEqual(1);
   expect(game.counters.trunksProduced, 'a trunk was produced').toBeGreaterThanOrEqual(1);
-  expect(game.counters.planksProduced, 'a plank reached the sawmill and was cut').toBeGreaterThanOrEqual(1);
-  expect(game.counters.buildingsCompleted, 'construction sites completed').toBeGreaterThanOrEqual(2);
+  expect(
+    game.counters.planksProduced,
+    'a plank reached the sawmill and was cut',
+  ).toBeGreaterThanOrEqual(1);
+  expect(game.counters.buildingsCompleted, 'construction sites completed').toBeGreaterThanOrEqual(
+    2,
+  );
   expect(game.settlers, 'carriers/workers are active').toBeGreaterThan(0);
 
   // P3: during the 10x economy run, worker-action events drove the audio engine
   // to request (and decode) at least one SFX buffer, and the context is live.
   await page.waitForFunction(
     () => {
-      const a = (
-        window as unknown as { __s2debug: { audio: { sfxRequested: number } } }
-      ).__s2debug.audio;
+      const a = (window as unknown as { __s2debug: { audio: { sfxRequested: number } } }).__s2debug
+        .audio;
       return a.sfxRequested >= 1;
     },
     undefined,
@@ -423,12 +417,16 @@ test('P2 gate: build a wood/plank economy via the UI and watch it run', async ({
     () =>
       (
         window as unknown as {
-          __s2debug: { audio: { contextState: string; sfxRequested: number; buffersLoaded: number } };
+          __s2debug: {
+            audio: { contextState: string; sfxRequested: number; buffersLoaded: number };
+          };
         }
       ).__s2debug.audio,
   );
   expect(audioDbg.contextState, 'AudioContext running after gesture').toBe('running');
-  expect(audioDbg.sfxRequested, 'an SFX buffer was requested during play').toBeGreaterThanOrEqual(1);
+  expect(audioDbg.sfxRequested, 'an SFX buffer was requested during play').toBeGreaterThanOrEqual(
+    1,
+  );
 
   // Mid-game screenshot showing buildings + carriers on roads.
   await page.getByTestId('game-canvas').screenshot({ path: `${P2FINAL_DIR}/p2-economy-1x.png` });
@@ -493,7 +491,9 @@ test('P4: expanded build menu lists buildings by size class with costs', async (
 
   // Open the node context menu (the grouped build menu with category flyouts).
   const pos = await page.evaluate((n) => {
-    const d = (window as unknown as { __s2debug: { nodeToScreen(n: number): { x: number; y: number } } }).__s2debug;
+    const d = (
+      window as unknown as { __s2debug: { nodeToScreen(n: number): { x: number; y: number } } }
+    ).__s2debug;
     return d.nodeToScreen(n);
   }, node);
   await page.getByTestId('game-canvas').click({ position: pos });
@@ -519,7 +519,9 @@ test('P4: expanded build menu lists buildings by size class with costs', async (
 
   // Every building shows a cost like "(2 boards, 3 stone)"; more than 10 offered.
   const withCost = labels.filter((t) => /\(\d+ (board|stone)/.test(t));
-  expect(withCost.length, `build menu lists many buildings: ${labels.join(', ')}`).toBeGreaterThan(10);
+  expect(withCost.length, `build menu lists many buildings: ${labels.join(', ')}`).toBeGreaterThan(
+    10,
+  );
 
   // The classic P2 buildings live in their size-class flyouts.
   await menu.getByTestId('ctx-cat-huts').click();
@@ -591,9 +593,7 @@ test('P4: road-build preview activates for a valid destination and clears on Esc
   // Esc exits road mode and clears the preview.
   await page.keyboard.press('Escape');
   const cleared = await page.evaluate(() => {
-    return (
-      window as unknown as { __s2debug: { roadPreview(): unknown } }
-    ).__s2debug.roadPreview();
+    return (window as unknown as { __s2debug: { roadPreview(): unknown } }).__s2debug.roadPreview();
   });
   expect(cleared, 'preview cleared after Esc').toBeNull();
   expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);
@@ -642,7 +642,9 @@ interface S2Military {
 }
 
 /** Read the military debug surface (throws if it is missing). */
-function readMil(page: Page): Promise<{ players: number; hqNode: number; counters: Record<string, number> }> {
+function readMil(
+  page: Page,
+): Promise<{ players: number; hqNode: number; counters: Record<string, number> }> {
   return page.evaluate(() => {
     const d = (window as unknown as { __s2debug?: S2Military }).__s2debug;
     if (!d) throw new Error('window.__s2debug missing');
@@ -760,7 +762,10 @@ test('P4: two-player battle — borders, garrison panel, attack, capture', async
     (counters.buildingsCaptured ?? 0) + (counters.soldiersDied ?? 0),
     'the battle resolved (capture or casualty)',
   ).toBeGreaterThanOrEqual(1);
-  expect(counters.territoryChanges, 'territory changed as buildings occupied').toBeGreaterThanOrEqual(1);
+  expect(
+    counters.territoryChanges,
+    'territory changed as buildings occupied',
+  ).toBeGreaterThanOrEqual(1);
 
   expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);
 });
@@ -822,8 +827,8 @@ test('P6: setup selects a computer opponent that seeds and expands', async ({ pa
     { timeout: 90_000 },
   );
 
-  const aiBuildings = await page.evaluate(
-    () => (window as unknown as { __s2debug: S2Ai }).__s2debug.buildingsOf(1),
+  const aiBuildings = await page.evaluate(() =>
+    (window as unknown as { __s2debug: S2Ai }).__s2debug.buildingsOf(1),
   );
   expect(aiBuildings, 'the AI built past its HQ').toBeGreaterThan(1);
 
@@ -1007,9 +1012,8 @@ test('P7: seafaring — harbor + ship + expedition founds a harbor on another is
   // supplies (assembly still runs through the real engine command), queue
   // prepareExpedition, and centre the view on the harbor for the panel click.
   const harborId = await page.evaluate((p) => {
-    const d = (
-      window as unknown as { __s2debug: S2Sea & { prepareExpedition(h: number): void } }
-    ).__s2debug;
+    const d = (window as unknown as { __s2debug: S2Sea & { prepareExpedition(h: number): void } })
+      .__s2debug;
     const h = d.debugSpawnHarbor(0, p.near);
     d.debugSpawnShip(0, h);
     d.debugGrantExpeditionSupplies(0);
