@@ -242,10 +242,22 @@ export function terrainBuildable(world: World, geom: Geometry, rules: TerrainRul
   return true;
 }
 
-/** True when a flag may be placed at `node` for `player`. */
-export function canPlaceFlag(world: World, geom: Geometry, rules: TerrainRules, node: number): boolean {
+/**
+ * True when a flag may be placed at `node` for `player`. Ownership is enforced
+ * only when `player` is given: a flag must sit inside that player's own territory
+ * (S2 rule). The argument is optional so the app's build preview and terrain-only
+ * callers keep working without an owner.
+ */
+export function canPlaceFlag(
+  world: World,
+  geom: Geometry,
+  rules: TerrainRules,
+  node: number,
+  player?: number,
+): boolean {
   if (world.flagAtNode[node] >= 0) return false;
   if (world.buildingAtNode[node] >= 0) return false;
+  if (player !== undefined && ownerPlayer(world.owner[node]) !== player) return false;
   if (world.objectType[node] !== OBJ_TYPE.none) {
     // A flag cannot sit on a tree, granite, sapling, or crop field.
     const ot = world.objectType[node];
@@ -293,16 +305,13 @@ export function canPlaceBuilding(
   if (world.buildingAtNode[node] >= 0 || world.flagAtNode[node] >= 0) return false;
   const ot = world.objectType[node];
   if (isTreeType(ot) || isGraniteType(ot) || isFieldObject(ot)) return false;
-  // Ownership (MILITARY.md §3): cannot build on land owned by another player.
-  // Neutral (unclaimed) and own land are allowed — full S2 restricts to your own
-  // territory, but we relax to neutral so the economy sandbox stays buildable
-  // and military buildings can expand the frontier (SIMPLIFICATION, documented).
-  // The `player` argument is optional so existing callers (and the app's build
-  // preview) keep working; ownership is only enforced when a player is given.
-  if (player !== undefined) {
-    const owner = ownerPlayer(world.owner[node]);
-    if (owner >= 0 && owner !== player) return false;
-  }
+  // Ownership (MILITARY.md §3, S2 rule): a building may only be founded inside the
+  // acting player's own territory — neutral (unclaimed) and enemy land are both
+  // rejected. A military building expands the frontier only once it is occupied;
+  // it is still placed on land you already own, at the border. The `player`
+  // argument is optional so terrain-only callers (and the app's build preview)
+  // keep working; ownership is only enforced when a player is given.
+  if (player !== undefined && ownerPlayer(world.owner[node]) !== player) return false;
   // Mines require a mountain node; coastal buildings (harbor/shipyard) require a
   // land node on the shore; every other building requires buildable meadow.
   const def = buildingDef(buildingType);
@@ -326,7 +335,7 @@ export function canPlaceBuilding(
     if (player !== undefined && flag?.player !== player) return false;
     return world.buildingAtNode[flagNode] < 0;
   }
-  return canPlaceFlag(world, geom, rules, flagNode);
+  return canPlaceFlag(world, geom, rules, flagNode, player);
 }
 
 // --- Executors ------------------------------------------------------------
@@ -339,7 +348,7 @@ function execPlaceFlag(
   player: number,
   node: number,
 ): Flag | null {
-  if (!canPlaceFlag(world, geom, rules, node)) return null;
+  if (!canPlaceFlag(world, geom, rules, node, player)) return null;
   const id = storeAlloc(world.flags, (fid) => ({ id: fid, node, player, wares: [] }));
   world.flagAtNode[node] = id;
   // A flag dropped onto an existing road taps into it: split the road at the
@@ -422,6 +431,11 @@ function execBuildRoad(
   // built across players, and its carrier (owned by `player`) must serve them.
   if (world.flags.items[flagA]?.player !== player || world.flags.items[flagB]?.player !== player) {
     return;
+  }
+  // Territory (S2 rule): every node the road runs over must lie in the building
+  // player's own land — a road is never laid across neutral or enemy territory.
+  for (const n of path) {
+    if (ownerPlayer(world.owner[n]) !== player) return;
   }
   // Interior nodes: adjacent, walkable, and not flags/buildings.
   for (let i = 1; i < path.length; i++) {

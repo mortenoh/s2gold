@@ -21,7 +21,8 @@ import {
 } from './index';
 import { applyCommand } from './commands';
 import { makeTwoIslandMap, TWO_ISLAND } from './harness';
-import { spawnBuilding, connectBuildings } from './harness-economy';
+import { spawnBuilding, connectBuildings, garrisonBuilding } from './harness-economy';
+import { recalcTerritory } from './systems/territory';
 import { getBuilding, getFlag, storeAlloc, type Ship } from './world';
 
 type Geom = ReturnType<typeof worldGeometry>;
@@ -133,7 +134,8 @@ function setupTransport(seed: number): {
   const harborA = spawnBuilding(world, geom, geom.index(TWO_ISLAND.harborA.x, TWO_ISLAND.harborA.y), BUILDING.harbor);
   const harborB = spawnBuilding(world, geom, geom.index(TWO_ISLAND.harborB.x, TWO_ISLAND.harborB.y), BUILDING.harbor);
   const storehouse = spawnBuilding(world, geom, geom.index(TWO_ISLAND.consumerB.x, TWO_ISLAND.consumerB.y), BUILDING.storehouse);
-  connectBuildings(world, geom, harborB.node, storehouse.node); // road on island B
+  recalcTerritory(world, geom); // the working harbors now project territory over island B
+  connectBuildings(world, geom, harborB.node, storehouse.node); // road on island B (owned land)
   tickWorld(world); // execute the road command
   manufactureShip(world, geom, harborA.id);
 
@@ -211,6 +213,12 @@ describe('P7 expedition founding', () => {
     manufactureShip(world, geom, harborA.id);
     const targetSpot = geom.index(TWO_ISLAND.harborB.x, TWO_ISLAND.harborB.y);
     const doorNode = geom.neighbour(targetSpot, 'SE');
+
+    // Give player 1 a foothold on island B: an occupied guardhouse projects
+    // territory over the target's door node so player 1 may claim the flag there.
+    const p1Fort = spawnBuilding(world, geom, geom.index(17, 6), BUILDING.guardhouse, 1);
+    garrisonBuilding(p1Fort, [3, 0, 0, 0, 0]);
+    recalcTerritory(world, geom);
 
     // Player 1 claims the target's door flag before player 0 can settle there.
     applyCommand(world, { player: 1, type: 'placeFlag', node: doorNode });

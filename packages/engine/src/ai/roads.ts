@@ -118,7 +118,11 @@ export function planRoads(
     // blockFlags: route around interior flags so the planned road is one that
     // execBuildRoad will accept (it rejects any road crossing another flag); the
     // start and target flag nodes themselves stay valid path endpoints.
-    const walk = findWalkPath(world, geom, rules, flag.node, target, true);
+    // ownedBy(player): keep every node inside our own territory — execBuildRoad
+    // now rejects a road that dips through neutral or enemy land, so a shortcut
+    // across it would only burn a road attempt (and eventually demolish a
+    // connectable building). Confining the search yields a legal all-owned detour.
+    const walk = findWalkPath(world, geom, rules, flag.node, target, true, player);
     if (!walk || walk.length === 0) continue;
     commands.push({ player, type: 'buildRoad', path: [flag.node, ...walk] });
   }

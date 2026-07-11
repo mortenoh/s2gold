@@ -8,7 +8,7 @@
  */
 
 import { applyCommand } from './commands';
-import { buildingDef, makeResource, type BuildingType } from './constants';
+import { buildingDef, makeResource, ownerByteFor, type BuildingType } from './constants';
 import { Geometry } from './geometry';
 import { findWalkPath } from './pathfinding';
 import { GREENLAND_RULES } from './terrain';
@@ -71,6 +71,30 @@ export function spawnBuilding(
   }));
   world.buildingAtNode[node] = bid;
   return getBuilding(world, bid);
+}
+
+/**
+ * Fixture shortcut: claim the rectangular block of nodes [x0..x1] x [y0..y1] for
+ * `player` by writing world.owner directly. Economy scenarios spread their
+ * buildings and connecting roads beyond a single HQ's territory disc; under S2
+ * territory rules a road may only run over land the builder owns, so the staged
+ * land must be owned. Ownership is normally derived from military points, but
+ * these production-only scenarios never trigger a territory recompute, so a
+ * direct claim is a stable stand-in for a garrison covering the work area.
+ */
+export function claimArea(
+  world: World,
+  geom: Geometry,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  player = 0,
+): void {
+  const owner = ownerByteFor(player);
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) world.owner[geom.index(x, y)] = owner;
+  }
 }
 
 /** Paint mountain terrain (id 0x01) on a node so a mine may sit there. */

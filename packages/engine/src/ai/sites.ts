@@ -21,7 +21,6 @@ import {
   RADIUS,
   resourceAmount,
   resourceType,
-  ownerPlayer,
   type BuildingType,
 } from '../constants';
 import type { Geometry } from '../geometry';
@@ -179,9 +178,8 @@ export function pickBuildSite(
         if (!terrainMineable(world, node)) continue;
         if (resourceType(world.resource[node]) !== bias.resource) continue;
         if (resourceAmount(world.resource[node]) <= 0) continue;
-        // Must be on our own or neutral land near the network.
-        const owner = ownerPlayer(world.owner[node]);
-        if (owner >= 0 && owner !== player) continue;
+        // canPlaceBuilding already rejected any node not owned by us (neutral and
+        // enemy alike), so a surviving mine candidate is guaranteed on our land.
         score = geom.distance(hq, node);
         break;
       }

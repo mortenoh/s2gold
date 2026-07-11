@@ -11,6 +11,7 @@
  * runs and platforms.
  */
 
+import { ownerPlayer } from './constants';
 import type { Geometry } from './geometry';
 import { isWalkableTexture, type TerrainRules } from './terrain';
 import { isWaterNode } from './water';
@@ -95,7 +96,10 @@ function rebuild(cameFrom: Map<number, number>, goal: number): number[] {
  * unreachable. Building nodes block movement (except the goal itself); flags and
  * roads are walkable. Pass `blockFlags` to also route around interior flags —
  * used to plan a *road* (which cannot pass through another flag), so the planned
- * path is one the buildRoad command will actually accept.
+ * path is one the buildRoad command will actually accept. Pass `ownedBy` to
+ * confine the whole path to that player's territory — a planned road may never
+ * cross neutral or enemy land (execBuildRoad rejects it), so an owned route must
+ * be found instead. Left undefined (the default), ownership is not constrained.
  */
 export function findWalkPath(
   world: World,
@@ -104,12 +108,14 @@ export function findWalkPath(
   start: number,
   goal: number,
   blockFlags = false,
+  ownedBy?: number,
 ): number[] | null {
   if (start === goal) return [];
 
   const walkable = (n: number): boolean => {
     if (n !== goal && world.buildingAtNode[n] >= 0) return false;
     if (blockFlags && n !== goal && world.flagAtNode[n] >= 0) return false;
+    if (ownedBy !== undefined && ownerPlayer(world.owner[n]) !== ownedBy) return false;
     return isWalkableTexture(world.terrain1[n], rules) && isWalkableTexture(world.terrain2[n], rules);
   };
   if (!walkable(goal)) return null;

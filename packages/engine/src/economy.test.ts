@@ -17,7 +17,7 @@ import {
   type GameEvent,
 } from './index';
 import { makeFlatMap } from './harness';
-import { connectToHq, setResource, spawnBuilding } from './harness-economy';
+import { claimArea, connectToHq, setResource, spawnBuilding } from './harness-economy';
 
 /** Run `n` ticks, collecting every emitted event. */
 function runTicks(world: ReturnType<typeof createWorld>, n: number): GameEvent[] {
@@ -162,6 +162,7 @@ describe('distribution fairness (CONSTANTS.md §3-4)', () => {
   it('spreads a shared ware evenly across equal consumers', () => {
     const world = createWorld(makeFlatMap(32, 32, 4, 16), { seed: 1, players: 1 });
     const geom = worldGeometry(world);
+    claimArea(world, geom, 2, 10, 16, 22); // own the land both sawmills and their roads span
     // Two sawmills, both consuming trunks, wired to the HQ.
     const sawA = spawnBuilding(world, geom, geom.index(14, 12), 'sawmill', 0, true);
     const sawB = spawnBuilding(world, geom, geom.index(14, 20), 'sawmill', 0, true);

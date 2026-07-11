@@ -13,12 +13,12 @@ describe('geologist survey', () => {
   it('places a sign showing the ore under a nearby mountain and returns the helper', () => {
     const world = createWorld(makeFlatMap(30, 30, 2, 2), { seed: 1, players: 1 });
     const geom = worldGeometry(world);
-    // A coal mountain patch around (10,10), with a flag next to it.
-    const m = geom.index(10, 10);
+    // A coal mountain patch around (6,6) (inside the HQ's territory), flag next to it.
+    const m = geom.index(6, 6);
     for (const d of geom.neighbours(m)) paintMountain(world, d);
     paintMountain(world, m);
     setResource(world, m, RESOURCE.coal, 7);
-    const flagNode = geom.index(9, 10);
+    const flagNode = geom.index(5, 6);
     applyCommand(world, { type: 'placeFlag', player: 0, node: flagNode });
     tickWorld(world);
 

@@ -37,7 +37,13 @@ export function encodeBase64(bytes: number[]): string {
  * Build a synthetic flat all-meadow map for unit tests: buildable everywhere, no
  * objects, one HQ. Terrain id 0x08 (meadow) fills texture1/texture2.
  */
-export function makeFlatMap(width: number, height: number, hqX = 1, hqY = 1): MapJson {
+export function makeFlatMap(
+  width: number,
+  height: number,
+  hqX = 1,
+  hqY = 1,
+  extraHqs: Array<{ x: number; y: number }> = [],
+): MapJson {
   const size = width * height;
   const meadow = new Array<number>(size).fill(0x08);
   const zero = new Array<number>(size).fill(0);
@@ -50,14 +56,22 @@ export function makeFlatMap(width: number, height: number, hqX = 1, hqY = 1): Ma
     resources: encodeBase64(zero),
     owner: encodeBase64(zero),
   };
+  // Player 0's HQ plus any additional players' HQs (index 1..), so a 2-player
+  // fixture gives each player real territory to place flags/roads/buildings in.
+  const hqXs = [hqX, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff];
+  const hqYs = [hqY, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff];
+  extraHqs.forEach((h, i) => {
+    hqXs[i + 1] = h.x;
+    hqYs[i + 1] = h.y;
+  });
   return {
     title: 'flat',
     width,
     height,
     terrain: 0,
     players: 1,
-    hq_x: [hqX, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff],
-    hq_y: [hqY, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff],
+    hq_x: hqXs,
+    hq_y: hqYs,
     encoding: 'base64',
     layers,
   };

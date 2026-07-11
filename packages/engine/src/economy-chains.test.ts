@@ -9,6 +9,7 @@ import {
 } from './index';
 import { makeFlatMap } from './harness';
 import {
+  claimArea,
   connectBuildings,
   connectToHq,
   paintMountain,
@@ -36,6 +37,7 @@ describe('bread chain (farm -> mill -> bakery)', () => {
   it('sows and harvests grain, mills flour, and bakes bread', () => {
     const world = createWorld(makeFlatMap(30, 30, 3, 15), { seed: 7, players: 1 });
     const geom = worldGeometry(world);
+    claimArea(world, geom, 1, 8, 20, 22); // own the land the chain and its roads span
     addWired(world, geom, geom.index(14, 15), 'farm');
     addWired(world, geom, geom.index(10, 10), 'well');
     addWired(world, geom, geom.index(10, 20), 'mill');
@@ -93,6 +95,7 @@ function buildCoinPipeline(seed: number): World {
 function buildIronChain(seed: number): World {
   const world = createWorld(makeFlatMap(32, 32, 4, 12), { seed, players: 1 });
   const geom = worldGeometry(world);
+  claimArea(world, geom, 2, 4, 16, 14); // own the land the chain and its roads span
   const iron = geom.index(8, 6);
   const coal1 = geom.index(11, 6);
   const coal2 = geom.index(14, 6);

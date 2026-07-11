@@ -20,7 +20,9 @@ import {
   territoryOf,
   worldGeometry,
   buildingDef,
+  ownerAt,
   OBJ_TYPE,
+  OWNER_NONE,
   type GameEvent,
   type MapJson,
 } from '../index';
@@ -298,6 +300,41 @@ describe('P6 AI road maintenance', () => {
     // The planned road must not cross the interior flag F...
     expect(road.path.slice(1, -1)).not.toContain(F);
     // ...and applying it actually connects the building (execBuildRoad accepts it).
+    applyCommand(world, road);
+    tickWorld(world); // queued buildRoad executes at tick start
+    expect(flagsConnectedToHq(world, 0).has(b.flagId)).toBe(true);
+  });
+
+  it('detours a planned road around neutral land, never through it (task 1)', () => {
+    // HQ at (11,9) so its door flag lands at (12,10): the road target T.
+    const map = makeFlatMap(30, 30, 11, 9);
+    const world = createWorld(map, { seed: 1, players: 1 });
+    const geom = worldGeometry(world);
+    const T = geom.index(12, 10);
+    expect(world.flags.items[flagsConnectedToHq(world, 0).values().next().value!]!.node).toBe(T);
+
+    // Stranded building whose door flag S=(10,10) sits two steps west of T on the
+    // same even row: the unique 2-step shortcut S->T runs through M=(11,10).
+    const b = spawnBuilding(world, geom, geom.index(9, 9), 'woodcutter', 0, true);
+    expect(world.flags.items[b.flagId]!.node).toBe(geom.index(10, 10));
+
+    // Carve M out of our territory: it becomes neutral, so execBuildRoad rejects
+    // any road crossing it. An all-owned detour via (11,11) still exists, so the
+    // AI must plan that instead of the shorter straight line through neutral land.
+    const M = geom.index(11, 10);
+    world.owner[M] = OWNER_NONE;
+    expect(ownerAt(world, M)).toBe(-1);
+    expect(ownerAt(world, geom.index(11, 11))).toBe(0); // detour node still ours
+
+    const ai = createAiState(0);
+    const cmds = planRoads(world, geom, rules, ai);
+    const road = cmds.find((c) => c.type === 'buildRoad');
+    expect(road).toBeDefined();
+    if (!road || road.type !== 'buildRoad') throw new Error('expected a buildRoad command');
+    // The planned road never touches the neutral node M (fails if planRoads still
+    // plans the geometric shortcut, which execBuildRoad would then reject)...
+    expect(road.path).not.toContain(M);
+    // ...and applying it actually connects the building over owned land.
     applyCommand(world, road);
     tickWorld(world); // queued buildRoad executes at tick start
     expect(flagsConnectedToHq(world, 0).has(b.flagId)).toBe(true);
