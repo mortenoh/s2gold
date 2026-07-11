@@ -13,7 +13,6 @@ import {
   BUILDING,
   buildingDef,
   FLAG_MIN_DISTANCE,
-  FLAG_WARE_CAPACITY,
   isFieldObject,
   isTreeType,
   isGraniteType,
@@ -44,12 +43,12 @@ import {
   storeLive,
   type Building,
   type Flag,
-  type Road,
   type World,
 } from './world';
 import { execAttack } from './systems/military';
 import { execPrepareExpedition, execStartExpedition } from './systems/seafaring';
 import { recalcTerritory } from './systems/territory';
+import { freeCarrier, freeDonkey } from './systems/roads';
 
 /** A queued player command (discriminated on `type`). */
 export type Command =
@@ -369,51 +368,6 @@ function execPlaceFlag(
   splitRoadsAt(world, id, node);
   events.emit({ type: 'FlagPlaced', flagId: id, node, player });
   return getFlag(world, id);
-}
-
-/**
- * Release a road's serving carrier back to the free list. A carrier caught
- * mid-carry still holds a live ware token (loc==='carried', locId===carrierId);
- * re-home it onto the first of `dropFlags` with a free slot so dispatch re-routes
- * it, or free the token when every candidate flag is full. Otherwise the token
- * leaks and its targetBuildingId permanently inflates dispatch's en-route count.
- */
-function freeCarrier(world: World, carrierId: number, dropFlags: number[]): void {
-  const carrier = world.settlers.items[carrierId];
-  if (!carrier) return;
-  if (carrier.carryingWareId >= 0) {
-    const ware = world.wares.items[carrier.carryingWareId];
-    if (ware) {
-      const flag = dropFlags
-        .map((fid) => (fid >= 0 ? world.flags.items[fid] : null))
-        .find((f) => f && f.wares.length < FLAG_WARE_CAPACITY);
-      if (flag) {
-        ware.loc = 'flag';
-        ware.locId = flag.id;
-        ware.nextFlag = -1; // dispatch recomputes from the new flag
-        flag.wares.push(ware.id);
-      } else {
-        storeFree(world.wares, carrier.carryingWareId);
-      }
-    }
-    carrier.carryingWareId = -1;
-  }
-  world.settlers.items[carrierId] = null;
-  world.settlers.free.push(carrierId);
-}
-
-/**
- * Release an upgraded road's pack donkey when the road is destroyed: re-home any
- * carried ware (like {@link freeCarrier}) and return the donkey to the player's
- * bred-donkey pool so it can serve a future donkey road. Clears road.donkeyId.
- */
-function freeDonkey(world: World, road: Road, dropFlags: number[]): void {
-  const donkeyId = road.donkeyId;
-  if (donkeyId < 0) return;
-  freeCarrier(world, donkeyId, dropFlags);
-  road.donkeyId = -1;
-  const pl = world.players[road.player];
-  if (pl) pl.donkeys++;
 }
 
 /**

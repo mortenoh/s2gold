@@ -50,6 +50,7 @@ import {
   type World,
 } from '../world';
 import { beginWalk, spawnSoldier, stepWalk, walkDone } from './movement';
+import { removeForeignRoadsAtFlag } from './roads';
 import { recalcTerritory } from './territory';
 
 // --- Small garrison helpers -----------------------------------------------
@@ -301,6 +302,10 @@ function captureBuilding(
   if (b.inputStock.length > 0) b.inputStock[0] = 0; // spilled coins are lost
   const flag = world.flags.items[b.flagId];
   if (flag) flag.player = to;
+  // The loser's roads into this flag are cut (their carried wares re-home onto
+  // each road's far flag): the old owner's economy must not keep delivering
+  // into - or route wares across - a flag that now belongs to the captor.
+  removeForeignRoadsAtFlag(world, b.flagId, to);
   events.emit({
     type: 'BuildingCaptured',
     buildingId: b.id,

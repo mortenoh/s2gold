@@ -308,3 +308,47 @@ describe('harbor completion claims territory', () => {
     expect(ownerAt(world, probe)).toBe(0);
   }, 60_000);
 });
+
+describe("capture cuts the loser's roads at the flag", () => {
+  it("the old owner's roads no longer feed a captured building's flag", () => {
+    // P0 guardhouse (strong) near P1's guardhouse, which P1 wired to its HQ.
+    const world = createWorld(makeFlatMap(48, 20, 2, 2, [{ x: 40, y: 10 }]), {
+      seed: 41,
+      players: 2,
+    });
+    const geom = worldGeometry(world);
+    const tgt = spawnBuilding(world, geom, geom.index(26, 10), 'guardhouse', 1);
+    garrisonBuilding(tgt, [1, 0, 0, 0, 0]);
+    recalcTerritory(world, geom);
+    // P1's supply road from its HQ flag to the guardhouse door flag.
+    const hq1 = world.buildings.items[world.players[1].hqBuildingId]!;
+    const hqFlagNode = world.flags.items[hq1.flagId]!.node;
+    const doorFlagNode = world.flags.items[tgt.flagId]!.node;
+    expect(connectRoad(world, geom, hqFlagNode, doorFlagNode, 1)).toBeTruthy();
+    tickWorld(world);
+    const feeding = [...storeLive(world.roads)].filter(
+      (r) => r.player === 1 && (r.flagA === tgt.flagId || r.flagB === tgt.flagId),
+    );
+    expect(feeding.length).toBe(1);
+
+    // P0 captures the guardhouse.
+    const src = spawnBuilding(world, geom, geom.index(20, 10), 'guardhouse', 0);
+    garrisonBuilding(src, [0, 0, 0, 0, 3]);
+    recalcTerritory(world, geom);
+    applyCommand(world, { type: 'attack', player: 0, targetBuildingId: tgt.id, soldiers: 2 });
+    let captured = false;
+    for (let i = 0; i < 4000 && !captured; i++) {
+      for (const e of tickWorld(world)) {
+        if (e.type === 'BuildingCaptured' && e.toPlayer === 0) captured = true;
+      }
+    }
+    expect(captured).toBe(true);
+
+    // Pre-fix P1's road survived with flagB = the now-P0 flag, so P1's
+    // carriers kept delivering into P0's building. Now the road is cut.
+    const stillFeeding = [...storeLive(world.roads)].filter(
+      (r) => r.player === 1 && (r.flagA === tgt.flagId || r.flagB === tgt.flagId),
+    );
+    expect(stillFeeding.length).toBe(0);
+  });
+});
