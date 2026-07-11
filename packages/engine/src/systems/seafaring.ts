@@ -252,6 +252,19 @@ export function spawnShip(
   return world.ships.items[id] as Ship;
 }
 
+/**
+ * The expedition spot checks shared by launch and landing: a free land node
+ * whose SE door node is free and whose door flag (if any) is the player's own.
+ */
+function expeditionSpotFree(world: World, geom: Geometry, spot: number, player: number): boolean {
+  if (world.buildingAtNode[spot] >= 0) return false;
+  const doorNode = geom.neighbour(spot, 'SE');
+  if (world.buildingAtNode[doorNode] >= 0) return false;
+  const doorFlag = world.flagAtNode[doorNode];
+  if (doorFlag >= 0 && world.flags.items[doorFlag]?.player !== player) return false;
+  return true;
+}
+
 /** Found a working harbor (HQ-lite) at a land node, with its SE door flag. */
 function foundHarbor(world: World, geom: Geometry, node: number, player: number): number {
   const flagNode = geom.neighbour(node, 'SE');
@@ -414,6 +427,10 @@ function stepOneShip(ctx: SeaContext, events: EventSink, ship: Ship): void {
       const arrived = ship.pathIndex >= ship.path.length ? true : stepShip(ship);
       if (!arrived) break;
       const spot = ship.expeditionTargetSpot;
+      // Revalidate on landing: the spot may have been built on (or its door
+      // flag claimed by another player) during the voyage. Wait anchored
+      // offshore and retry each tick rather than overwrite live state.
+      if (!expeditionSpotFree(world, geom, spot, ship.player)) break;
       const newHarborId = foundHarbor(world, geom, spot, ship.player);
       recalcTerritory(world, geom);
       events.emit({
@@ -527,16 +544,11 @@ export function execStartExpedition(
   const harbor = world.buildings.items[harborId];
   if (!harbor || harbor.type !== BUILDING.harbor || harbor.state !== 'working') return;
 
-  // The target must be a free coastal land spot with a free SE door node.
-  if (world.buildingAtNode[targetSpot] >= 0) return;
+  // The target must be a free coastal land spot with a free SE door node whose
+  // flag (if any) is our own - re-checked on landing, since the voyage is long.
+  if (!expeditionSpotFree(world, geom, targetSpot, player)) return;
   const targetDock = harborDockNode(world, geom, targetSpot);
   if (targetDock < 0) return;
-  const doorNode = geom.neighbour(targetSpot, 'SE');
-  if (world.buildingAtNode[doorNode] >= 0) return;
-  // Don't launch toward a spot whose door flag belongs to another player — the
-  // colony's harbor would otherwise be served by a foreign flag.
-  const doorFlag = world.flagAtNode[doorNode];
-  if (doorFlag >= 0 && world.flags.items[doorFlag]?.player !== player) return;
 
   // Find an idle ship homed here with a water route to the target.
   const dockHome = harborDockNode(world, geom, harbor.node);

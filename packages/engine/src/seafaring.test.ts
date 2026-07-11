@@ -243,6 +243,55 @@ describe('P7 expedition founding', () => {
     expect(expeditionStatus(world, harborA.id)).toBeNull(); // kit consumed
   });
 
+  it('waits offshore instead of founding on a spot occupied during the voyage', () => {
+    const world = createWorld(makeTwoIslandMap(), { seed: 6, players: 2 });
+    const geom = worldGeometry(world);
+    const harborA = spawnBuilding(
+      world,
+      geom,
+      geom.index(TWO_ISLAND.harborA.x, TWO_ISLAND.harborA.y),
+      BUILDING.harbor,
+    );
+    manufactureShip(world, geom, harborA.id);
+    const targetSpot = geom.index(TWO_ISLAND.harborB.x, TWO_ISLAND.harborB.y);
+
+    applyCommand(world, { player: 0, type: 'prepareExpedition', harborId: harborA.id });
+    let ready = false;
+    for (let i = 0; i < 50 && !ready; i++) {
+      for (const e of tickWorld(world)) if (e.type === 'ExpeditionReady') ready = true;
+    }
+    expect(ready).toBe(true);
+    applyCommand(world, { player: 0, type: 'startExpedition', harborId: harborA.id, targetSpot });
+    tickWorld(world); // the ship departs
+
+    // Mid-voyage, another player's building takes the target spot.
+    const squatter = spawnBuilding(world, geom, targetSpot, BUILDING.harbor, 1);
+
+    let landed = false;
+    for (let i = 0; i < 1500 && !landed; i++) {
+      for (const e of tickWorld(world)) if (e.type === 'ExpeditionLanded') landed = true;
+    }
+
+    // Pre-fix the landing overwrote buildingAtNode with a second live harbor
+    // and reassigned the door flag. Now the ship waits offshore instead.
+    expect(landed).toBe(false);
+    expect(world.buildingAtNode[targetSpot]).toBe(squatter.id);
+    const door = world.flagAtNode[geom.neighbour(targetSpot, 'SE')];
+    expect(getFlag(world, door).player).toBe(1);
+
+    // The moment the squatter is gone (building AND its leftover door flag,
+    // which by design outlives the building and blocks foreign spots), the
+    // waiting expedition founds normally.
+    applyCommand(world, { player: 1, type: 'demolish', node: targetSpot });
+    tickWorld(world);
+    applyCommand(world, { player: 1, type: 'demolish', node: geom.neighbour(targetSpot, 'SE') });
+    for (let i = 0; i < 200 && !landed; i++) {
+      for (const e of tickWorld(world)) if (e.type === 'ExpeditionLanded') landed = true;
+    }
+    expect(landed).toBe(true);
+    expect(harborsOf(world, 0).some((h) => h.node === targetSpot)).toBe(true);
+  });
+
   it('refuses to found on a spot whose door flag belongs to another player', () => {
     const world = createWorld(makeTwoIslandMap(), { seed: 4, players: 2 });
     const geom = worldGeometry(world);
