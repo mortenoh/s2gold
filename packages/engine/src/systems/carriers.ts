@@ -220,7 +220,13 @@ function stepCarrier(world: World, carrier: Settler, events: EventSink): void {
       // Only a WORKING warehouse absorbs at the door: a storehouse/harbor still
       // under construction must take the normal flag path so the delivery is
       // credited to deliveredBoards/deliveredStones and the site can finish.
-      if (carried && tgt && tgt.flagId === dropFlagId && isWarehouse(tgt) && tgt.state === 'working') {
+      if (
+        carried &&
+        tgt &&
+        tgt.flagId === dropFlagId &&
+        isWarehouse(tgt) &&
+        tgt.state === 'working'
+      ) {
         world.players[tgt.player].wares[carried.type]++;
         storeFree(world.wares, carried.id);
         carrier.carryingWareId = -1;

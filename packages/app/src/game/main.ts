@@ -240,7 +240,7 @@ async function boot(): Promise<void> {
     '',
     (name) => {
       const entry = index.find((m) => m.name === name);
-      if (entry) void switchMap(entry);
+      if (entry) void switchMap(entry).catch((err: unknown) => mapSwitchFailed(entry.name, err));
     },
     { 'data-testid': 'map-select' },
   );
@@ -553,10 +553,17 @@ async function boot(): Promise<void> {
   let camera = new Camera(1, 1);
   let session: GameSession | null = null;
   let landscape: LandscapeSet = 0;
+  // The building/flag/border-stone archive for the active map. Falls back to
+  // the always-registered summer rom_z when a landscape's archive is missing
+  // (assets converted before winter support): wrong-season beats invisible.
+  let nationArchive = BUILDING_ARCHIVE;
   let objAtlasReady = false;
   // Current map identity (drives per-map save filtering + default save names).
   let currentMap = '';
   let currentMapTitle = '';
+  // Live campaign tracking (set when the page booted with ?campaign=).
+  let activeCampaign: CampaignController | null = null;
+  let activeChapterMap = '';
   const minimap = new MinimapView(minimapCanvas, (wx, wy) => {
     camera.centerOn(wx, wy, canvas.width, canvas.height);
   });
@@ -581,10 +588,27 @@ async function boot(): Promise<void> {
     }
   }
 
+  // Monotonic switch generation: an in-flight switchMap that has been
+  // superseded by a newer one must abandon before touching shared state, or
+  // the last-resolving fetch would win over the user's latest selection.
+  let switchGen = 0;
+
+  /** A failed map switch must not be silent: toast + keep the HUD honest. */
+  function mapSwitchFailed(name: string, err: unknown): void {
+    console.error(`map switch to ${name} failed`, err);
+    saveToast(`Failed to load map ${name}`);
+    if (currentMap) {
+      mapSelect.setValue(currentMap);
+      document.body.dataset.mapReady = currentMap;
+    }
+  }
+
   async function switchMap(entry: MapIndexEntry, aiPlayers: readonly number[] = []): Promise<void> {
+    const gen = ++switchGen;
     delete document.body.dataset.mapReady;
     const map = await loadMap(entry);
     const atlas = await loadTerrainImage(map.terrain);
+    if (gen !== switchGen) return; // superseded by a newer switch
     renderer.resize();
     renderer.load(map.data, atlas);
 
@@ -592,6 +616,7 @@ async function boot(): Promise<void> {
     const archive = objectAtlasForLandscape(map.terrain);
     if (!sprites.hasAtlas(archive)) {
       const loaded = await loadAtlas(archive);
+      if (gen !== switchGen) return;
       if (loaded) sprites.registerAtlas(loaded.meta, loaded.pages, loaded.pmaskPages);
     }
     objAtlasReady = sprites.hasAtlas(archive);
@@ -599,10 +624,15 @@ async function boot(): Promise<void> {
     // Winter maps swap the Roman building/flag/border-stone graphics to the W*
     // nation archive (wrom_z); greenland/wasteland keep the summer rom_z that is
     // registered once at startup. Load the winter archive lazily on first winter map.
-    const nationArchive = buildingArchiveForLandscape(map.terrain);
-    if (!sprites.hasAtlas(nationArchive)) {
-      const loaded = await loadAtlas(nationArchive);
+    const wantedNation = buildingArchiveForLandscape(map.terrain);
+    if (!sprites.hasAtlas(wantedNation)) {
+      const loaded = await loadAtlas(wantedNation);
+      if (gen !== switchGen) return;
       if (loaded) sprites.registerAtlas(loaded.meta, loaded.pages, loaded.pmaskPages);
+    }
+    nationArchive = sprites.hasAtlas(wantedNation) ? wantedNation : BUILDING_ARCHIVE;
+    if (nationArchive !== wantedNation) {
+      console.warn(`missing sprite archive ${wantedNation}; falling back to ${BUILDING_ARCHIVE}`);
     }
 
     // Computer opponents: keep only slot indices this map can seat, then seed
@@ -611,6 +641,9 @@ async function boot(): Promise<void> {
     const playerCount = ai.length > 0 ? Math.max(...ai) + 1 : undefined;
     session = new GameSession(map.engineMap, GAME_SEED, playerCount, ai);
     session.fogEnabled = readFogPref();
+    // A fresh session runs at 1x unpaused: sync the HUD controls to it.
+    setSpeed(1);
+    setPaused(false);
     sprites.setMap(map.data.width, map.data.height, map.data.heightLayer);
     roads.setMap(map.data.width, map.data.height);
     rebuildStatics();
@@ -641,6 +674,14 @@ async function boot(): Promise<void> {
     // Keep the URL honest about the active AI config (cleared on a plain switch).
     if (ai.length > 0) url.searchParams.set('ai', ai.join(','));
     else url.searchParams.delete('ai');
+    // Leaving the chapter's map ends campaign tracking: the win condition
+    // must not be satisfiable (and progress recorded) on a different map.
+    if (activeCampaign && entry.name !== activeChapterMap) {
+      activeCampaign.dispose();
+      activeCampaign.button.remove();
+      activeCampaign = null;
+      url.searchParams.delete('campaign');
+    }
     window.history.replaceState(null, '', url);
     document.body.dataset.mapReady = entry.name;
   }
@@ -1077,7 +1118,7 @@ async function boot(): Promise<void> {
             {
               carrier,
               jobs,
-              buildingArchive: buildingArchiveForLandscape(landscape),
+              buildingArchive: nationArchive,
               objectArchive: objectAtlasForLandscape(landscape),
               workAvailable: sprites.hasAtlas(WORK_ARCHIVE),
             },
@@ -1095,7 +1136,6 @@ async function boot(): Promise<void> {
     if (session) {
       const vis = session.fogEnabled ? session.visibility : null;
       const objectArchive = objectAtlasForLandscape(landscape);
-      const nationArchive = buildingArchiveForLandscape(landscape);
       for (let p = 0; p < session.playerCount; p++) {
         for (const s of borderStoneSprites(
           session.world,
@@ -1223,7 +1263,18 @@ async function boot(): Promise<void> {
         .filter((n) => Number.isInteger(n) && n > 0)
     : [];
   setSpeed(1);
-  await switchMap(pickMap(index, query), aiPlayers);
+  try {
+    await switchMap(pickMap(index, query), aiPlayers);
+  } catch (err) {
+    console.error('initial map load failed', err);
+    showMessage(
+      gameRoot,
+      'game-map-load-failed',
+      'Failed to load the map (missing or corrupt converted assets).<br />' +
+        'Check the asset pipeline output, then reload.',
+    );
+    return;
+  }
 
   // Campaign mode (/play/<map>?campaign=<id>): show the Objectives panel and
   // check the chapter's win condition against the live session.
@@ -1232,6 +1283,8 @@ async function boot(): Promise<void> {
   if (chapter) {
     document.title = `s2gold — ${chapter.title}`;
     const campaign = new CampaignController({ root, session: () => session, chapter });
+    activeCampaign = campaign;
+    activeChapterMap = chapter.mapName;
     // Insert before the (optional, default-hidden) tick/FPS readouts so the
     // campaign button stays with the main controls rather than trailing them.
     hudTop.insertBefore(campaign.button, tickLabel);

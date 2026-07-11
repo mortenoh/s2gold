@@ -195,7 +195,9 @@ export class MilitaryPanel {
         this.button(
           'Attack',
           () => {
-            const n = Math.max(1, Math.min(max, Number(count.value) || max));
+            // An empty or zero count clamps to 1; it must never mean "send all".
+            const raw = Number(count.value);
+            const n = Math.max(1, Math.min(max, Number.isFinite(raw) ? raw : 1));
             session.attack(view.buildingId, n);
             this.render();
           },

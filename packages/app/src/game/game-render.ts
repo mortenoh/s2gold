@@ -25,6 +25,7 @@ import {
   resourceAmount,
   resourceType,
   TICKS,
+  WARE_ID,
   type Building,
   type BuildingType,
   type Geometry,
@@ -178,12 +179,12 @@ export function donkeySprite(dir: number, step: number): number {
   );
 }
 
-/** carrier BOB job (GoodType) id for each carried ware. */
-export const WARE_JOB: Readonly<Record<WareType, number>> = {
-  trunk: 22,
-  plank: 23,
-  stone: 24,
-};
+/**
+ * carrier BOB job (GoodType) id for each carried ware. The engine's WARE_ID
+ * table IS the GoodType id space the converted carrier atlas indexes its
+ * overlay links by, so every ware type renders (not just trunk/plank/stone).
+ */
+export const WARE_JOB: Readonly<Record<WareType, number>> = WARE_ID;
 
 /**
  * JOBS.BOB job id per engine worker job, used to select the profession overlay
