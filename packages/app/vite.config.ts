@@ -63,6 +63,10 @@ export default defineConfig({
     // converted game art (public/assets). Emitting to dist/app/ avoids the mount
     // collision that otherwise 404s the app bundle in production.
     assetsDir: 'app',
+    // Never copy public/ (the ~75 MB converted asset tree) into dist: the
+    // server mounts /assets separately, and a stale dist/assets snapshot would
+    // silently shadow it whenever the real assets dir is missing.
+    copyPublicDir: false,
     rollupOptions: {
       input: {
         main: resolve(import.meta.dirname, 'index.html'),

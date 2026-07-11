@@ -65,9 +65,22 @@ async def test_saves_crud_roundtrip(client: AsyncClient):
 
 async def test_save_id_validation(client: AsyncClient):
     payload = {"name": "x", "map": "m", "data": {}}
-    for bad in ("../etc/passwd", "UPPER", "a b"):
+    # NOTE: httpx normalizes dot segments client-side, so a literal "../" never
+    # reaches the app; the encoded form below arrives raw and is decoded to
+    # ".." by routing, genuinely exercising the SAVE_ID_PATTERN check.
+    for bad in ("%2e%2e", "%2e%2e%2fetc%2fpasswd", "UPPER", "a b"):
         response = await client.put(f"/api/saves/{bad}", json=payload)
         assert response.status_code in (404, 422), bad
+
+
+async def test_oversized_save_rejected(client: AsyncClient, app: FastAPI):
+    app.state.settings.max_save_bytes = 1024
+    big = {"name": "big", "map": "m", "data": {"blob": "x" * 4096}}
+    response = await client.put("/api/saves/big-save", json=big)
+    assert response.status_code == 413
+    # Within the limit still works.
+    response = await client.put("/api/saves/small-save", json={"name": "s", "map": "m", "data": {}})
+    assert response.status_code == 200
 
 
 async def test_blank_name_rejected(client: AsyncClient):

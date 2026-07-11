@@ -17,5 +17,6 @@ class Settings(BaseSettings):
     assets_dir: Path = ASSETS_DIR
     frontend_dist: Path = REPO_ROOT / "packages" / "app" / "dist"
     saves_dir: Path = REPO_ROOT / "saves"
+    max_save_bytes: int = 32 * 1024 * 1024  # reject save uploads larger than this
 
     model_config = {"env_prefix": "S2GOLD_"}
