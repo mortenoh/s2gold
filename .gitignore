@@ -16,6 +16,7 @@ extracted/
 *.sf2
 assets-cache/
 packages/app/public/assets/
+docs/reference-study/
 
 # Node
 node_modules/
