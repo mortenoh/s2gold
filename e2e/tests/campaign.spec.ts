@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { assetsPresent } from './helpers';
 
 /**
  * P7 campaign gate: the campaign menu gates chapters (only I selectable at
@@ -13,11 +14,6 @@ const PROGRESS_KEY = 's2gold.campaign.progress';
 
 // Each Playwright test runs in an isolated browser context, so localStorage
 // (campaign progress, intro-watched) always starts empty — no explicit reset.
-
-async function assetsPresent(page: Page): Promise<boolean> {
-  const res = await page.request.get('/assets/maps/index.json');
-  return res.ok();
-}
 
 test('campaign menu lists ten chapters with only chapter I selectable initially', async ({
   page,
@@ -123,6 +119,8 @@ test('force-completing chapter I records progress and unlocks chapter II', async
 });
 
 test('intro overlay opens from the title screen and can be skipped', async ({ page }) => {
+  test.skip(!(await assetsPresent(page)), 'converted assets not installed');
+
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(String(err)));
 

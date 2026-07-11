@@ -1,4 +1,5 @@
 import { expect, test, type ConsoleMessage } from '@playwright/test';
+import { assetsPresent } from './helpers';
 
 /**
  * Benign console noise: missing optional assets (404s for /assets/*) must not
@@ -40,6 +41,8 @@ test('title screen renders the menu without console errors', async ({ page }) =>
 });
 
 test('free play flows to setup, lists maps, and starts a game', async ({ page }) => {
+  test.skip(!(await assetsPresent(page)), 'converted assets not installed');
+
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(String(err)));
 
@@ -72,6 +75,8 @@ test('free play flows to setup, lists maps, and starts a game', async ({ page })
 });
 
 test('a specific map can be selected and previewed', async ({ page }) => {
+  test.skip(!(await assetsPresent(page)), 'converted assets not installed');
+
   await page.goto('/setup');
   await expect(page.getByTestId('map-list')).toBeVisible();
 

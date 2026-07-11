@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { assetsPresent } from './helpers';
 
 interface S2Debug {
   staticObjects: number;
@@ -37,11 +38,6 @@ async function readDebug(page: Page): Promise<S2Debug> {
  * switching, and never throws. Tests skip gracefully when converted assets
  * are absent (CI without the GOG installer).
  */
-
-async function assetsPresent(page: Page): Promise<boolean> {
-  const res = await page.request.get('/assets/maps/index.json');
-  return res.ok();
-}
 
 /**
  * Sample the WebGL canvas (preserveDrawingBuffer is on) through a 2D canvas
