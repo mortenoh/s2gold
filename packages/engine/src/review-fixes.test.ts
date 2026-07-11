@@ -14,7 +14,7 @@ import {
   type GameEvent,
 } from './index';
 import { makeFlatMap } from './harness';
-import { garrisonBuilding, spawnBuilding } from './harness-economy';
+import { claimArea, connectRoad, garrisonBuilding, spawnBuilding } from './harness-economy';
 import { recalcTerritory } from './systems/territory';
 import { storeLive } from './world';
 
@@ -177,5 +177,44 @@ describe('captures do not absorb rival attackers', () => {
     // came up short with no death event.
     expect(soldierTotal(world, 1) + died[1]).toBe(before1);
     expect(soldierTotal(world, 2) + died[2]).toBe(before2);
+  });
+});
+
+describe('flags do not split foreign roads', () => {
+  it("placing a flag on an ex-enemy road leaves the enemy road intact", () => {
+    // P1 builds a road on its own land; the land then changes hands to P0.
+    const world = createWorld(makeFlatMap(40, 20, 2, 2, [{ x: 30, y: 10 }]), {
+      seed: 21,
+      players: 2,
+    });
+    const geom = worldGeometry(world);
+    claimArea(world, geom, 18, 8, 30, 12, 1);
+    const a = geom.index(20, 10);
+    const b = geom.index(26, 10);
+    applyCommand(world, { type: 'placeFlag', player: 1, node: a });
+    applyCommand(world, { type: 'placeFlag', player: 1, node: b });
+    tickWorld(world);
+    expect(connectRoad(world, geom, a, b, 1)).toBeTruthy();
+    tickWorld(world);
+    const roadsBefore = [...storeLive(world.roads)].filter((r) => r.player === 1);
+    expect(roadsBefore.length).toBe(1);
+    const interior = roadsBefore[0].path[2]; // an interior node of P1's road
+
+    // The frontier moves: P0 now owns the road's land and flags the interior.
+    claimArea(world, geom, 18, 8, 30, 12, 0);
+    applyCommand(world, { type: 'placeFlag', player: 0, node: interior });
+    tickWorld(world);
+    const flagId = world.flagAtNode[interior];
+    expect(flagId).toBeGreaterThanOrEqual(0);
+
+    // Pre-fix the enemy road was split into two P1 halves terminating at P0's
+    // flag (wiring the economies together). Now it stays one untouched road.
+    const roadsAfter = [...storeLive(world.roads)].filter((r) => r.player === 1);
+    expect(roadsAfter.length).toBe(1);
+    expect(roadsAfter[0].path).toEqual(roadsBefore[0].path);
+    for (const r of roadsAfter) {
+      expect(r.flagA).not.toBe(flagId);
+      expect(r.flagB).not.toBe(flagId);
+    }
   });
 });

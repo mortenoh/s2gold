@@ -422,9 +422,14 @@ function freeDonkey(world: World, road: Road, dropFlags: number[]): void {
  * system re-staffs both halves next tick.
  */
 function splitRoadsAt(world: World, flagId: number, node: number): void {
+  const flagPlayer = world.flags.items[flagId]?.player ?? -1;
   for (const road of [...storeLive(world.roads)]) {
     const idx = road.path.indexOf(node);
     if (idx <= 0 || idx >= road.path.length - 1) continue; // endpoint or absent
+    // Only the flag owner's roads tap in. A foreign road (left crossing land
+    // that changed hands) must not be split: the halves would keep the foreign
+    // owner but terminate at this flag, wiring the two economies together.
+    if (road.player !== flagPlayer) continue;
     const { player, flagA, flagB } = road;
     const left = road.path.slice(0, idx + 1);
     const right = road.path.slice(idx);
