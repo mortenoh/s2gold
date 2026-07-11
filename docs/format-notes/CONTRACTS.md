@@ -54,7 +54,7 @@ Naming: lowercase, original basenames (`mapbobs`, `rom_y`, `tex5`, ...).
 ## Player-color sprites
 
 Bitmap type 4 ("player" bitmaps) contain pixels that get recolored per player. Emit the
-base sprite with those pixels in the *first* player's colors AND a separate grayscale/
+base sprite with those pixels in the _first_ player's colors AND a separate grayscale/
 mask PNG (`*_pmask.png`) marking player-color pixels + shade index, so the renderer can
 tint at runtime. Record the palette indices used in atlas.json.
 

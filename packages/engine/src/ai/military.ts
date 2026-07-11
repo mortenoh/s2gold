@@ -92,7 +92,8 @@ export function pickAttackTarget(
     const strength = garrisonStrength(t);
     if (
       strength < bestStrength ||
-      (strength === bestStrength && (dist < bestDist || (dist === bestDist && (best < 0 || t.id < best))))
+      (strength === bestStrength &&
+        (dist < bestDist || (dist === bestDist && (best < 0 || t.id < best))))
     ) {
       best = t.id;
       bestStrength = strength;

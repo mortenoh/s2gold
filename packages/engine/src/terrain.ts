@@ -44,9 +44,7 @@ export const BUILDABLE_IDS: ReadonlySet<number> = new Set([
 ]);
 
 /** Mountain family — walkable and mineable, but only mines may be built. */
-export const MOUNTAIN_IDS: ReadonlySet<number> = new Set([
-  0x01, 0x0b, 0x0c, 0x0d, 0x12, 0x22,
-]);
+export const MOUNTAIN_IDS: ReadonlySet<number> = new Set([0x01, 0x0b, 0x0c, 0x0d, 0x12, 0x22]);
 
 /**
  * Impassable terrain ids (greenland): water, reef, swamp and lava. Snow (0x02)

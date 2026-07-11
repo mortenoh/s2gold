@@ -49,7 +49,7 @@ function makeAiMap(
   const objType = new Array<number>(size).fill(0);
   const objIdx = new Array<number>(size).fill(0);
   const idx = (x: number, y: number): number =>
-    ((y % height) + height) % height * width + (((x % width) + width) % width);
+    (((y % height) + height) % height) * width + (((x % width) + width) % width);
 
   // Trees south of the AI HQ (for woodcutter + forester radius).
   for (let dx = -4; dx <= 4; dx++) {
@@ -206,7 +206,17 @@ describe('P6 AI site selection', () => {
     const world = createWorld(map, { seed: 1, players: 2 });
     const geom = worldGeometry(world);
     const hq = world.buildings.items[world.players[1].hqBuildingId]!.node;
-    const node = pickBuildSite(world, geom, rules, 1, 'woodcutter', { kind: 'nearTrees' }, hq, 16, 14);
+    const node = pickBuildSite(
+      world,
+      geom,
+      rules,
+      1,
+      'woodcutter',
+      { kind: 'nearTrees' },
+      hq,
+      16,
+      14,
+    );
     expect(node).toBeGreaterThanOrEqual(0);
     // A tree lies within the woodcutter's reach of the chosen site.
     let treeNear = false;
@@ -222,7 +232,17 @@ describe('P6 AI site selection', () => {
     const world = createWorld(map, { seed: 1, players: 1 });
     const geom = worldGeometry(world);
     const hq = world.buildings.items[world.players[0].hqBuildingId]!.node;
-    const node = pickBuildSite(world, geom, rules, 0, 'woodcutter', { kind: 'nearTrees' }, hq, 8, 10);
+    const node = pickBuildSite(
+      world,
+      geom,
+      rules,
+      0,
+      'woodcutter',
+      { kind: 'nearTrees' },
+      hq,
+      8,
+      10,
+    );
     expect(node).toBe(-1);
   });
 
@@ -346,7 +366,15 @@ describe('P6 AI attack-target choice', () => {
 
   it('targets the weakest reachable enemy military building', () => {
     const map = makeFlatMap(30, 30, 6, 6);
-    const world = createWorld({ ...map, players: 2, hq_x: [6, 20, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff], hq_y: [6, 6, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff] }, { seed: 1, players: 2 });
+    const world = createWorld(
+      {
+        ...map,
+        players: 2,
+        hq_x: [6, 20, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff],
+        hq_y: [6, 6, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff],
+      },
+      { seed: 1, players: 2 },
+    );
     const geom = worldGeometry(world);
 
     // AI (player 1) fortress with a real surplus near two enemy buildings.
@@ -368,7 +396,15 @@ describe('P6 AI attack-target choice', () => {
 
   it('falls back to the enemy HQ when no military targets remain', () => {
     const map = makeFlatMap(30, 30, 6, 6);
-    const world = createWorld({ ...map, players: 2, hq_x: [6, 20, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff], hq_y: [6, 6, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff] }, { seed: 1, players: 2 });
+    const world = createWorld(
+      {
+        ...map,
+        players: 2,
+        hq_x: [6, 20, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff],
+        hq_y: [6, 6, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff],
+      },
+      { seed: 1, players: 2 },
+    );
     const geom = worldGeometry(world);
 
     // AI (player 1) fortress with a surplus; the enemy has no military
@@ -383,7 +419,15 @@ describe('P6 AI attack-target choice', () => {
 
   it('prefers a military target over the enemy HQ', () => {
     const map = makeFlatMap(30, 30, 6, 6);
-    const world = createWorld({ ...map, players: 2, hq_x: [6, 20, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff], hq_y: [6, 6, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff] }, { seed: 1, players: 2 });
+    const world = createWorld(
+      {
+        ...map,
+        players: 2,
+        hq_x: [6, 20, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff],
+        hq_y: [6, 6, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff],
+      },
+      { seed: 1, players: 2 },
+    );
     const geom = worldGeometry(world);
 
     const fort = spawnBuilding(world, geom, geom.index(12, 6), 'fortress', 1, true);
@@ -400,7 +444,15 @@ describe('P6 AI attack-target choice', () => {
 
   it('returns null when the AI has no soldier surplus', () => {
     const map = makeFlatMap(30, 30, 6, 6);
-    const world = createWorld({ ...map, players: 2, hq_x: [6, 20, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff], hq_y: [6, 6, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff] }, { seed: 1, players: 2 });
+    const world = createWorld(
+      {
+        ...map,
+        players: 2,
+        hq_x: [6, 20, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff],
+        hq_y: [6, 6, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff],
+      },
+      { seed: 1, players: 2 },
+    );
     const geom = worldGeometry(world);
     const mine = spawnBuilding(world, geom, geom.index(16, 6), 'guardhouse', 1, true);
     garrisonBuilding(mine, [1, 0, 0, 0, 0]); // only the lone keeper — no surplus

@@ -19,14 +19,7 @@
  * cost and always founds a harbor (not an arbitrary building).
  */
 
-import {
-  BUILDING,
-  FLAG_WARE_CAPACITY,
-  JOB,
-  NUM_SOLDIER_RANKS,
-  OBJ_TYPE,
-  SEA,
-} from '../constants';
+import { BUILDING, FLAG_WARE_CAPACITY, JOB, NUM_SOLDIER_RANKS, OBJ_TYPE, SEA } from '../constants';
 import type { EventSink } from '../events';
 import type { Geometry } from '../geometry';
 import { buildFlagGraph, findFlagRoute, findWaterPath } from '../pathfinding';
@@ -61,9 +54,7 @@ export interface SeaContext {
 /** True when a building is a working harbor that has a navigable-water dock. */
 function isDockedHarbor(world: World, geom: Geometry, b: Building): boolean {
   return (
-    b.type === BUILDING.harbor &&
-    b.state === 'working' &&
-    harborDockNode(world, geom, b.node) >= 0
+    b.type === BUILDING.harbor && b.state === 'working' && harborDockNode(world, geom, b.node) >= 0
   );
 }
 
@@ -251,7 +242,13 @@ export function spawnShip(
     expeditionStones: 0,
     expeditionBuilder: false,
   }));
-  events.emit({ type: 'ShipBuilt', shipId: id, buildingId: shipyard.id, homeHarborId: homeId, player: shipyard.player });
+  events.emit({
+    type: 'ShipBuilt',
+    shipId: id,
+    buildingId: shipyard.id,
+    homeHarborId: homeId,
+    player: shipyard.player,
+  });
   return world.ships.items[id] as Ship;
 }
 
@@ -404,7 +401,12 @@ function stepOneShip(ctx: SeaContext, events: EventSink, ship: Ship): void {
       if (!arrived) break;
       ship.destHarborId = -1;
       ship.state = 'idle';
-      events.emit({ type: 'ShipArrived', shipId: ship.id, harborId: ship.homeHarborId, player: ship.player });
+      events.emit({
+        type: 'ShipArrived',
+        shipId: ship.id,
+        harborId: ship.homeHarborId,
+        player: ship.player,
+      });
       break;
     }
 
@@ -414,8 +416,19 @@ function stepOneShip(ctx: SeaContext, events: EventSink, ship: Ship): void {
       const spot = ship.expeditionTargetSpot;
       const newHarborId = foundHarbor(world, geom, spot, ship.player);
       recalcTerritory(world, geom);
-      events.emit({ type: 'ExpeditionLanded', shipId: ship.id, harborId: newHarborId, node: spot, player: ship.player });
-      events.emit({ type: 'ShipArrived', shipId: ship.id, harborId: newHarborId, player: ship.player });
+      events.emit({
+        type: 'ExpeditionLanded',
+        shipId: ship.id,
+        harborId: newHarborId,
+        node: spot,
+        player: ship.player,
+      });
+      events.emit({
+        type: 'ShipArrived',
+        shipId: ship.id,
+        harborId: newHarborId,
+        player: ship.player,
+      });
       // Re-home the ship to the new colony and clear the expedition kit.
       ship.homeHarborId = newHarborId;
       ship.destHarborId = -1;
@@ -485,7 +498,14 @@ export function execPrepareExpedition(world: World, player: number, harborId: nu
   const h = world.buildings.items[harborId];
   if (!h || h.player !== player || h.type !== BUILDING.harbor || h.state !== 'working') return;
   if (world.expeditions.some((e) => e.harborId === harborId)) return;
-  world.expeditions.push({ harborId, player, boards: 0, stones: 0, hasBuilder: false, ready: false });
+  world.expeditions.push({
+    harborId,
+    player,
+    boards: 0,
+    stones: 0,
+    hasBuilder: false,
+    ready: false,
+  });
 }
 
 /**
@@ -500,7 +520,9 @@ export function execStartExpedition(
   harborId: number,
   targetSpot: number,
 ): void {
-  const eIdx = world.expeditions.findIndex((e) => e.harborId === harborId && e.ready && e.player === player);
+  const eIdx = world.expeditions.findIndex(
+    (e) => e.harborId === harborId && e.ready && e.player === player,
+  );
   if (eIdx < 0) return;
   const harbor = world.buildings.items[harborId];
   if (!harbor || harbor.type !== BUILDING.harbor || harbor.state !== 'working') return;
@@ -521,7 +543,12 @@ export function execStartExpedition(
   if (dockHome < 0) return;
   let ship: Ship | null = null;
   for (const s of storeLive(world.ships)) {
-    if (s.player === player && s.homeHarborId === harborId && s.state === 'idle' && s.cargo.length === 0) {
+    if (
+      s.player === player &&
+      s.homeHarborId === harborId &&
+      s.state === 'idle' &&
+      s.cargo.length === 0
+    ) {
       ship = s;
       break;
     }

@@ -12,7 +12,11 @@ import type { BitmapFont, DrawOptions } from './font';
 import { el } from '../lib/dom';
 
 /** Build a right-sized canvas rendering `text` with `font`. */
-export function fontCanvas(font: BitmapFont, text: string, opts: DrawOptions = {}): HTMLCanvasElement {
+export function fontCanvas(
+  font: BitmapFont,
+  text: string,
+  opts: DrawOptions = {},
+): HTMLCanvasElement {
   const canvas = font.render(text, opts);
   canvas.className = 'font-canvas';
   canvas.setAttribute('aria-hidden', 'true');

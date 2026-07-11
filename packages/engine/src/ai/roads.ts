@@ -46,7 +46,11 @@ export function flagsConnectedToHq(world: World, player: number): Set<number> {
 }
 
 /** Non-HQ buildings of `player` whose flag is not connected to the HQ. */
-export function unconnectedBuildings(world: World, player: number, connected: Set<number>): Building[] {
+export function unconnectedBuildings(
+  world: World,
+  player: number,
+  connected: Set<number>,
+): Building[] {
   const out: Building[] = [];
   for (const b of storeLive(world.buildings)) {
     if (b.player !== player) continue;

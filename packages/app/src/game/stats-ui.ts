@@ -232,8 +232,7 @@ export class StatsPanel {
       const s = session.statsSeries[p];
       if (!s) continue;
       const val = (arr: number[]): number => (last >= 0 ? (arr[last] ?? 0) : 0);
-      const role =
-        p === session.localPlayer ? 'You' : aiSet.has(p) ? 'Computer' : 'Idle';
+      const role = p === session.localPlayer ? 'You' : aiSet.has(p) ? 'Computer' : 'Idle';
       const swatch = el('span', { class: 'stats-swatch' });
       swatch.style.background = playerRgb(p);
       legend.append(

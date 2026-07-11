@@ -642,7 +642,9 @@ export class GameSession {
   signAt(node: number): number {
     const surveyed = this.world.signs.some((s) => s.node === node);
     if (!surveyed) return -1;
-    return resourceAmount(this.world.resource[node]) > 0 ? resourceType(this.world.resource[node]) : 0;
+    return resourceAmount(this.world.resource[node]) > 0
+      ? resourceType(this.world.resource[node])
+      : 0;
   }
 
   demolish(node: number): void {
@@ -656,7 +658,14 @@ export class GameSession {
   }
 
   canBuild(node: number, buildingType: BuildingType): boolean {
-    return canPlaceBuilding(this.world, this.geom, this.rules, node, buildingType, this.localPlayer);
+    return canPlaceBuilding(
+      this.world,
+      this.geom,
+      this.rules,
+      node,
+      buildingType,
+      this.localPlayer,
+    );
   }
 
   /**

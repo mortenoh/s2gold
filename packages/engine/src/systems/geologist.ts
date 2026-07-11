@@ -48,12 +48,7 @@ function survey(world: World, geom: Geometry, center: number): void {
 }
 
 /** Step one geologist through its walk -> survey -> return -> retire cycle. */
-function stepGeologist(
-  world: World,
-  geom: Geometry,
-  rules: TerrainRules,
-  g: Settler,
-): void {
+function stepGeologist(world: World, geom: Geometry, rules: TerrainRules, g: Settler): void {
   if (g.state === 'toWork') {
     const arrived = walkDone(g) ? true : stepWalk(g);
     if (!arrived) return;

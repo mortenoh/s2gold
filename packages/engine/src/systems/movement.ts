@@ -37,12 +37,7 @@ export function walkDone(settler: Settler): boolean {
 }
 
 /** Allocate a fresh settler with default fields at a node. */
-export function spawnSettler(
-  world: World,
-  job: JobType,
-  player: number,
-  node: number,
-): Settler {
+export function spawnSettler(world: World, job: JobType, player: number, node: number): Settler {
   const id = storeAlloc(world.settlers, (sid) => ({
     id: sid,
     job,
@@ -78,12 +73,7 @@ export function spawnSettler(
  * to its rank name (SOLDIER_RANK_NAMES) for renderer parity; `rank`/`hp` carry
  * the combat stats (MILITARY.md §1).
  */
-export function spawnSoldier(
-  world: World,
-  rank: number,
-  player: number,
-  node: number,
-): Settler {
+export function spawnSoldier(world: World, rank: number, player: number, node: number): Settler {
   const s = spawnSettler(world, SOLDIER_RANK_NAMES[rank] ?? 'soldier', player, node);
   s.rank = rank;
   s.hp = SOLDIER_HITPOINTS[rank] ?? 3;

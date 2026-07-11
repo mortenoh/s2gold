@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  RESOURCE,
-  createWorld,
-  hashWorld,
-  tickWorld,
-  worldGeometry,
-  type World,
-} from './index';
+import { RESOURCE, createWorld, hashWorld, tickWorld, worldGeometry, type World } from './index';
 import { makeFlatMap } from './harness';
 import {
   claimArea,

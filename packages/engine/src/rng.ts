@@ -33,7 +33,7 @@ function store(i: Internal): RngState {
 function step(i: Internal): number {
   const old = i.state;
   i.state = (old * MULT + i.inc) & MASK64;
-  const xorshifted = ((old >> 18n) ^ old) >> 27n & 0xffffffffn;
+  const xorshifted = (((old >> 18n) ^ old) >> 27n) & 0xffffffffn;
   const rot = Number(old >> 59n);
   const x = Number(xorshifted) >>> 0;
   return ((x >>> rot) | (x << ((-rot >>> 0) & 31))) >>> 0;

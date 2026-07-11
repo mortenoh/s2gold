@@ -94,7 +94,11 @@ export async function renderTitle(root: HTMLElement): Promise<void> {
   } else {
     // No font atlas: still render a usable menu with plain DOM text.
     panel.append(
-      el('h1', { class: 'menu-fallback-title', text: strings.title, attrs: { 'data-testid': 'title-heading' } }),
+      el('h1', {
+        class: 'menu-fallback-title',
+        text: strings.title,
+        attrs: { 'data-testid': 'title-heading' },
+      }),
       (() => {
         const nav = el('nav', { class: 'menu-list', attrs: { 'data-testid': 'menu-list' } });
         const introEntry = el('button', {
@@ -105,11 +109,30 @@ export async function renderTitle(root: HTMLElement): Promise<void> {
         });
         introEntry.addEventListener('click', () => void openIntro(root));
         nav.append(
-          el('a', { class: 'menu-entry', href: '/campaign', text: strings.campaign, attrs: { 'data-testid': 'menu-campaign' } }),
-          el('a', { class: 'menu-entry', href: '/setup', text: strings.unlimited, attrs: { 'data-testid': 'menu-freeplay' } }),
+          el('a', {
+            class: 'menu-entry',
+            href: '/campaign',
+            text: strings.campaign,
+            attrs: { 'data-testid': 'menu-campaign' },
+          }),
+          el('a', {
+            class: 'menu-entry',
+            href: '/setup',
+            text: strings.unlimited,
+            attrs: { 'data-testid': 'menu-freeplay' },
+          }),
           introEntry,
-          el('a', { class: 'menu-entry', href: '/inspector', text: 'Asset inspector', attrs: { 'data-testid': 'menu-inspector' } }),
-          el('span', { class: 'menu-entry disabled', text: strings.loadGame, attrs: { 'data-testid': 'menu-loadgame', 'aria-disabled': 'true' } }),
+          el('a', {
+            class: 'menu-entry',
+            href: '/inspector',
+            text: 'Asset inspector',
+            attrs: { 'data-testid': 'menu-inspector' },
+          }),
+          el('span', {
+            class: 'menu-entry disabled',
+            text: strings.loadGame,
+            attrs: { 'data-testid': 'menu-loadgame', 'aria-disabled': 'true' },
+          }),
         );
         return nav;
       })(),

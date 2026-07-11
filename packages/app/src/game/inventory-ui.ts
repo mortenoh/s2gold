@@ -225,8 +225,14 @@ function makeDraggable(panel: HTMLElement, handle: HTMLElement, ignore: HTMLElem
     panel.style.transform = 'none';
     const move = (e: PointerEvent): void => {
       const margin = 4;
-      const left = Math.max(margin, Math.min(e.clientX - dx, window.innerWidth - rect.width - margin));
-      const top = Math.max(margin, Math.min(e.clientY - dy, window.innerHeight - rect.height - margin));
+      const left = Math.max(
+        margin,
+        Math.min(e.clientX - dx, window.innerWidth - rect.width - margin),
+      );
+      const top = Math.max(
+        margin,
+        Math.min(e.clientY - dy, window.innerHeight - rect.height - margin),
+      );
       panel.style.left = `${left}px`;
       panel.style.top = `${top}px`;
     };

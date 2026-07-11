@@ -57,7 +57,7 @@ describe('building placement rules', () => {
   });
 });
 
-describe('placement is restricted to the acting player\'s own territory', () => {
+describe("placement is restricted to the acting player's own territory", () => {
   // Two HQs on a flat 30x30 map: player 0 around (6,6), player 1 around (20,6),
   // HQ_RADIUS=9. That leaves each HQ's disc owned, the far corners neutral, and
   // the opposite disc enemy-owned — the three ownership cases we need to assert.
@@ -103,9 +103,15 @@ describe('placement is restricted to the acting player\'s own territory', () => 
     // ownership, not the meadow BQ.
     expect(canPlaceBuilding(world, geom, GREENLAND_RULES, neutral, BUILDING.woodcutter)).toBe(true);
 
-    expect(canPlaceBuilding(world, geom, GREENLAND_RULES, owned, BUILDING.woodcutter, 0)).toBe(true);
-    expect(canPlaceBuilding(world, geom, GREENLAND_RULES, neutral, BUILDING.woodcutter, 0)).toBe(false);
-    expect(canPlaceBuilding(world, geom, GREENLAND_RULES, enemy, BUILDING.woodcutter, 0)).toBe(false);
+    expect(canPlaceBuilding(world, geom, GREENLAND_RULES, owned, BUILDING.woodcutter, 0)).toBe(
+      true,
+    );
+    expect(canPlaceBuilding(world, geom, GREENLAND_RULES, neutral, BUILDING.woodcutter, 0)).toBe(
+      false,
+    );
+    expect(canPlaceBuilding(world, geom, GREENLAND_RULES, enemy, BUILDING.woodcutter, 0)).toBe(
+      false,
+    );
   });
 
   it('execPlaceBuilding refuses an unowned node but builds on owned land', () => {
@@ -114,11 +120,21 @@ describe('placement is restricted to the acting player\'s own territory', () => 
     const owned = findNode(world, geom, 0);
     const neutral = findNode(world, geom, -1);
 
-    applyCommand(world, { player: 0, type: 'placeBuilding', node: neutral, buildingType: BUILDING.woodcutter });
+    applyCommand(world, {
+      player: 0,
+      type: 'placeBuilding',
+      node: neutral,
+      buildingType: BUILDING.woodcutter,
+    });
     tickWorld(world);
     expect(buildingAt(world, neutral)).toBeNull();
 
-    applyCommand(world, { player: 0, type: 'placeBuilding', node: owned, buildingType: BUILDING.woodcutter });
+    applyCommand(world, {
+      player: 0,
+      type: 'placeBuilding',
+      node: owned,
+      buildingType: BUILDING.woodcutter,
+    });
     tickWorld(world);
     expect(buildingAt(world, owned)?.type).toBe(BUILDING.woodcutter);
   });
@@ -154,7 +170,7 @@ describe('placement is restricted to the acting player\'s own territory', () => 
     expect(flagAt(world, owned)).not.toBeNull();
   });
 
-  it('refuses a road whose path leaves the player\'s territory', () => {
+  it("refuses a road whose path leaves the player's territory", () => {
     const world = twoPlayerWorld();
     const geom = worldGeometry(world);
     const hq = world.buildings.items[world.players[0].hqBuildingId]!;
@@ -203,7 +219,14 @@ describe('ware transport and carrier hand-off', () => {
 
     const flag = flagAt(world, fNode)!;
     const before = world.players[0].wares.stone;
-    applyCommand(world, { tick: world.tick, player: 0, type: 'cheatSpawnWare', flag: flag.id, wareType: 'stone', count: 3 });
+    applyCommand(world, {
+      tick: world.tick,
+      player: 0,
+      type: 'cheatSpawnWare',
+      flag: flag.id,
+      wareType: 'stone',
+      count: 3,
+    });
 
     let carrierSeen = false;
     // A carrier now walks the realistic 20 GF/edge (CONSTANTS.md §4), so this
@@ -257,7 +280,14 @@ describe('freeing a mid-carry carrier does not orphan its ware', () => {
     tickWorld(world);
 
     const flag = flagAt(world, fNode)!;
-    applyCommand(world, { tick: world.tick, player: 0, type: 'cheatSpawnWare', flag: flag.id, wareType: 'stone', count: 1 });
+    applyCommand(world, {
+      tick: world.tick,
+      player: 0,
+      type: 'cheatSpawnWare',
+      flag: flag.id,
+      wareType: 'stone',
+      count: 1,
+    });
 
     let wareId = -1;
     for (let i = 0; i < 700 && wareId < 0; i++) {

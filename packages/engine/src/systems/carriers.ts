@@ -69,7 +69,12 @@ function assignCarriers(world: World, events: EventSink): void {
     carrier.state = 'carrierIdle';
     road.carrierId = carrier.id;
     player.workers[JOB.carrier]--;
-    events.emit({ type: 'SettlerSpawned', settlerId: carrier.id, job: JOB.carrier, player: road.player });
+    events.emit({
+      type: 'SettlerSpawned',
+      settlerId: carrier.id,
+      job: JOB.carrier,
+      player: road.player,
+    });
   }
 }
 
@@ -109,7 +114,8 @@ function assignDonkeys(world: World, geom: Geometry, rules: TerrainRules, events
     const startNode = hq ? hq.node : midNode;
     const donkey = spawnSettler(world, JOB.packdonkey, road.player, startNode);
     donkey.roadId = road.id;
-    const path = startNode === midNode ? null : findWalkPath(world, geom, rules, startNode, midNode);
+    const path =
+      startNode === midNode ? null : findWalkPath(world, geom, rules, startNode, midNode);
     if (path && path.length > 0) {
       donkey.state = 'donkeyToRoad';
       donkey.targetNode = midNode;
@@ -120,7 +126,12 @@ function assignDonkeys(world: World, geom: Geometry, rules: TerrainRules, events
     }
     road.donkeyId = donkey.id;
     player.donkeys--;
-    events.emit({ type: 'SettlerSpawned', settlerId: donkey.id, job: JOB.packdonkey, player: road.player });
+    events.emit({
+      type: 'SettlerSpawned',
+      settlerId: donkey.id,
+      job: JOB.packdonkey,
+      player: road.player,
+    });
   }
 }
 
@@ -211,7 +222,12 @@ function stepCarrier(world: World, carrier: Settler, events: EventSink): void {
         storeFree(world.wares, carried.id);
         carrier.carryingWareId = -1;
         carrier.state = 'carrierIdle';
-        events.emit({ type: 'WareDelivered', wareType: carried.type, buildingId: tgt.id, player: tgt.player });
+        events.emit({
+          type: 'WareDelivered',
+          wareType: carried.type,
+          buildingId: tgt.id,
+          player: tgt.player,
+        });
         return;
       }
     }
@@ -284,7 +300,12 @@ function stepCarrier(world: World, carrier: Settler, events: EventSink): void {
 }
 
 /** Run the carrier system for one tick. */
-export function runCarriers(world: World, geom: Geometry, rules: TerrainRules, events: EventSink): void {
+export function runCarriers(
+  world: World,
+  geom: Geometry,
+  rules: TerrainRules,
+  events: EventSink,
+): void {
   evaluateUpgrades(world, events);
   assignCarriers(world, events);
   assignDonkeys(world, geom, rules, events);

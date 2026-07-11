@@ -13,7 +13,14 @@
  * (see the view helpers in index.ts), so nothing else needs storing.
  */
 
-import { BUILDING, buildingDef, HARBOR_RADIUS, HQ_RADIUS, OWNER_NONE, ownerByteFor } from '../constants';
+import {
+  BUILDING,
+  buildingDef,
+  HARBOR_RADIUS,
+  HQ_RADIUS,
+  OWNER_NONE,
+  ownerByteFor,
+} from '../constants';
 import type { Geometry } from '../geometry';
 import { storeLive, type World } from './../world';
 
@@ -70,8 +77,7 @@ export function recalcTerritory(world: World, geom: Geometry): boolean {
         if (
           d < bestDist ||
           (d === bestDist &&
-            (p.player < bestPlayer ||
-              (p.player === bestPlayer && p.buildingId < bestBuilding)))
+            (p.player < bestPlayer || (p.player === bestPlayer && p.buildingId < bestBuilding)))
         ) {
           bestDist = d;
           bestPlayer = p.player;

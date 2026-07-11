@@ -69,6 +69,7 @@ s2gold/
 ### A. Asset pipeline (Python typer CLI; critical path)
 
 `s2gold install --installer <path-to-gog-exe>` (wrapped by `make install`):
+
 1. Verify tool deps; run `innoextract` into `extracted/`.
 2. Parse LST containers → decode bitmap types (raw, RLE, player-color, shadow) →
    PNG atlases + JSON metadata (offsets `nx,ny`, sizes, animation groups, player-color
@@ -84,6 +85,7 @@ s2gold/
 Subcommands for dev: `s2gold inspect <file>`, `s2gold convert <category>`, `s2gold verify`.
 
 ### B. Engine (deterministic sim, TypeScript)
+
 - Triangular map grid (the S2 dual-triangle lattice), node properties (terrain, height,
   objects, resources, ownership/borders, fog).
 - Entities: flags, roads, buildings, settlers (state machines), wares.
@@ -94,12 +96,14 @@ Subcommands for dev: `s2gold inspect <file>`, `s2gold convert <category>`, `s2go
 - Command pattern for all player input; savegames = serialized state (own format).
 
 ### C. Renderer + UI
+
 - Terrain mesh w/ slope lighting from GOU tables, texture-per-triangle, edge blending;
   smooth scroll, map wrap-around; sprite pass with row z-sorting; minimap.
 - Original UI recreation: main menu, in-game HUD, build menu, building windows,
   distribution/transport priority windows, statistics.
 
 ### D. Audio
+
 - SFX trigger table (which sound at which event/animation frame), positional volume;
   music playlist (pre-rendered OGGs) per documented track order; volume settings.
 
@@ -125,16 +129,16 @@ world campaign (Gold edition second campaign) mission set.
 
 ## Phases & milestone gates
 
-| Phase | Deliverable | Gate (Playwright-verified) |
-|---|---|---|
-| **P0** | Repo scaffold, CI, `make install` end-to-end: exe → extracted → all assets converted | Asset inspector page shows atlases, palettes, a WLD map dump; pytest + Vitest green |
-| **P1** | Terrain renderer + map loading + scrolling + minimap | Screenshot of MISS200 ("Off we go") map matches reference; 60 fps pan |
-| **P2** | Flags, roads, HQ, carriers, construction, wood/stone/sawmill loop, in-game HUD | E2E: place woodcutter via UI → tree felled → plank reaches construction site |
-| **P3** | Full economy (all chains, distribution, tools, recruitment), sound FX | E2E: bread chain (farm→mill→bakery→miner) produces gold coins headlessly + in browser |
-| **P4** | Military: territory, occupation, attack, ranks, catapults; fog of war | Headless battle sim matches documented combat rules; E2E attack flow |
-| **P5** | Music playback, menus with original art, save/load, statistics | E2E: track plays (audio element state assert); save→reload→identical state hash |
-| **P6** | AI opponent (build planner + expansion + attack heuristics) | AI beats a passive player on a small map headlessly |
-| **P7** | Ships/harbors/expeditions, campaign missions (RTX objectives, briefings), intro video, polish | Campaign chapter 1 completable; Gold "world campaign" maps load |
+| Phase  | Deliverable                                                                                   | Gate (Playwright-verified)                                                            |
+| ------ | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **P0** | Repo scaffold, CI, `make install` end-to-end: exe → extracted → all assets converted          | Asset inspector page shows atlases, palettes, a WLD map dump; pytest + Vitest green   |
+| **P1** | Terrain renderer + map loading + scrolling + minimap                                          | Screenshot of MISS200 ("Off we go") map matches reference; 60 fps pan                 |
+| **P2** | Flags, roads, HQ, carriers, construction, wood/stone/sawmill loop, in-game HUD                | E2E: place woodcutter via UI → tree felled → plank reaches construction site          |
+| **P3** | Full economy (all chains, distribution, tools, recruitment), sound FX                         | E2E: bread chain (farm→mill→bakery→miner) produces gold coins headlessly + in browser |
+| **P4** | Military: territory, occupation, attack, ranks, catapults; fog of war                         | Headless battle sim matches documented combat rules; E2E attack flow                  |
+| **P5** | Music playback, menus with original art, save/load, statistics                                | E2E: track plays (audio element state assert); save→reload→identical state hash       |
+| **P6** | AI opponent (build planner + expansion + attack heuristics)                                   | AI beats a passive player on a small map headlessly                                   |
+| **P7** | Ships/harbors/expeditions, campaign missions (RTX objectives, briefings), intro video, polish | Campaign chapter 1 completable; Gold "world campaign" maps load                       |
 
 P2 is the "soul of the game" gate (roads + carriers); if it feels right, everything
 above it is mechanical.

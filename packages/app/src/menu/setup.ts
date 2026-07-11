@@ -71,14 +71,26 @@ export async function renderSetup(root: HTMLElement): Promise<void> {
     font = null;
   }
 
-  const panel = el('div', { class: 'menu-panel setup-panel', attrs: { 'data-testid': 'setup-panel' } });
+  const panel = el('div', {
+    class: 'menu-panel setup-panel',
+    attrs: { 'data-testid': 'setup-panel' },
+  });
 
   // Header with a back link.
   const header = el('div', { class: 'setup-header' });
   header.append(
-    el('a', { class: 'menu-back', href: '/', text: '← Back', attrs: { 'data-testid': 'setup-back' } }),
+    el('a', {
+      class: 'menu-back',
+      href: '/',
+      text: '← Back',
+      attrs: { 'data-testid': 'setup-back' },
+    }),
     font
-      ? fontHeading(font, strings.unlimitedSettings, { scale: 2, color: GOLD, testid: 'setup-heading' })
+      ? fontHeading(font, strings.unlimitedSettings, {
+          scale: 2,
+          color: GOLD,
+          testid: 'setup-heading',
+        })
       : el('h1', { text: strings.unlimitedSettings, attrs: { 'data-testid': 'setup-heading' } }),
   );
   panel.append(header);
@@ -105,14 +117,26 @@ export async function renderSetup(root: HTMLElement): Promise<void> {
       ? fontHeading(font, strings.selectionOfMaps, { scale: 1, color: '#e8dcc0' })
       : el('div', { class: 'setup-subheading', text: strings.selectionOfMaps }),
   );
-  const list = el('ul', { class: 'setup-map-list', attrs: { 'data-testid': 'map-list', role: 'listbox' } });
+  const list = el('ul', {
+    class: 'setup-map-list',
+    attrs: { 'data-testid': 'map-list', role: 'listbox' },
+  });
   listWrap.append(list);
 
   // --- Right: preview + start ----------------------------------------------
   const previewWrap = el('div', { class: 'setup-preview-wrap' });
-  const previewTitle = el('div', { class: 'setup-preview-title', attrs: { 'data-testid': 'preview-title' } });
-  const previewCanvasHost = el('div', { class: 'setup-preview-canvas', attrs: { 'data-testid': 'preview-canvas' } });
-  const previewInfo = el('div', { class: 'setup-preview-info', attrs: { 'data-testid': 'preview-info' } });
+  const previewTitle = el('div', {
+    class: 'setup-preview-title',
+    attrs: { 'data-testid': 'preview-title' },
+  });
+  const previewCanvasHost = el('div', {
+    class: 'setup-preview-canvas',
+    attrs: { 'data-testid': 'preview-canvas' },
+  });
+  const previewInfo = el('div', {
+    class: 'setup-preview-info',
+    attrs: { 'data-testid': 'preview-info' },
+  });
   // Per-slot player selectors (populated per map in select(); empty for 1p maps).
   const slotsHost = el('div', { class: 'setup-slots', attrs: { 'data-testid': 'ai-slots' } });
   const startBtn = el('button', {
@@ -230,7 +254,10 @@ export async function renderSetup(root: HTMLElement): Promise<void> {
     });
     item.append(
       el('span', { class: 'map-item-title', text: entry.title }),
-      el('span', { class: 'map-item-meta', text: `${entry.width}x${entry.height} - ${entry.players}p` }),
+      el('span', {
+        class: 'map-item-meta',
+        text: `${entry.width}x${entry.height} - ${entry.players}p`,
+      }),
     );
     const activate = (): void => void select(entry, item);
     item.addEventListener('click', activate);

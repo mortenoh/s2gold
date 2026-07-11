@@ -36,7 +36,12 @@ export function toParagraphs(raw: string): string[] {
  * returning the wrapped lines. Words longer than the width are placed on their
  * own line rather than split.
  */
-function wrapParagraph(font: BitmapFont, text: string, maxWidthPx: number, scale: number): string[] {
+function wrapParagraph(
+  font: BitmapFont,
+  text: string,
+  maxWidthPx: number,
+  scale: number,
+): string[] {
   const words = text.split(' ').filter((w) => w.length > 0);
   const lines: string[] = [];
   let current = '';

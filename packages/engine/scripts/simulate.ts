@@ -33,7 +33,9 @@ function loadMap(): MapJson {
 export function runSimulation(ticks: number, everyN: number, report: (line: string) => void): void {
   const map = loadMap();
   const { world, layout } = setupDemoWorld(map, 2024);
-  report(`layout: woodcutter@${layout.woodcutter} sawmill@${layout.sawmill} quarry@${layout.quarry}`);
+  report(
+    `layout: woodcutter@${layout.woodcutter} sawmill@${layout.sawmill} quarry@${layout.quarry}`,
+  );
   report(worldSummary(world));
   for (let i = 1; i <= ticks; i++) {
     tickWorld(world);
@@ -43,7 +45,9 @@ export function runSimulation(ticks: number, everyN: number, report: (line: stri
 
 // Execute when run directly (not when imported by the example test).
 const invokedDirectly =
-  typeof process !== 'undefined' && process.argv[1] && import.meta.url === `file://${process.argv[1]}`;
+  typeof process !== 'undefined' &&
+  process.argv[1] &&
+  import.meta.url === `file://${process.argv[1]}`;
 if (invokedDirectly) {
   const ticks = Number(process.argv[2] ?? 2000);
   const everyN = Number(process.argv[3] ?? 100);

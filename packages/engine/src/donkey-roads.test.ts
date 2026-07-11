@@ -12,12 +12,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { applyCommand } from './commands';
-import {
-  DONKEY_UPGRADE_BUSY_GF,
-  JOB,
-  PRODUCTIVITY_GF,
-  WARE,
-} from './constants';
+import { DONKEY_UPGRADE_BUSY_GF, JOB, PRODUCTIVITY_GF, WARE } from './constants';
 import { spawnBuilding } from './harness-economy';
 import { makeFlatMap } from './harness';
 import { hashWorld, deserializeWorld, serializeWorld } from './serialize';
@@ -37,7 +32,10 @@ function claimAll(world: World): void {
  * warehouse. The single primary carrier hauls flagB -> flagA every trip. Returns
  * the world, geometry, road, far-flag id and HQ id.
  */
-function buildFeedingRoad(seed: number, edges = 6): {
+function buildFeedingRoad(
+  seed: number,
+  edges = 6,
+): {
   world: World;
   geom: Geometry;
   road: Road;
@@ -87,12 +85,7 @@ function feedStones(world: World, flagId: number): void {
 }
 
 /** Run `ticks` frames feeding the far flag; count stones delivered into the HQ. */
-function runAndCountDeliveries(
-  world: World,
-  farFlag: number,
-  hqId: number,
-  ticks: number,
-): number {
+function runAndCountDeliveries(world: World, farFlag: number, hqId: number, ticks: number): number {
   let delivered = 0;
   for (let t = 0; t < ticks; t++) {
     feedStones(world, farFlag);
@@ -160,16 +153,17 @@ describe('donkey second carrier throughput', () => {
     // Control: single carrier, road left un-upgraded.
     const control = buildFeedingRoad(11);
     const controlDelivered = runAndCountDeliveries(
-      control.world, control.farFlag, control.hqId, measureTicks,
+      control.world,
+      control.farFlag,
+      control.hqId,
+      measureTicks,
     );
 
     // Upgraded: force the road to a donkey road and stock one bred donkey.
     const up = buildFeedingRoad(11);
     up.road.upgraded = true;
     up.world.players[0].donkeys = 1;
-    const upDelivered = runAndCountDeliveries(
-      up.world, up.farFlag, up.hqId, measureTicks,
-    );
+    const upDelivered = runAndCountDeliveries(up.world, up.farFlag, up.hqId, measureTicks);
 
     // A pack donkey should have been drawn from the pool and placed on the road.
     expect(up.world.players[0].donkeys).toBe(0);

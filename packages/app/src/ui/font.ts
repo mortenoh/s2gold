@@ -78,7 +78,11 @@ export function glyphFor(metrics: FontMetrics, code: number): FontGlyph | undefi
  * `lines * dy + gaps`, all multiplied by the integer scale. Trailing
  * letter-spacing is not counted so a single glyph measures exactly its width.
  */
-export function measureText(metrics: FontMetrics, text: string, opts: TextOptions = {}): TextLayout {
+export function measureText(
+  metrics: FontMetrics,
+  text: string,
+  opts: TextOptions = {},
+): TextLayout {
   const scale = Math.max(1, Math.floor(opts.scale ?? 1));
   const letterSpacing = opts.letterSpacing ?? 0;
   const lineSpacing = opts.lineSpacing ?? 0;
@@ -168,7 +172,13 @@ export class BitmapFont {
    * Draw `text` with its top-left at (x, y). Newlines advance by the line
    * height. A `color` tints the white glyphs; otherwise the atlas is used as-is.
    */
-  draw(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, opts: DrawOptions = {}): void {
+  draw(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    x: number,
+    y: number,
+    opts: DrawOptions = {},
+  ): void {
     const scale = Math.max(1, Math.floor(opts.scale ?? 1));
     const letterSpacing = opts.letterSpacing ?? 0;
     const lineSpacing = opts.lineSpacing ?? 0;

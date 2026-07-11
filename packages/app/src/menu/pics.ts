@@ -49,7 +49,10 @@ export function pickPicUrl(index: PicsIndex | null, keys: readonly string[]): st
  * No-op (leaving the CSS fallback) when no pic is available. Returns the URL
  * used, or null.
  */
-export async function applyBackdrop(el: HTMLElement, keys: readonly string[]): Promise<string | null> {
+export async function applyBackdrop(
+  el: HTMLElement,
+  keys: readonly string[],
+): Promise<string | null> {
   const url = pickPicUrl(await loadPicsIndex(), keys);
   if (!url) return null;
   el.style.backgroundImage = `url("${url}")`;

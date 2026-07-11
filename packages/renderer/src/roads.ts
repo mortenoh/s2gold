@@ -152,7 +152,8 @@ export class RoadRenderer {
     const j0 = Math.floor((camera.y - TR_H) / this.worldH) - 1;
     const j1 = Math.floor((camera.y + viewH + TR_H) / this.worldH) + 1;
 
-    const needed = segments.length * (i1 - i0 + 1) * (j1 - j0 + 1) * VERTS_PER_QUAD * FLOATS_PER_VERTEX;
+    const needed =
+      segments.length * (i1 - i0 + 1) * (j1 - j0 + 1) * VERTS_PER_QUAD * FLOATS_PER_VERTEX;
     if (this.scratch.length < needed) this.scratch = new Float32Array(needed);
     const buf = this.scratch;
     let o = 0;

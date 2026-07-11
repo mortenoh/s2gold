@@ -44,7 +44,12 @@ export function runConstruction(
       else builder.node = b.node; // fallback: no route — place at the door
       b.workerId = builder.id;
       player.workers[JOB.builder]--;
-      events.emit({ type: 'SettlerSpawned', settlerId: builder.id, job: JOB.builder, player: b.player });
+      events.emit({
+        type: 'SettlerSpawned',
+        settlerId: builder.id,
+        job: JOB.builder,
+        player: b.player,
+      });
       continue;
     }
 

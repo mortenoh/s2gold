@@ -50,7 +50,12 @@ function doorFlagNode(geom: Geometry, node: number): number {
 }
 
 /** Distance from `node` to the nearest existing flag owned by `player` (Infinity if none). */
-function nearestPlayerFlagDistance(world: World, geom: Geometry, player: number, node: number): number {
+function nearestPlayerFlagDistance(
+  world: World,
+  geom: Geometry,
+  player: number,
+  node: number,
+): number {
   let best = Infinity;
   for (const f of storeLive(world.flags)) {
     if (f.player !== player) continue;

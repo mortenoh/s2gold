@@ -70,8 +70,12 @@ describe('P7 water classification + coastal buildability', () => {
     expect(canPlaceHarbor(world, geom, GREENLAND_RULES, waterNode)).toBe(false);
     // A shipyard is coastal too; an ordinary building is not allowed at the shore.
     const shipyardSpot = geom.index(TWO_ISLAND.shipyardA.x, TWO_ISLAND.shipyardA.y);
-    expect(canPlaceBuilding(world, geom, GREENLAND_RULES, shipyardSpot, BUILDING.shipyard)).toBe(true);
-    expect(canPlaceBuilding(world, geom, GREENLAND_RULES, harborA, BUILDING.woodcutter)).toBe(false);
+    expect(canPlaceBuilding(world, geom, GREENLAND_RULES, shipyardSpot, BUILDING.shipyard)).toBe(
+      true,
+    );
+    expect(canPlaceBuilding(world, geom, GREENLAND_RULES, harborA, BUILDING.woodcutter)).toBe(
+      false,
+    );
   });
 });
 
@@ -79,8 +83,16 @@ describe('P7 water pathfinding', () => {
   it('is deterministic, wraps water, and refuses land goals', () => {
     const world = createWorld(makeTwoIslandMap(), { seed: 1, players: 1 });
     const geom = worldGeometry(world);
-    const dockA = harborDockNode(world, geom, geom.index(TWO_ISLAND.harborA.x, TWO_ISLAND.harborA.y));
-    const dockB = harborDockNode(world, geom, geom.index(TWO_ISLAND.harborB.x, TWO_ISLAND.harborB.y));
+    const dockA = harborDockNode(
+      world,
+      geom,
+      geom.index(TWO_ISLAND.harborA.x, TWO_ISLAND.harborA.y),
+    );
+    const dockB = harborDockNode(
+      world,
+      geom,
+      geom.index(TWO_ISLAND.harborB.x, TWO_ISLAND.harborB.y),
+    );
 
     const p1 = findWaterPath(world, geom, dockA, dockB);
     const p2 = findWaterPath(world, geom, dockA, dockB);
@@ -98,7 +110,12 @@ describe('P7 ship construction', () => {
   it('builds a ship at a coastal shipyard and docks it at a harbor', () => {
     const world = createWorld(makeTwoIslandMap(), { seed: 2, players: 1 });
     const geom = worldGeometry(world);
-    const harbor = spawnBuilding(world, geom, geom.index(TWO_ISLAND.harborA.x, TWO_ISLAND.harborA.y), BUILDING.harbor);
+    const harbor = spawnBuilding(
+      world,
+      geom,
+      geom.index(TWO_ISLAND.harborA.x, TWO_ISLAND.harborA.y),
+      BUILDING.harbor,
+    );
     const shipyard = spawnBuilding(
       world,
       geom,
@@ -131,9 +148,24 @@ function setupTransport(seed: number): {
 } {
   const world = createWorld(makeTwoIslandMap(), { seed, players: 1 });
   const geom = worldGeometry(world);
-  const harborA = spawnBuilding(world, geom, geom.index(TWO_ISLAND.harborA.x, TWO_ISLAND.harborA.y), BUILDING.harbor);
-  const harborB = spawnBuilding(world, geom, geom.index(TWO_ISLAND.harborB.x, TWO_ISLAND.harborB.y), BUILDING.harbor);
-  const storehouse = spawnBuilding(world, geom, geom.index(TWO_ISLAND.consumerB.x, TWO_ISLAND.consumerB.y), BUILDING.storehouse);
+  const harborA = spawnBuilding(
+    world,
+    geom,
+    geom.index(TWO_ISLAND.harborA.x, TWO_ISLAND.harborA.y),
+    BUILDING.harbor,
+  );
+  const harborB = spawnBuilding(
+    world,
+    geom,
+    geom.index(TWO_ISLAND.harborB.x, TWO_ISLAND.harborB.y),
+    BUILDING.harbor,
+  );
+  const storehouse = spawnBuilding(
+    world,
+    geom,
+    geom.index(TWO_ISLAND.consumerB.x, TWO_ISLAND.consumerB.y),
+    BUILDING.storehouse,
+  );
   recalcTerritory(world, geom); // the working harbors now project territory over island B
   connectBuildings(world, geom, harborB.node, storehouse.node); // road on island B (owned land)
   tickWorld(world); // execute the road command
@@ -177,7 +209,12 @@ describe('P7 expedition founding', () => {
   it('assembles a kit, sails a ship, and founds a new harbor on the far island', () => {
     const world = createWorld(makeTwoIslandMap(), { seed: 4, players: 1 });
     const geom = worldGeometry(world);
-    const harborA = spawnBuilding(world, geom, geom.index(TWO_ISLAND.harborA.x, TWO_ISLAND.harborA.y), BUILDING.harbor);
+    const harborA = spawnBuilding(
+      world,
+      geom,
+      geom.index(TWO_ISLAND.harborA.x, TWO_ISLAND.harborA.y),
+      BUILDING.harbor,
+    );
     manufactureShip(world, geom, harborA.id);
     const targetSpot = geom.index(TWO_ISLAND.harborB.x, TWO_ISLAND.harborB.y);
 
@@ -209,7 +246,12 @@ describe('P7 expedition founding', () => {
   it('refuses to found on a spot whose door flag belongs to another player', () => {
     const world = createWorld(makeTwoIslandMap(), { seed: 4, players: 2 });
     const geom = worldGeometry(world);
-    const harborA = spawnBuilding(world, geom, geom.index(TWO_ISLAND.harborA.x, TWO_ISLAND.harborA.y), BUILDING.harbor);
+    const harborA = spawnBuilding(
+      world,
+      geom,
+      geom.index(TWO_ISLAND.harborA.x, TWO_ISLAND.harborA.y),
+      BUILDING.harbor,
+    );
     manufactureShip(world, geom, harborA.id);
     const targetSpot = geom.index(TWO_ISLAND.harborB.x, TWO_ISLAND.harborB.y);
     const doorNode = geom.neighbour(targetSpot, 'SE');

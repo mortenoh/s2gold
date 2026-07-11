@@ -94,7 +94,8 @@ export function stepAi(
   const player = world.players[state.playerId];
   if (!player || player.hqBuildingId < 0) return { commands, state };
   if (world.tick < state.nextDecisionTick) return { commands, state };
-  state.nextDecisionTick = world.tick + state.decideInterval + nextRange(state.rng, state.decideInterval);
+  state.nextDecisionTick =
+    world.tick + state.decideInterval + nextRange(state.rng, state.decideInterval);
 
   const geom = new Geometry(world.width, world.height);
 

@@ -423,8 +423,7 @@ export class SpriteRenderer {
     // quad carries the player `tint` (applied through the mask); an unmasked one
     // carries `shade` (a brightness multiplier for fog, NO_TINT by default) so a
     // player tint never bleeds onto un-masked sprites like buildings.
-    const masked =
-      s.pmask === true && tint !== NO_TINT && reg.pmaskTextures[s.atlas] != null;
+    const masked = s.pmask === true && tint !== NO_TINT && reg.pmaskTextures[s.atlas] != null;
     out.push({
       tint: masked ? tint : shade,
       archive,

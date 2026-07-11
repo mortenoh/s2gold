@@ -98,17 +98,52 @@ export const WARE_ID: Readonly<Record<string, number>> = {
 
 /** All ware types in a fixed canonical order (drives deterministic map keys). */
 export const WARE_TYPES: readonly WareType[] = [
-  WARE.beer, WARE.tongs, WARE.hammer, WARE.axe, WARE.saw, WARE.pickaxe, WARE.shovel,
-  WARE.crucible, WARE.rodandline, WARE.scythe, WARE.water, WARE.cleaver, WARE.rollingpin,
-  WARE.bow, WARE.sword, WARE.iron, WARE.flour, WARE.fish, WARE.bread, WARE.shield,
-  WARE.trunk, WARE.plank, WARE.stone, WARE.grain, WARE.coins, WARE.gold, WARE.ironore,
-  WARE.coal, WARE.meat, WARE.ham,
+  WARE.beer,
+  WARE.tongs,
+  WARE.hammer,
+  WARE.axe,
+  WARE.saw,
+  WARE.pickaxe,
+  WARE.shovel,
+  WARE.crucible,
+  WARE.rodandline,
+  WARE.scythe,
+  WARE.water,
+  WARE.cleaver,
+  WARE.rollingpin,
+  WARE.bow,
+  WARE.sword,
+  WARE.iron,
+  WARE.flour,
+  WARE.fish,
+  WARE.bread,
+  WARE.shield,
+  WARE.trunk,
+  WARE.plank,
+  WARE.stone,
+  WARE.grain,
+  WARE.coins,
+  WARE.gold,
+  WARE.ironore,
+  WARE.coal,
+  WARE.meat,
+  WARE.ham,
 ];
 
 /** The 12 metalworks tools (CONSTANTS.md §1 Tool enum order). */
 export const TOOL_WARES: readonly WareType[] = [
-  WARE.tongs, WARE.hammer, WARE.axe, WARE.saw, WARE.pickaxe, WARE.shovel,
-  WARE.crucible, WARE.rodandline, WARE.scythe, WARE.cleaver, WARE.rollingpin, WARE.bow,
+  WARE.tongs,
+  WARE.hammer,
+  WARE.axe,
+  WARE.saw,
+  WARE.pickaxe,
+  WARE.shovel,
+  WARE.crucible,
+  WARE.rodandline,
+  WARE.scythe,
+  WARE.cleaver,
+  WARE.rollingpin,
+  WARE.bow,
 ];
 
 // --- Job types ------------------------------------------------------------
@@ -149,10 +184,30 @@ export const JOB = {
 export type JobType = string;
 
 export const JOB_TYPES: readonly JobType[] = [
-  JOB.carrier, JOB.builder, JOB.woodcutter, JOB.forester, JOB.sawmiller, JOB.stonemason,
-  JOB.fisher, JOB.hunter, JOB.farmer, JOB.miller, JOB.baker, JOB.butcher, JOB.miner,
-  JOB.brewer, JOB.pigbreeder, JOB.donkeybreeder, JOB.ironfounder, JOB.minter,
-  JOB.metalworker, JOB.armorer, JOB.wellman, JOB.scout, JOB.shipwright, JOB.geologist,
+  JOB.carrier,
+  JOB.builder,
+  JOB.woodcutter,
+  JOB.forester,
+  JOB.sawmiller,
+  JOB.stonemason,
+  JOB.fisher,
+  JOB.hunter,
+  JOB.farmer,
+  JOB.miller,
+  JOB.baker,
+  JOB.butcher,
+  JOB.miner,
+  JOB.brewer,
+  JOB.pigbreeder,
+  JOB.donkeybreeder,
+  JOB.ironfounder,
+  JOB.minter,
+  JOB.metalworker,
+  JOB.armorer,
+  JOB.wellman,
+  JOB.scout,
+  JOB.shipwright,
+  JOB.geologist,
 ];
 
 /** How far from the sent flag a geologist surveys mountain nodes for ore. */
@@ -314,61 +369,447 @@ const MINE_CAP = 2; // mines hold 2 of each food (CONSTANTS.md §2)
  * resources). Enum ids in the `id` field are the original S2/s25 building ids.
  */
 export const BUILDING_DEFS: Readonly<Record<string, BuildingDef>> = {
-  headquarters: { id: 0, cost: { boards: 0, stones: 0 }, size: 'castle', kind: 'hq', worker: null, inputs: [], inputCap: CAP, useOneEach: true, outputs: [], workTicks: 0 },
+  headquarters: {
+    id: 0,
+    cost: { boards: 0, stones: 0 },
+    size: 'castle',
+    kind: 'hq',
+    worker: null,
+    inputs: [],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [],
+    workTicks: 0,
+  },
 
   // Outdoor harvesters (walk to a map object / resource node).
-  woodcutter: { id: 17, cost: { boards: 2, stones: 0 }, size: 'hut', kind: 'harvester', worker: JOB.woodcutter, inputs: [], inputCap: CAP, useOneEach: true, outputs: [WARE.trunk], workTicks: 148, radius: 6 }, // §3 Woodcutter work=148, §2 radius 6
-  forester: { id: 20, cost: { boards: 2, stones: 0 }, size: 'hut', kind: 'harvester', worker: JOB.forester, inputs: [], inputCap: CAP, useOneEach: true, outputs: [], workTicks: 66, radius: 6 }, // §3 Forester work=66 (plants trees)
-  quarry: { id: 19, cost: { boards: 2, stones: 0 }, size: 'hut', kind: 'harvester', worker: JOB.stonemason, inputs: [], inputCap: CAP, useOneEach: true, outputs: [WARE.stone], workTicks: 129, radius: 8 }, // §3 Stonemason work=129, §2 radius 8
-  fishery: { id: 18, cost: { boards: 2, stones: 0 }, size: 'hut', kind: 'harvester', worker: JOB.fisher, inputs: [], inputCap: CAP, useOneEach: true, outputs: [WARE.fish], workTicks: 129, radius: 7, resource: 6 }, // §3 Fisher work=129, §2 radius 7, Fish resource nibble 6
+  woodcutter: {
+    id: 17,
+    cost: { boards: 2, stones: 0 },
+    size: 'hut',
+    kind: 'harvester',
+    worker: JOB.woodcutter,
+    inputs: [],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [WARE.trunk],
+    workTicks: 148,
+    radius: 6,
+  }, // §3 Woodcutter work=148, §2 radius 6
+  forester: {
+    id: 20,
+    cost: { boards: 2, stones: 0 },
+    size: 'hut',
+    kind: 'harvester',
+    worker: JOB.forester,
+    inputs: [],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [],
+    workTicks: 66,
+    radius: 6,
+  }, // §3 Forester work=66 (plants trees)
+  quarry: {
+    id: 19,
+    cost: { boards: 2, stones: 0 },
+    size: 'hut',
+    kind: 'harvester',
+    worker: JOB.stonemason,
+    inputs: [],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [WARE.stone],
+    workTicks: 129,
+    radius: 8,
+  }, // §3 Stonemason work=129, §2 radius 8
+  fishery: {
+    id: 18,
+    cost: { boards: 2, stones: 0 },
+    size: 'hut',
+    kind: 'harvester',
+    worker: JOB.fisher,
+    inputs: [],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [WARE.fish],
+    workTicks: 129,
+    radius: 7,
+    resource: 6,
+  }, // §3 Fisher work=129, §2 radius 7, Fish resource nibble 6
 
   // In-building timed producers with no ware input.
-  well: { id: 35, cost: { boards: 2, stones: 0 }, size: 'hut', kind: 'generator', worker: JOB.wellman, inputs: [], inputCap: CAP, useOneEach: true, outputs: [WARE.water], workTicks: 92 }, // §2 Well (Helper); short cycle (Helper wait pacing)
-  hunter: { id: 22, cost: { boards: 2, stones: 0 }, size: 'hut', kind: 'generator', worker: JOB.hunter, inputs: [], inputCap: CAP, useOneEach: true, outputs: [WARE.meat], workTicks: 300 }, // §3 Hunter work=0/wait1=300 (no game-animal objects modelled; timed producer — SIMPLIFIED)
+  well: {
+    id: 35,
+    cost: { boards: 2, stones: 0 },
+    size: 'hut',
+    kind: 'generator',
+    worker: JOB.wellman,
+    inputs: [],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [WARE.water],
+    workTicks: 92,
+  }, // §2 Well (Helper); short cycle (Helper wait pacing)
+  hunter: {
+    id: 22,
+    cost: { boards: 2, stones: 0 },
+    size: 'hut',
+    kind: 'generator',
+    worker: JOB.hunter,
+    inputs: [],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [WARE.meat],
+    workTicks: 300,
+  }, // §3 Hunter work=0/wait1=300 (no game-animal objects modelled; timed producer — SIMPLIFIED)
 
   // Farm: crop-field sow/harvest lifecycle on map nodes.
-  farm: { id: 37, cost: { boards: 3, stones: 3 }, size: 'castle', kind: 'farm', worker: JOB.farmer, inputs: [], inputCap: CAP, useOneEach: true, outputs: [WARE.grain], workTicks: 117, radius: 2 }, // §3 Farmer work=117, §2 radius 2
+  farm: {
+    id: 37,
+    cost: { boards: 3, stones: 3 },
+    size: 'castle',
+    kind: 'farm',
+    worker: JOB.farmer,
+    inputs: [],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [WARE.grain],
+    workTicks: 117,
+    radius: 2,
+  }, // §3 Farmer work=117, §2 radius 2
 
   // Workshops (consume inputs -> produce output).
-  sawmill: { id: 33, cost: { boards: 2, stones: 2 }, size: 'house', kind: 'workshop', worker: JOB.sawmiller, inputs: [WARE.trunk], inputCap: CAP, useOneEach: true, outputs: [WARE.plank], workTicks: 479 }, // §5 Carpenter 1 Wood->1 Boards, work=479
-  mill: { id: 31, cost: { boards: 2, stones: 2 }, size: 'house', kind: 'workshop', worker: JOB.miller, inputs: [WARE.grain], inputCap: CAP, useOneEach: true, outputs: [WARE.flour], workTicks: 470 }, // §5 Miller 1 Grain->1 Flour, work=470
-  bakery: { id: 32, cost: { boards: 2, stones: 2 }, size: 'house', kind: 'workshop', worker: JOB.baker, inputs: [WARE.flour, WARE.water], inputCap: CAP, useOneEach: true, outputs: [WARE.bread], workTicks: 470 }, // §5 Baker Flour+Water->Bread, work=470
-  pigfarm: { id: 28, cost: { boards: 3, stones: 3 }, size: 'castle', kind: 'workshop', worker: JOB.pigbreeder, inputs: [WARE.grain, WARE.water], inputCap: CAP, useOneEach: true, outputs: [WARE.ham], workTicks: 390 }, // §5 PigBreeder Grain+Water->Ham, work=390
-  slaughterhouse: { id: 21, cost: { boards: 2, stones: 2 }, size: 'house', kind: 'workshop', worker: JOB.butcher, inputs: [WARE.ham], inputCap: CAP, useOneEach: true, outputs: [WARE.meat], workTicks: 478 }, // §5 Butcher Ham->Meat, work=478
-  brewery: { id: 23, cost: { boards: 2, stones: 2 }, size: 'house', kind: 'workshop', worker: JOB.brewer, inputs: [WARE.grain, WARE.water], inputCap: CAP, useOneEach: true, outputs: [WARE.beer], workTicks: 530 }, // §5 Brewer Grain+Water->Beer, work=530
-  ironsmelter: { id: 26, cost: { boards: 2, stones: 2 }, size: 'house', kind: 'workshop', worker: JOB.ironfounder, inputs: [WARE.ironore, WARE.coal], inputCap: CAP, useOneEach: true, outputs: [WARE.iron], workTicks: 950 }, // §5 IronFounder IronOre+Coal->Iron, work=950
-  armory: { id: 24, cost: { boards: 2, stones: 2 }, size: 'house', kind: 'workshop', worker: JOB.armorer, inputs: [WARE.iron, WARE.coal], inputCap: CAP, useOneEach: true, outputs: [WARE.sword, WARE.shield], alternate: true, workTicks: 940 }, // §5 Armorer Iron+Coal->Sword/Shield alternating, work=940
-  metalworks: { id: 25, cost: { boards: 2, stones: 2 }, size: 'house', kind: 'workshop', worker: JOB.metalworker, inputs: [WARE.iron, WARE.plank], inputCap: CAP, useOneEach: true, outputs: [WARE.scythe], producesTool: true, workTicks: 850 }, // §5/§7 Metalworker Iron+Boards->1 tool (by tool priority), work=850
-  mint: { id: 34, cost: { boards: 2, stones: 2 }, size: 'house', kind: 'workshop', worker: JOB.minter, inputs: [WARE.gold, WARE.coal], inputCap: CAP, useOneEach: true, outputs: [WARE.coins], workTicks: 1050 }, // §5 Minter Gold+Coal->Coins, work=1050
-  donkeybreeder: { id: 38, cost: { boards: 3, stones: 3 }, size: 'castle', kind: 'workshop', worker: JOB.donkeybreeder, inputs: [WARE.grain, WARE.water], inputCap: CAP, useOneEach: true, outputs: [], breedsDonkey: true, workTicks: 370 }, // §5 DonkeyBreeder Grain+Water->PackDonkey (into the player donkey pool), work=370
+  sawmill: {
+    id: 33,
+    cost: { boards: 2, stones: 2 },
+    size: 'house',
+    kind: 'workshop',
+    worker: JOB.sawmiller,
+    inputs: [WARE.trunk],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [WARE.plank],
+    workTicks: 479,
+  }, // §5 Carpenter 1 Wood->1 Boards, work=479
+  mill: {
+    id: 31,
+    cost: { boards: 2, stones: 2 },
+    size: 'house',
+    kind: 'workshop',
+    worker: JOB.miller,
+    inputs: [WARE.grain],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [WARE.flour],
+    workTicks: 470,
+  }, // §5 Miller 1 Grain->1 Flour, work=470
+  bakery: {
+    id: 32,
+    cost: { boards: 2, stones: 2 },
+    size: 'house',
+    kind: 'workshop',
+    worker: JOB.baker,
+    inputs: [WARE.flour, WARE.water],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [WARE.bread],
+    workTicks: 470,
+  }, // §5 Baker Flour+Water->Bread, work=470
+  pigfarm: {
+    id: 28,
+    cost: { boards: 3, stones: 3 },
+    size: 'castle',
+    kind: 'workshop',
+    worker: JOB.pigbreeder,
+    inputs: [WARE.grain, WARE.water],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [WARE.ham],
+    workTicks: 390,
+  }, // §5 PigBreeder Grain+Water->Ham, work=390
+  slaughterhouse: {
+    id: 21,
+    cost: { boards: 2, stones: 2 },
+    size: 'house',
+    kind: 'workshop',
+    worker: JOB.butcher,
+    inputs: [WARE.ham],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [WARE.meat],
+    workTicks: 478,
+  }, // §5 Butcher Ham->Meat, work=478
+  brewery: {
+    id: 23,
+    cost: { boards: 2, stones: 2 },
+    size: 'house',
+    kind: 'workshop',
+    worker: JOB.brewer,
+    inputs: [WARE.grain, WARE.water],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [WARE.beer],
+    workTicks: 530,
+  }, // §5 Brewer Grain+Water->Beer, work=530
+  ironsmelter: {
+    id: 26,
+    cost: { boards: 2, stones: 2 },
+    size: 'house',
+    kind: 'workshop',
+    worker: JOB.ironfounder,
+    inputs: [WARE.ironore, WARE.coal],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [WARE.iron],
+    workTicks: 950,
+  }, // §5 IronFounder IronOre+Coal->Iron, work=950
+  armory: {
+    id: 24,
+    cost: { boards: 2, stones: 2 },
+    size: 'house',
+    kind: 'workshop',
+    worker: JOB.armorer,
+    inputs: [WARE.iron, WARE.coal],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [WARE.sword, WARE.shield],
+    alternate: true,
+    workTicks: 940,
+  }, // §5 Armorer Iron+Coal->Sword/Shield alternating, work=940
+  metalworks: {
+    id: 25,
+    cost: { boards: 2, stones: 2 },
+    size: 'house',
+    kind: 'workshop',
+    worker: JOB.metalworker,
+    inputs: [WARE.iron, WARE.plank],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [WARE.scythe],
+    producesTool: true,
+    workTicks: 850,
+  }, // §5/§7 Metalworker Iron+Boards->1 tool (by tool priority), work=850
+  mint: {
+    id: 34,
+    cost: { boards: 2, stones: 2 },
+    size: 'house',
+    kind: 'workshop',
+    worker: JOB.minter,
+    inputs: [WARE.gold, WARE.coal],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [WARE.coins],
+    workTicks: 1050,
+  }, // §5 Minter Gold+Coal->Coins, work=1050
+  donkeybreeder: {
+    id: 38,
+    cost: { boards: 3, stones: 3 },
+    size: 'castle',
+    kind: 'workshop',
+    worker: JOB.donkeybreeder,
+    inputs: [WARE.grain, WARE.water],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [],
+    breedsDonkey: true,
+    workTicks: 370,
+  }, // §5 DonkeyBreeder Grain+Water->PackDonkey (into the player donkey pool), work=370
 
   // Mines (consume 1 food; decrement a subsurface resource within radius 2).
-  coalmine: { id: 11, cost: { boards: 4, stones: 0 }, size: 'mine', kind: 'mine', worker: JOB.miner, inputs: [WARE.fish, WARE.meat, WARE.bread], inputCap: MINE_CAP, useOneEach: false, outputs: [WARE.coal], workTicks: 583, radius: 2, resource: 3 }, // §5 Miner food->Coal, work=583; OBJECTS §5a Coal nibble 3
-  ironmine: { id: 12, cost: { boards: 4, stones: 0 }, size: 'mine', kind: 'mine', worker: JOB.miner, inputs: [WARE.fish, WARE.meat, WARE.bread], inputCap: MINE_CAP, useOneEach: false, outputs: [WARE.ironore], workTicks: 583, radius: 2, resource: 1 }, // Iron nibble 1
-  goldmine: { id: 13, cost: { boards: 4, stones: 0 }, size: 'mine', kind: 'mine', worker: JOB.miner, inputs: [WARE.fish, WARE.meat, WARE.bread], inputCap: MINE_CAP, useOneEach: false, outputs: [WARE.gold], workTicks: 583, radius: 2, resource: 2 }, // Gold nibble 2
-  granitemine: { id: 10, cost: { boards: 4, stones: 0 }, size: 'mine', kind: 'mine', worker: JOB.miner, inputs: [WARE.fish, WARE.meat, WARE.bread], inputCap: MINE_CAP, useOneEach: false, outputs: [WARE.stone], workTicks: 583, radius: 2, resource: 4 }, // Granite nibble 4
+  coalmine: {
+    id: 11,
+    cost: { boards: 4, stones: 0 },
+    size: 'mine',
+    kind: 'mine',
+    worker: JOB.miner,
+    inputs: [WARE.fish, WARE.meat, WARE.bread],
+    inputCap: MINE_CAP,
+    useOneEach: false,
+    outputs: [WARE.coal],
+    workTicks: 583,
+    radius: 2,
+    resource: 3,
+  }, // §5 Miner food->Coal, work=583; OBJECTS §5a Coal nibble 3
+  ironmine: {
+    id: 12,
+    cost: { boards: 4, stones: 0 },
+    size: 'mine',
+    kind: 'mine',
+    worker: JOB.miner,
+    inputs: [WARE.fish, WARE.meat, WARE.bread],
+    inputCap: MINE_CAP,
+    useOneEach: false,
+    outputs: [WARE.ironore],
+    workTicks: 583,
+    radius: 2,
+    resource: 1,
+  }, // Iron nibble 1
+  goldmine: {
+    id: 13,
+    cost: { boards: 4, stones: 0 },
+    size: 'mine',
+    kind: 'mine',
+    worker: JOB.miner,
+    inputs: [WARE.fish, WARE.meat, WARE.bread],
+    inputCap: MINE_CAP,
+    useOneEach: false,
+    outputs: [WARE.gold],
+    workTicks: 583,
+    radius: 2,
+    resource: 2,
+  }, // Gold nibble 2
+  granitemine: {
+    id: 10,
+    cost: { boards: 4, stones: 0 },
+    size: 'mine',
+    kind: 'mine',
+    worker: JOB.miner,
+    inputs: [WARE.fish, WARE.meat, WARE.bread],
+    inputCap: MINE_CAP,
+    useOneEach: false,
+    outputs: [WARE.stone],
+    workTicks: 583,
+    radius: 2,
+    resource: 4,
+  }, // Granite nibble 4
 
   // Warehouse + vision.
-  storehouse: { id: 29, cost: { boards: 4, stones: 3 }, size: 'house', kind: 'warehouse', worker: null, inputs: [], inputCap: CAP, useOneEach: true, outputs: [], workTicks: 0 },
-  lookout: { id: 14, cost: { boards: 4, stones: 0 }, size: 'hut', kind: 'special', worker: JOB.scout, inputs: [], inputCap: CAP, useOneEach: true, outputs: [], workTicks: 0 }, // §2 Lookout tower: vision only (stub)
+  storehouse: {
+    id: 29,
+    cost: { boards: 4, stones: 3 },
+    size: 'house',
+    kind: 'warehouse',
+    worker: null,
+    inputs: [],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [],
+    workTicks: 0,
+  },
+  lookout: {
+    id: 14,
+    cost: { boards: 4, stones: 0 },
+    size: 'hut',
+    kind: 'special',
+    worker: JOB.scout,
+    inputs: [],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [],
+    workTicks: 0,
+  }, // §2 Lookout tower: vision only (stub)
 
   // Seafaring (P7). Shipyard: House-class coastal workshop; Shipwright turns
   // Boards into ship entities (§2 id 36, §3 Shipwright work_length=1250). Harbor:
   // Harbor-class coastal warehouse; anchors territory (HARBOR_RADIUS=8) and hosts
   // ships/expeditions (§2 id 39). No producer worker (acts like the HQ/storehouse).
-  shipyard: { id: 36, cost: { boards: 2, stones: 3 }, size: 'house', kind: 'shipyard', worker: JOB.shipwright, inputs: [WARE.plank], inputCap: CAP, useOneEach: true, outputs: [], workTicks: 1250 }, // §5 Shipwright Boards->Ship, work=1250
-  harbor: { id: 39, cost: { boards: 4, stones: 6 }, size: 'harbor', kind: 'warehouse', worker: null, inputs: [], inputCap: CAP, useOneEach: true, outputs: [], workTicks: 0, militaryRadius: 8 }, // §2 Harbor building: warehouse + HARBOR_RADIUS territory anchor
+  shipyard: {
+    id: 36,
+    cost: { boards: 2, stones: 3 },
+    size: 'house',
+    kind: 'shipyard',
+    worker: JOB.shipwright,
+    inputs: [WARE.plank],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [],
+    workTicks: 1250,
+  }, // §5 Shipwright Boards->Ship, work=1250
+  harbor: {
+    id: 39,
+    cost: { boards: 4, stones: 6 },
+    size: 'harbor',
+    kind: 'warehouse',
+    worker: null,
+    inputs: [],
+    inputCap: CAP,
+    useOneEach: true,
+    outputs: [],
+    workTicks: 0,
+    militaryRadius: 8,
+  }, // §2 Harbor building: warehouse + HARBOR_RADIUS territory anchor
 
   // Military buildings (MILITARY.md §2). Costs from CONSTANTS.md §2. No worker
   // job (soldiers occupy via the military system, not the recruit-a-worker path);
   // coins are delivered as the `coins` input for promotion (MILITARY.md §6).
-  barracks: { id: 1, cost: { boards: 2, stones: 0 }, size: 'hut', kind: 'military', worker: null, inputs: [WARE.coins], inputCap: 1, useOneEach: false, outputs: [], workTicks: 0, maxTroops: 2, maxGold: 1, armorCap: 1, militaryRadius: 8 }, // §2 Barracks: troops 2, gold 1, radius 8
-  guardhouse: { id: 2, cost: { boards: 2, stones: 3 }, size: 'hut', kind: 'military', worker: null, inputs: [WARE.coins], inputCap: 2, useOneEach: false, outputs: [], workTicks: 0, maxTroops: 3, maxGold: 2, armorCap: 2, militaryRadius: 9 }, // §2 Guardhouse: troops 3, gold 2, radius 9
-  watchtower: { id: 4, cost: { boards: 3, stones: 5 }, size: 'house', kind: 'military', worker: null, inputs: [WARE.coins], inputCap: 4, useOneEach: false, outputs: [], workTicks: 0, maxTroops: 6, maxGold: 4, armorCap: 4, militaryRadius: 10 }, // §2 Watchtower: troops 6, gold 4, radius 10
-  fortress: { id: 9, cost: { boards: 4, stones: 7 }, size: 'castle', kind: 'military', worker: null, inputs: [WARE.coins], inputCap: 6, useOneEach: false, outputs: [], workTicks: 0, maxTroops: 9, maxGold: 6, armorCap: 6, militaryRadius: 11 }, // §2 Fortress: troops 9, gold 6, radius 11
+  barracks: {
+    id: 1,
+    cost: { boards: 2, stones: 0 },
+    size: 'hut',
+    kind: 'military',
+    worker: null,
+    inputs: [WARE.coins],
+    inputCap: 1,
+    useOneEach: false,
+    outputs: [],
+    workTicks: 0,
+    maxTroops: 2,
+    maxGold: 1,
+    armorCap: 1,
+    militaryRadius: 8,
+  }, // §2 Barracks: troops 2, gold 1, radius 8
+  guardhouse: {
+    id: 2,
+    cost: { boards: 2, stones: 3 },
+    size: 'hut',
+    kind: 'military',
+    worker: null,
+    inputs: [WARE.coins],
+    inputCap: 2,
+    useOneEach: false,
+    outputs: [],
+    workTicks: 0,
+    maxTroops: 3,
+    maxGold: 2,
+    armorCap: 2,
+    militaryRadius: 9,
+  }, // §2 Guardhouse: troops 3, gold 2, radius 9
+  watchtower: {
+    id: 4,
+    cost: { boards: 3, stones: 5 },
+    size: 'house',
+    kind: 'military',
+    worker: null,
+    inputs: [WARE.coins],
+    inputCap: 4,
+    useOneEach: false,
+    outputs: [],
+    workTicks: 0,
+    maxTroops: 6,
+    maxGold: 4,
+    armorCap: 4,
+    militaryRadius: 10,
+  }, // §2 Watchtower: troops 6, gold 4, radius 10
+  fortress: {
+    id: 9,
+    cost: { boards: 4, stones: 7 },
+    size: 'castle',
+    kind: 'military',
+    worker: null,
+    inputs: [WARE.coins],
+    inputCap: 6,
+    useOneEach: false,
+    outputs: [],
+    workTicks: 0,
+    maxTroops: 9,
+    maxGold: 6,
+    armorCap: 6,
+    militaryRadius: 11,
+  }, // §2 Fortress: troops 9, gold 6, radius 11
 
   // Catapult (MILITARY.md §7). Consumes 1 Stones per shot (store of 4).
-  catapult: { id: 16, cost: { boards: 4, stones: 2 }, size: 'house', kind: 'catapult', worker: null, inputs: [WARE.stone], inputCap: 4, useOneEach: true, outputs: [], workTicks: 0 }, // §7 Catapult: 4-stone store, throws at enemy military buildings
+  catapult: {
+    id: 16,
+    cost: { boards: 4, stones: 2 },
+    size: 'house',
+    kind: 'catapult',
+    worker: null,
+    inputs: [WARE.stone],
+    inputCap: 4,
+    useOneEach: true,
+    outputs: [],
+    workTicks: 0,
+  }, // §7 Catapult: 4-stone store, throws at enemy military buildings
 };
 
 /** Look up a building's definition (undefined for unknown types). */
@@ -492,12 +933,36 @@ export const DONKEY_UPGRADE_BUSY_GF = (PRODUCTIVITY_GF * DONKEY_PRODUCTIVITY) / 
  */
 export const DEFAULT_TRANSPORT_PRIORITY: Readonly<Record<WareType, number>> = (() => {
   const order: WareType[] = [
-    WARE.coins, WARE.plank, WARE.stone, WARE.trunk,
-    WARE.fish, WARE.bread, WARE.meat, WARE.water, WARE.flour, WARE.grain, WARE.ham,
-    WARE.ironore, WARE.coal, WARE.iron, WARE.gold,
-    WARE.sword, WARE.shield, WARE.beer,
-    WARE.tongs, WARE.hammer, WARE.axe, WARE.saw, WARE.pickaxe, WARE.shovel,
-    WARE.crucible, WARE.rodandline, WARE.scythe, WARE.cleaver, WARE.rollingpin, WARE.bow,
+    WARE.coins,
+    WARE.plank,
+    WARE.stone,
+    WARE.trunk,
+    WARE.fish,
+    WARE.bread,
+    WARE.meat,
+    WARE.water,
+    WARE.flour,
+    WARE.grain,
+    WARE.ham,
+    WARE.ironore,
+    WARE.coal,
+    WARE.iron,
+    WARE.gold,
+    WARE.sword,
+    WARE.shield,
+    WARE.beer,
+    WARE.tongs,
+    WARE.hammer,
+    WARE.axe,
+    WARE.saw,
+    WARE.pickaxe,
+    WARE.shovel,
+    WARE.crucible,
+    WARE.rodandline,
+    WARE.scythe,
+    WARE.cleaver,
+    WARE.rollingpin,
+    WARE.bow,
   ];
   const r: Record<WareType, number> = {};
   for (const w of WARE_TYPES) {
@@ -514,10 +979,29 @@ export const DEFAULT_TRANSPORT_PRIORITY: Readonly<Record<WareType, number>> = ((
  * (Boat is a §6 ware but the boat/water economy is out of P3 wave-1 scope.)
  */
 export const HQ_START_WARES: Readonly<Record<WareType, number>> = {
-  beer: 6, hammer: 16, axe: 6, saw: 2, pickaxe: 2, shovel: 4, crucible: 4,
-  rodandline: 6, scythe: 8, cleaver: 2, rollingpin: 2, bow: 2, tongs: 0,
-  sword: 6, fish: 4, bread: 8, shield: 6, trunk: 24, plank: 44, stone: 68,
-  ironore: 16, coal: 16, meat: 6,
+  beer: 6,
+  hammer: 16,
+  axe: 6,
+  saw: 2,
+  pickaxe: 2,
+  shovel: 4,
+  crucible: 4,
+  rodandline: 6,
+  scythe: 8,
+  cleaver: 2,
+  rollingpin: 2,
+  bow: 2,
+  tongs: 0,
+  sword: 6,
+  fish: 4,
+  bread: 8,
+  shield: 6,
+  trunk: 24,
+  plank: 44,
+  stone: 68,
+  ironore: 16,
+  coal: 16,
+  meat: 6,
 };
 /**
  * Source: CONSTANTS.md §6 settlers/jobs, Normal column. `carrier` seeds from the

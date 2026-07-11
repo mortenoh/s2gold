@@ -83,7 +83,9 @@ describe('mine food consumption + resource depletion (CONSTANTS.md §5)', () => 
     mine.inputStock = [2, 0, 0]; // 2 fish stocked (Fish/Meat/Bread order)
 
     const events = runTicks(world, 620); // > one 583-GF cycle
-    const produced = events.filter((e) => e.type === 'WareProduced' && e.wareType === 'coal').length;
+    const produced = events.filter(
+      (e) => e.type === 'WareProduced' && e.wareType === 'coal',
+    ).length;
     const started = events.filter((e) => e.type === 'WorkStarted' && e.kind === 'mining').length;
 
     expect(started).toBeGreaterThanOrEqual(1);
@@ -149,9 +151,7 @@ describe('new-settler recruitment (Helper + tool -> worker, CONSTANTS.md §7)', 
     spawnBuilding(world, geom, geom.index(12, 12), 'farm', 0, false);
     const events = runTicks(world, 60);
 
-    const recruited = events.filter(
-      (e) => e.type === 'SettlerRecruited' && e.job === 'farmer',
-    );
+    const recruited = events.filter((e) => e.type === 'SettlerRecruited' && e.job === 'farmer');
     expect(recruited.length).toBe(1);
     expect(p.wares.scythe).toBe(scytheBefore - 1); // tool consumed
     expect(p.workers.carrier).toBe(helperBefore - 1); // Helper consumed

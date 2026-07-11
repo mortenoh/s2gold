@@ -45,7 +45,10 @@ describe('demolishing a territory building releases its land', () => {
 describe('flag ownership is enforced', () => {
   it('a building cannot reuse another player’s door flag', () => {
     // Player 1's HQ near (20,20) gives that corner to player 1 (radius 9).
-    const world = createWorld(makeFlatMap(40, 40, 1, 1, [{ x: 16, y: 20 }]), { seed: 1, players: 2 });
+    const world = createWorld(makeFlatMap(40, 40, 1, 1, [{ x: 16, y: 20 }]), {
+      seed: 1,
+      players: 2,
+    });
     const geom = worldGeometry(world);
     const buildNode = geom.index(20, 20);
     const doorNode = geom.neighbour(buildNode, 'SE');
@@ -57,7 +60,10 @@ describe('flag ownership is enforced', () => {
 
   it('a road cannot be built between another player’s flags', () => {
     // Player 1's HQ near (20,20) owns the whole a..b span these flags/road use.
-    const world = createWorld(makeFlatMap(40, 40, 1, 1, [{ x: 16, y: 20 }]), { seed: 1, players: 2 });
+    const world = createWorld(makeFlatMap(40, 40, 1, 1, [{ x: 16, y: 20 }]), {
+      seed: 1,
+      players: 2,
+    });
     const geom = worldGeometry(world);
     const a = geom.index(20, 20);
     const n1 = geom.neighbour(a, 'E');

@@ -1,6 +1,7 @@
 # Reference links for format & gameplay research
 
 Format prose specs (primary — implement from these):
+
 - Index: https://settlers2.net/documentation/
 - LST: https://settlers2.net/documentation/lst-file-format/
 - LBM: https://settlers2.net/documentation/graphics-files-lbm/
@@ -14,10 +15,12 @@ Format prose specs (primary — implement from these):
 - General: https://moddingwiki.shikadi.net/wiki/The_Settlers_II
 
 XMIDI:
+
 - https://www.vgmpf.com/Wiki/index.php/XMI
 - https://github.com/Mindwerks/wildmidi/blob/master/docs/formats/XMIFileFormat-AIL.txt
 
 Reference implementation — GPL, consult for facts/ambiguities only, NEVER copy code:
+
 - https://github.com/Return-To-The-Roots/libsiedler2 (src/Load*.cpp; BOB format is
   documented nowhere else — extract offsets/semantics into your own notes first,
   then implement independently)

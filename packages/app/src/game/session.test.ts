@@ -5,7 +5,8 @@ import { GameSession } from './session';
 /** Minimal flat all-meadow map (buildable everywhere) for session round-trips. */
 function makeFlatMap(width: number, height: number): MapJson {
   const size = width * height;
-  const b64 = (fill: number): string => Buffer.from(new Uint8Array(size).fill(fill)).toString('base64');
+  const b64 = (fill: number): string =>
+    Buffer.from(new Uint8Array(size).fill(fill)).toString('base64');
   return {
     title: 'flat',
     width,

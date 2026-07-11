@@ -235,7 +235,12 @@ function executeCommand(
 // --- Validation (also exported as view helpers) ---------------------------
 
 /** True when the node's six surrounding triangles are all buildable meadow. */
-export function terrainBuildable(world: World, geom: Geometry, rules: TerrainRules, node: number): boolean {
+export function terrainBuildable(
+  world: World,
+  geom: Geometry,
+  rules: TerrainRules,
+  node: number,
+): boolean {
   for (const tri of geom.trianglesAround(node)) {
     const tex = tri.layer === 1 ? world.terrain1[tri.node] : world.terrain2[tri.node];
     if (!isBuildableTexture(tex, rules)) return false;
@@ -264,7 +269,10 @@ export function canPlaceFlag(
     const ot = world.objectType[node];
     if (isTreeType(ot) || isGraniteType(ot) || isFieldObject(ot)) return false;
   }
-  if (!isWalkableTexture(world.terrain1[node], rules) || !isWalkableTexture(world.terrain2[node], rules)) {
+  if (
+    !isWalkableTexture(world.terrain1[node], rules) ||
+    !isWalkableTexture(world.terrain2[node], rules)
+  ) {
     return false;
   }
   for (const flag of storeLive(world.flags)) {
@@ -321,7 +329,10 @@ export function canPlaceBuilding(
   } else if (requiresCoast(buildingType)) {
     // The shore relaxes the full meadow BQ: the node's own two texture layers
     // must be buildable land, and it must touch navigable water (P7).
-    if (!isBuildableTexture(world.terrain1[node], rules) || !isBuildableTexture(world.terrain2[node], rules)) {
+    if (
+      !isBuildableTexture(world.terrain1[node], rules) ||
+      !isBuildableTexture(world.terrain2[node], rules)
+    ) {
       return false;
     }
     if (!isCoastalLand(world, geom, node)) return false;
@@ -426,8 +437,28 @@ function splitRoadsAt(world: World, flagId: number, node: number): void {
     // two fresh halves each re-earn their own upgrade from scratch.
     if (road.donkeyId >= 0) freeDonkey(world, road, [flagId, flagA, flagB]);
     storeFree(world.roads, road.id);
-    storeAlloc(world.roads, (rid) => ({ id: rid, player, path: left, flagA, flagB: flagId, carrierId: -1, busyGf: 0, upgraded: false, donkeyId: -1 }));
-    storeAlloc(world.roads, (rid) => ({ id: rid, player, path: right, flagA: flagId, flagB, carrierId: -1, busyGf: 0, upgraded: false, donkeyId: -1 }));
+    storeAlloc(world.roads, (rid) => ({
+      id: rid,
+      player,
+      path: left,
+      flagA,
+      flagB: flagId,
+      carrierId: -1,
+      busyGf: 0,
+      upgraded: false,
+      donkeyId: -1,
+    }));
+    storeAlloc(world.roads, (rid) => ({
+      id: rid,
+      player,
+      path: right,
+      flagA: flagId,
+      flagB,
+      carrierId: -1,
+      busyGf: 0,
+      upgraded: false,
+      donkeyId: -1,
+    }));
   }
 }
 
@@ -462,7 +493,10 @@ function execBuildRoad(
   for (let i = 1; i < path.length - 1; i++) {
     const n = path[i];
     if (world.flagAtNode[n] >= 0 || world.buildingAtNode[n] >= 0) return;
-    if (!isWalkableTexture(world.terrain1[n], rules) || !isWalkableTexture(world.terrain2[n], rules)) {
+    if (
+      !isWalkableTexture(world.terrain1[n], rules) ||
+      !isWalkableTexture(world.terrain2[n], rules)
+    ) {
       return;
     }
   }

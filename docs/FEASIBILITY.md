@@ -2,8 +2,8 @@
 
 Date: 2026-07-08. Verdict up front: **feasible**, with every risky element de-risked by
 hands-on proof-of-concept against the actual GOG installer in this directory. The
-realistic framing: a *playable core game* (terrain, roads, carriers, economy, military,
-sound) is a well-bounded project; *full fidelity* (campaign, ships, AI, editor) is a
+realistic framing: a _playable core game_ (terrain, roads, carriers, economy, military,
+sound) is a well-bounded project; _full fidelity_ (campaign, ships, AI, editor) is a
 long tail we reach in phases.
 
 ## 1. Ground rules (legal shape)
@@ -15,7 +15,7 @@ long tail we reach in phases.
   at `make install` the user points to their `setup_the_settlers_2_gold_*.exe` and a
   local CLI extracts + converts everything into a git-ignored assets directory that
   the browser app then serves. Extraction does **not** happen in the browser.
-- RttR/libsiedler2 (GPL) is used strictly as *behavioral and format documentation* —
+- RttR/libsiedler2 (GPL) is used strictly as _behavioral and format documentation_ —
   reading their docs/wiki is fine; copying their code would force GPL on us and is
   off-limits unless we deliberately choose a GPL license.
 - If ever published, avoid the "The Settlers" trademark in the name.
@@ -24,21 +24,21 @@ long tail we reach in phases.
 
 `innoextract` (v1.9, installed) fully extracts the installer (Inno Setup 5.6.2 unicode,
 307 MB). Everything the game needs is **plain files** — the 292 MB `SETTLERS2.gog` CD
-image is *not* required (it's the DOSBox-mounted CD; game data ships separately):
+image is _not_ required (it's the DOSBox-mounted CD; game data ships separately):
 
-| Path | Contents | Format | Status |
-|---|---|---|---|
-| `DATA/*.LST`, `DATA/MBOB/*` | All sprites: map objects, buildings (4 nations), UI, icons | LST container, magic `0x4E20`, verified | ✅ parsed count OK |
-| `DATA/BOBS/*.BOB` | Carrier/settler body-part animations | BOB format | header verified |
-| `GFX/TEXTURES/TEX5/6/7.LBM` | Terrain tilesets (Greenland/Wasteland/Winter) | IFF PBM, PackBits | ✅ **decoded to PNG (PoC)** |
-| `GFX/PALETTE/*.BBM` | 256-color palettes | IFF CMAP | ✅ decoded |
-| `DATA/TEXTURES/GOU*.DAT` | Gouraud shading tables for terrain lighting | raw tables | present |
-| `DATA/SOUNDDAT/SOUND.LST` | 199 sound effects | raw 8-bit unsigned PCM ~11 kHz | ✅ **wrapped to WAV, validated with ffprobe (PoC)** |
-| `DATA/SOUNDDAT/SNG/SNG_*.DAT` | 25+ music tracks | XMIDI (FORM XDIR/CAT XMID) | ✅ header verified |
-| `DATA/MAPS*, WORLDS` | Campaign + free-play maps | `WORLD_V1.0` (SWD/WLD) | ✅ header verified |
-| `DATA/TXT*/*.ENG/GER`, `DATA/MISSIONS/*.RTX` | All game text, mission briefings | GER/ENG text container (magic `0xFDE7`) | verified |
-| `DATA/IO/*.DAT/IDX`, `IO.LST` | UI graphics, `FONT14.FNT` fonts | LST-family | present |
-| `VIDEO/INTRO.SMK` | Intro video, 320×200, 2224 frames | Smacker v2 | identified by `file` |
+| Path                                         | Contents                                                   | Format                                  | Status                                              |
+| -------------------------------------------- | ---------------------------------------------------------- | --------------------------------------- | --------------------------------------------------- |
+| `DATA/*.LST`, `DATA/MBOB/*`                  | All sprites: map objects, buildings (4 nations), UI, icons | LST container, magic `0x4E20`, verified | ✅ parsed count OK                                  |
+| `DATA/BOBS/*.BOB`                            | Carrier/settler body-part animations                       | BOB format                              | header verified                                     |
+| `GFX/TEXTURES/TEX5/6/7.LBM`                  | Terrain tilesets (Greenland/Wasteland/Winter)              | IFF PBM, PackBits                       | ✅ **decoded to PNG (PoC)**                         |
+| `GFX/PALETTE/*.BBM`                          | 256-color palettes                                         | IFF CMAP                                | ✅ decoded                                          |
+| `DATA/TEXTURES/GOU*.DAT`                     | Gouraud shading tables for terrain lighting                | raw tables                              | present                                             |
+| `DATA/SOUNDDAT/SOUND.LST`                    | 199 sound effects                                          | raw 8-bit unsigned PCM ~11 kHz          | ✅ **wrapped to WAV, validated with ffprobe (PoC)** |
+| `DATA/SOUNDDAT/SNG/SNG_*.DAT`                | 25+ music tracks                                           | XMIDI (FORM XDIR/CAT XMID)              | ✅ header verified                                  |
+| `DATA/MAPS*, WORLDS`                         | Campaign + free-play maps                                  | `WORLD_V1.0` (SWD/WLD)                  | ✅ header verified                                  |
+| `DATA/TXT*/*.ENG/GER`, `DATA/MISSIONS/*.RTX` | All game text, mission briefings                           | GER/ENG text container (magic `0xFDE7`) | verified                                            |
+| `DATA/IO/*.DAT/IDX`, `IO.LST`                | UI graphics, `FONT14.FNT` fonts                            | LST-family                              | present                                             |
+| `VIDEO/INTRO.SMK`                            | Intro video, 320×200, 2224 frames                          | Smacker v2                              | identified by `file`                                |
 
 Every one of these formats is exhaustively documented by the RttR project's
 **libsiedler2** library (it has loaders for LST, BOB, LBM/BBM, WLD/SWD, GER/ENG, FNT,
@@ -58,14 +58,14 @@ transcription work, not reverse engineering.
 
 ## 3. Browser technology assessment
 
-| Concern | Assessment |
-|---|---|
-| Rendering | WebGL2. The map is a triangular grid; the original gouraud-shades each triangle by slope (GOU tables). WebGL vertex colors reproduce this exactly and give effortless 60 fps + smooth scrolling/zoom. Original ran on a 486; performance is a non-issue. |
-| Simulation | Deterministic fixed-tick integer sim (like the original's game frames), decoupled from rendering. Runs headless in Node for tests — this is what makes an agent-built game verifiable. |
-| Sound FX | WebAudio `AudioBuffer`s decoded once at import. Trivial. |
-| Music | XMID → standard MIDI (documented transform, ~200 lines) → **pre-rendered to OGG at install time** with local `fluidsynth` (installed) + a freely-licensed GM soundfont. Browser just plays audio files — no in-browser synth needed. |
-| Intro video | SMK → WebM at install time with local `ffmpeg` (has a native Smacker decoder, installed). Optional, not on the critical path. |
-| Asset serving | Converted assets are plain static files (PNG atlases + JSON + OGG/WAV) in a git-ignored directory; Vite serves them in dev, any static server in prod. |
+| Concern       | Assessment                                                                                                                                                                                                                                               |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rendering     | WebGL2. The map is a triangular grid; the original gouraud-shades each triangle by slope (GOU tables). WebGL vertex colors reproduce this exactly and give effortless 60 fps + smooth scrolling/zoom. Original ran on a 486; performance is a non-issue. |
+| Simulation    | Deterministic fixed-tick integer sim (like the original's game frames), decoupled from rendering. Runs headless in Node for tests — this is what makes an agent-built game verifiable.                                                                   |
+| Sound FX      | WebAudio `AudioBuffer`s decoded once at import. Trivial.                                                                                                                                                                                                 |
+| Music         | XMID → standard MIDI (documented transform, ~200 lines) → **pre-rendered to OGG at install time** with local `fluidsynth` (installed) + a freely-licensed GM soundfont. Browser just plays audio files — no in-browser synth needed.                     |
+| Intro video   | SMK → WebM at install time with local `ffmpeg` (has a native Smacker decoder, installed). Optional, not on the critical path.                                                                                                                            |
+| Asset serving | Converted assets are plain static files (PNG atlases + JSON + OGG/WAV) in a git-ignored directory; Vite serves them in dev, any static server in prod.                                                                                                   |
 
 ## 4. Install-time extraction (`make install`)
 
@@ -105,20 +105,20 @@ chains, road/carrier logistics, military occupation + combat + catapults, harbor
 expedition ships, fog of war, 4 nation sprite sets, 2 campaigns (Roman + World),
 AI opponents, statistics screens, save/load, the original UI. RttR took years in C++;
 a focused TS clone is realistically **30–60k LOC**. The phased plan (PLAN.md) gets a
-*visibly working game* early (terrain + roads + carriers + first economy loop) and
+_visibly working game_ early (terrain + roads + carriers + first economy loop) and
 reaches "full" incrementally, with a Playwright-verified milestone gate per phase.
 Multiplayer is explicitly out of scope (architecture keeps lockstep possible later).
 
 ## 7. Risk register
 
-| Risk | Severity | Mitigation |
-|---|---|---|
-| Install-time toolchain deps (innoextract, ffmpeg, fluidsynth) | Low | All verified installed; `make install` checks and reports missing tools |
-| BOB body-part animation format (composited settler sprites) | Medium | Well documented in libsiedler2; isolated converter with golden-image tests |
-| Gameplay fidelity (carrier fairness, combat rules) | Medium | RttR docs + Morten playtests; deterministic sim makes behavior testable/tunable |
-| Music rendering quality | Low | fluidsynth + free GM soundfont at install time; tweak soundfont choice freely |
-| Scope creep / long tail | High | Phase gates, playable at every milestone, core-first ordering |
-| Legal | Low | No asset redistribution, original code, no GPL copying, no trademark use |
+| Risk                                                          | Severity | Mitigation                                                                      |
+| ------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------- |
+| Install-time toolchain deps (innoextract, ffmpeg, fluidsynth) | Low      | All verified installed; `make install` checks and reports missing tools         |
+| BOB body-part animation format (composited settler sprites)   | Medium   | Well documented in libsiedler2; isolated converter with golden-image tests      |
+| Gameplay fidelity (carrier fairness, combat rules)            | Medium   | RttR docs + Morten playtests; deterministic sim makes behavior testable/tunable |
+| Music rendering quality                                       | Low      | fluidsynth + free GM soundfont at install time; tweak soundfont choice freely   |
+| Scope creep / long tail                                       | High     | Phase gates, playable at every milestone, core-first ordering                   |
+| Legal                                                         | Low      | No asset redistribution, original code, no GPL copying, no trademark use        |
 
 ## 8. Verdict
 

@@ -13,13 +13,13 @@ Source `gameTypes/JobTypes.h`, `gameData/MilitaryConsts.h HITPOINTS`.
 5 ranks; rank = Job - Private (0..4). `NUM_SOLDIER_RANKS = 5`,
 `MAX_MILITARY_RANK = 4` (but capped per game by the "max rank" setting).
 
-| rank | Job | English name | Hitpoints | attack-roll bonus (see §5) |
-|:--:|-----|--------------|:--:|:--:|
-| 0 | Private | Private | 3 | + rank |
-| 1 | PrivateFirstClass | Private first class | 4 | + rank |
-| 2 | Sergeant | Sergeant | 5 | + rank |
-| 3 | Officer | Officer | 6 | + rank |
-| 4 | General | General | 7 | + rank |
+| rank | Job               | English name        | Hitpoints | attack-roll bonus (see §5) |
+| :--: | ----------------- | ------------------- | :-------: | :------------------------: |
+|  0   | Private           | Private             |     3     |           + rank           |
+|  1   | PrivateFirstClass | Private first class |     4     |           + rank           |
+|  2   | Sergeant          | Sergeant            |     5     |           + rank           |
+|  3   | Officer           | Officer             |     6     |           + rank           |
+|  4   | General           | General             |     7     |           + rank           |
 
 Higher rank = more hitpoints (survives more hits) and a higher max attack roll (§5), so
 strength rises with rank. Armor (Gold edition) lets a soldier absorb one extra hit; the
@@ -33,12 +33,12 @@ Source `gameData/MilitaryConsts.h`. Arrays are per-building, order
 **[Barracks, Guardhouse, Watchtower, Fortress]** (`NUM_MILITARY_BLDS = 4`). Same for all
 nations.
 
-| Building | BuildingType id | Max troops | Max gold coins | Armor slots | Territory radius |
-|----------|:--:|:--:|:--:|:--:|:--:|
-| Barracks | 1 | 2 | 1 | 1 | 8 |
-| Guardhouse | 2 | 3 | 2 | 2 | 9 |
-| Watchtower | 4 | 6 | 4 | 4 | 10 |
-| Fortress | 9 | 9 | 6 | 6 | 11 |
+| Building   | BuildingType id | Max troops | Max gold coins | Armor slots | Territory radius |
+| ---------- | :-------------: | :--------: | :------------: | :---------: | :--------------: |
+| Barracks   |        1        |     2      |       1        |      1      |        8         |
+| Guardhouse |        2        |     3      |       2        |      2      |        9         |
+| Watchtower |        4        |     6      |       4        |      4      |        10        |
+| Fortress   |        9        |     9      |       6        |      6      |        11        |
 
 `NUM_TROOPS={2,3,6,9}`, `NUM_GOLDS={1,2,4,6}`, `NUM_ARMOR={1,2,4,6}`,
 `MILITARY_RADIUS={8,9,10,11}`. Also: `HQ_RADIUS = 9`, `HARBOR_RADIUS = 8`.
@@ -62,7 +62,9 @@ Military world partitioning: `MILITARY_SQUARE_SIZE = 20` nodes.
   buildings with coins disabled.
 
 ### Vision / sight ranges (nodes)
+
 Source `MilitaryConsts.h`. Added on top of the border/territory reach where "relative":
+
 - Military building extra sight: `VISUALRANGE_MILITARY = 3` (added to border reach).
 - Lookout tower (absolute): `VISUALRANGE_LOOKOUTTOWER = 20`.
 - Scout: `VISUALRANGE_SCOUT = 3`. Soldier: `VISUALRANGE_SOLDIER = 2`.
@@ -79,6 +81,7 @@ Constants: `BASE_ATTACKING_DISTANCE = 21`, `EXTENDED_ATTACKING_DISTANCE = 1`,
 `MAX_FAR_AWAY_CAPTURING_DISTANCE = 15`, `SEAATTACK_DISTANCE = 15`.
 
 **How many soldiers a building can send to attack target `dest`:**
+
 1. Base = `(numTroops - 1) * militarySetting[3] / SCALE[3]` (attack-strength slider);
    always leaves at least 1 soldier as garrison. If numTroops <= 1, sends 0.
 2. If straight-line `distance(building, dest) > 21`, subtract
@@ -91,6 +94,7 @@ Constants: `BASE_ATTACKING_DISTANCE = 21`, `EXTENDED_ATTACKING_DISTANCE = 1`,
    weak->strong; attackers taken from the strong end).
 
 **Combat flow:**
+
 - Attackers walk to the target building's flag. Defenders come out to meet them; opponents
   within `MEET_FOR_FIGHT_DISTANCE = 5` move toward each other and a fight starts.
 - When the last defender is beaten and attackers reach the building, the building is
@@ -113,15 +117,15 @@ two soldiers at one point; rounds alternate.
    - **0 (max strength):** `roll = RANDOM_RAND(rank + 6)` -> integer in `[0, rank+5]`.
    - **1 (medium, DEFAULT):** `roll = RANDOM_RAND(rank + 10)` -> `[0, rank+9]`.
    - **2 (min strength):** `roll = RANDOM_RAND(10)` -> `[0, 9]`, rank-independent.
-   (`RANDOM_RAND(n)` returns `0..n-1`.)
-3. **Hit test:** the *attacker* lands a hit iff `attacker_roll > defender_roll` (strict).
+     (`RANDOM_RAND(n)` returns `0..n-1`.)
+3. **Hit test:** the _attacker_ lands a hit iff `attacker_roll > defender_roll` (strict).
    Otherwise the defender successfully defends (no damage; a random defense animation 0-2).
 4. On a hit, the defender loses **1 hitpoint** (`TakeHit`). If hitpoints reach 0 that
    soldier dies and the other wins; loser removed from player inventory.
 5. **Timing:** each attack/defense round event = **15 GF**; the death sequence = **30 GF**.
 6. **Armor:** a soldier with armor absorbs one hit (armor consumed) before losing HP.
 
-**Luck:** because both sides roll uniformly, a higher rank shifts the *distribution*
+**Luck:** because both sides roll uniformly, a higher rank shifts the _distribution_
 upward (bigger max roll) so it wins more often, but any single round can go either way — a
 low-rank soldier can beat a general on a lucky sequence of rolls. In "min strength" mode
 rank is irrelevant (pure 50/50 per round barring ties).
@@ -145,10 +149,12 @@ Source `buildings/nobMilitary.cpp` (upgrade event), `gameData/MilitaryConsts.h`.
 - After promoting, the building re-checks and orders more coins if needed, and reschedules.
 
 ### Recovery
+
 Wounded soldiers heal inside buildings: `CONVALESCE_TIME + rand(CONVALESCE_TIME_RANDOM)` =
 `500 + rand(500)` GF per 1 hitpoint recovered.
 
 ### Recruitment cost (from warehouses/HQ)
+
 1 new Private = **1 Sword + 1 Shield + 1 Beer + 1 Helper**; recruit time
 `200 + rand(200)` GF. Ratio governed by military setting slot 0. (See `CONSTANTS.md` §7.)
 

@@ -37,7 +37,12 @@ describe.skipIf(!existsSync(MAP))('warehouse supply requires a route', () => {
     expect(spot).toBeGreaterThanOrEqual(0);
 
     const planksBefore = world.players[0]?.wares.plank ?? 0;
-    applyCommand(world, { player: 0, type: 'placeBuilding', node: spot, buildingType: 'woodcutter' });
+    applyCommand(world, {
+      player: 0,
+      type: 'placeBuilding',
+      node: spot,
+      buildingType: 'woodcutter',
+    });
 
     // No road: the planks must stay in the warehouse and off the HQ flag.
     for (let t = 0; t < 500; t++) tickWorld(world);

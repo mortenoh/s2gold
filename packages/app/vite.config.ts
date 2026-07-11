@@ -18,7 +18,11 @@ function cleanUrls(): Plugin {
           req.url = '/game.html';
         } else if (url === '/setup' || url.startsWith('/setup/') || url.startsWith('/setup?')) {
           req.url = '/index.html';
-        } else if (url === '/campaign' || url.startsWith('/campaign/') || url.startsWith('/campaign?')) {
+        } else if (
+          url === '/campaign' ||
+          url.startsWith('/campaign/') ||
+          url.startsWith('/campaign?')
+        ) {
           req.url = '/index.html';
         }
         next();

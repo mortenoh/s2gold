@@ -171,7 +171,11 @@ const DONKEY_WALK_FRAMES = 8;
  */
 export function donkeySprite(dir: number, step: number): number {
   const row = (6 - (((dir % 6) + 6) % 6)) % 6;
-  return DONKEY_SPRITE_BASE + row * DONKEY_DIR_STRIDE + (((step % DONKEY_WALK_FRAMES) + DONKEY_WALK_FRAMES) % DONKEY_WALK_FRAMES);
+  return (
+    DONKEY_SPRITE_BASE +
+    row * DONKEY_DIR_STRIDE +
+    (((step % DONKEY_WALK_FRAMES) + DONKEY_WALK_FRAMES) % DONKEY_WALK_FRAMES)
+  );
 }
 
 /** carrier BOB job (GoodType) id for each carried ware. */
@@ -262,7 +266,10 @@ export interface RenderAtlases {
  * null for an unknown building type (a kind the engine grew that we have no
  * sprite id for) so the caller can skip it rather than draw a garbage sprite.
  */
-export function buildingSprite(type: BuildingType, state: 'site' | 'working'): {
+export function buildingSprite(
+  type: BuildingType,
+  state: 'site' | 'working',
+): {
   sprite: number;
   shadow: number;
 } | null {
@@ -466,7 +473,8 @@ export function buildDynamics(
         player: b.player,
       });
       const done = buildingSprite(b.type, 'working');
-      const reveal = b.buildTicks > 0 ? Math.max(0, Math.min(1, b.buildProgress / b.buildTicks)) : 0;
+      const reveal =
+        b.buildTicks > 0 ? Math.max(0, Math.min(1, b.buildProgress / b.buildTicks)) : 0;
       if (done && reveal > 0.02) {
         out.push({
           worldX: a.x,
@@ -1032,7 +1040,10 @@ export function mineDepletedAt(world: World, geom: Geometry, node: number): bool
     for (let dx = -r; dx <= r; dx++) {
       const n = ((my + dy + H) % H) * W + ((mx + dx + W) % W);
       if (geom.distance(b.node, n) > r) continue;
-      if (resourceType(world.resource[n]) === def.resource && resourceAmount(world.resource[n]) > 0) {
+      if (
+        resourceType(world.resource[n]) === def.resource &&
+        resourceAmount(world.resource[n]) > 0
+      ) {
         return false; // ore still reachable
       }
     }

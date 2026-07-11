@@ -284,9 +284,7 @@ export class WinTracker {
         return {
           done: total > 0 && standing === 0,
           progress:
-            total === 0
-              ? 'Locate the enemy'
-              : `${total - standing} / ${total} enemies defeated`,
+            total === 0 ? 'Locate the enemy' : `${total - standing} / ${total} enemies defeated`,
         };
       }
     }

@@ -634,8 +634,7 @@ button.menu-entry:hover,
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background:
-    repeating-conic-gradient(#141a12 0% 25%, #0e130c 0% 50%) 50% / 20px 20px;
+  background: repeating-conic-gradient(#141a12 0% 25%, #0e130c 0% 50%) 50% / 20px 20px;
 }
 
 .setup-preview-canvas.loading {
@@ -848,8 +847,7 @@ a.campaign-chapter:focus-visible {
 
 .briefing-diary {
   background:
-    linear-gradient(rgba(239, 226, 192, 0.06), rgba(239, 226, 192, 0.06)),
-    rgba(20, 16, 8, 0.72);
+    linear-gradient(rgba(239, 226, 192, 0.06), rgba(239, 226, 192, 0.06)), rgba(20, 16, 8, 0.72);
   border: 1px solid rgba(240, 200, 74, 0.3);
   border-radius: 6px;
   padding: 16px 18px;

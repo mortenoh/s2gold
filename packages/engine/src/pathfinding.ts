@@ -116,7 +116,9 @@ export function findWalkPath(
     if (n !== goal && world.buildingAtNode[n] >= 0) return false;
     if (blockFlags && n !== goal && world.flagAtNode[n] >= 0) return false;
     if (ownedBy !== undefined && ownerPlayer(world.owner[n]) !== ownedBy) return false;
-    return isWalkableTexture(world.terrain1[n], rules) && isWalkableTexture(world.terrain2[n], rules);
+    return (
+      isWalkableTexture(world.terrain1[n], rules) && isWalkableTexture(world.terrain2[n], rules)
+    );
   };
   if (!walkable(goal)) return null;
 

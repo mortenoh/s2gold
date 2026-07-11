@@ -20,7 +20,10 @@ import { connectToHq, spawnBuilding } from './harness-economy';
 import { storeLive } from './world';
 
 function waterSupply(world: World): number {
-  return world.players[0].wares.water + [...storeLive(world.wares)].filter((w) => w.type === 'water').length;
+  return (
+    world.players[0].wares.water +
+    [...storeLive(world.wares)].filter((w) => w.type === 'water').length
+  );
 }
 
 describe('demand gate bounds surplus production', () => {

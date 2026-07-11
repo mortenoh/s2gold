@@ -42,7 +42,12 @@ export async function renderCampaign(root: HTMLElement): Promise<void> {
 
   const header = el('div', { class: 'campaign-header' });
   header.append(
-    el('a', { class: 'menu-back', href: '/', text: '← Back', attrs: { 'data-testid': 'campaign-back' } }),
+    el('a', {
+      class: 'menu-back',
+      href: '/',
+      text: '← Back',
+      attrs: { 'data-testid': 'campaign-back' },
+    }),
     font
       ? fontHeading(font, strings.campaign, { scale: 2, color: GOLD, testid: 'campaign-heading' })
       : el('h1', { text: strings.campaign, attrs: { 'data-testid': 'campaign-heading' } }),

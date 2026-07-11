@@ -112,10 +112,11 @@ export async function renderBriefing(root: HTMLElement, chapterId: number): Prom
     { class: 'briefing-objective', attrs: { 'data-testid': 'briefing-objective' } },
     el('div', { class: 'briefing-objective-title', text: strings.objective }),
     el('div', { class: 'briefing-objective-text', text: chapter.objective }),
-    goalLine
-      ? el('div', { class: 'briefing-objective-orig', text: `“${goalLine}”` })
-      : null,
-    el('div', { class: 'briefing-objective-win', text: `Victory: ${winConditionText(chapter.win)}` }),
+    goalLine ? el('div', { class: 'briefing-objective-orig', text: `“${goalLine}”` }) : null,
+    el('div', {
+      class: 'briefing-objective-win',
+      text: `Victory: ${winConditionText(chapter.win)}`,
+    }),
   );
   panel.append(objective);
 
@@ -154,7 +155,10 @@ function renderDiary(host: HTMLElement, font: BitmapFont | null, raw: string): v
     text: '‹ Prev',
     attrs: { 'data-testid': 'briefing-prev' },
   }) as HTMLButtonElement;
-  const label = el('span', { class: 'briefing-page-label', attrs: { 'data-testid': 'briefing-page' } });
+  const label = el('span', {
+    class: 'briefing-page-label',
+    attrs: { 'data-testid': 'briefing-page' },
+  });
   const next = el('button', {
     class: 'briefing-page-btn',
     type: 'button',

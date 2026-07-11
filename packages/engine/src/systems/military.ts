@@ -520,12 +520,7 @@ function resolveCaptures(
 }
 
 /** Step every soldier settler this tick, then resolve any pending captures. */
-function runSoldiers(
-  world: World,
-  geom: Geometry,
-  rules: TerrainRules,
-  events: EventSink,
-): void {
+function runSoldiers(world: World, geom: Geometry, rules: TerrainRules, events: EventSink): void {
   // Snapshot ids so freeing / capture mutations don't disturb iteration.
   const ids: number[] = [];
   for (const s of storeLive(world.settlers)) if (s.rank >= 0) ids.push(s.id);

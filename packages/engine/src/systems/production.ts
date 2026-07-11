@@ -51,7 +51,11 @@ import { isWaterNode } from '../water';
 /** A water node adjacent to `node` that still holds fish, or -1. */
 function adjacentFish(world: World, geom: Geometry, node: number): number {
   for (const n of geom.neighbours(node)) {
-    if (isWaterNode(world, n) && resourceType(world.resource[n]) === RESOURCE.fish && resourceAmount(world.resource[n]) > 0) {
+    if (
+      isWaterNode(world, n) &&
+      resourceType(world.resource[n]) === RESOURCE.fish &&
+      resourceAmount(world.resource[n]) > 0
+    ) {
       return n;
     }
   }
@@ -64,10 +68,23 @@ function adjacentFish(world: World, geom: Geometry, node: number): number {
  * see, so gating them on a stored reserve would wrongly stall those chains.
  */
 const ALWAYS_WANTED: ReadonlySet<WareType> = new Set<WareType>([
-  WARE.plank, WARE.stone, WARE.coins,
-  WARE.sword, WARE.shield, WARE.bow,
-  WARE.tongs, WARE.hammer, WARE.axe, WARE.saw, WARE.pickaxe, WARE.shovel,
-  WARE.crucible, WARE.rodandline, WARE.scythe, WARE.cleaver, WARE.rollingpin,
+  WARE.plank,
+  WARE.stone,
+  WARE.coins,
+  WARE.sword,
+  WARE.shield,
+  WARE.bow,
+  WARE.tongs,
+  WARE.hammer,
+  WARE.axe,
+  WARE.saw,
+  WARE.pickaxe,
+  WARE.shovel,
+  WARE.crucible,
+  WARE.rodandline,
+  WARE.scythe,
+  WARE.cleaver,
+  WARE.rollingpin,
 ]);
 
 /**
@@ -200,7 +217,13 @@ function placeOutput(world: World, events: EventSink, b: Building): void {
       nextFlag: -1,
     }));
     flag.wares.push(wid);
-    events.emit({ type: 'WareProduced', wareId: wid, wareType: outType, buildingId: b.id, player: b.player });
+    events.emit({
+      type: 'WareProduced',
+      wareId: wid,
+      wareType: outType,
+      buildingId: b.id,
+      player: b.player,
+    });
   }
 }
 
@@ -353,7 +376,13 @@ function runFarmer(
       if (arrived) {
         worker.state = 'working';
         worker.timer = def.workTicks;
-        events.emit({ type: 'WorkStarted', kind: 'farming', buildingId: b.id, node: worker.node, player: b.player });
+        events.emit({
+          type: 'WorkStarted',
+          kind: 'farming',
+          buildingId: b.id,
+          node: worker.node,
+          player: b.player,
+        });
       }
       break;
     }
@@ -440,7 +469,13 @@ function runWorkshop(events: EventSink, b: Building, def: BuildingDef, player: P
   for (let i = 0; i < def.inputs.length; i++) if ((b.inputStock[i] ?? 0) <= 0) return; // need one of each
   for (let i = 0; i < def.inputs.length; i++) b.inputStock[i]--;
   b.workTimer = def.workTicks;
-  events.emit({ type: 'WorkStarted', kind: workshopSound(b.type), buildingId: b.id, node: b.node, player: b.player });
+  events.emit({
+    type: 'WorkStarted',
+    kind: workshopSound(b.type),
+    buildingId: b.id,
+    node: b.node,
+    player: b.player,
+  });
 }
 
 /** Rough sound classification for a workshop's WorkStarted event. */
@@ -452,7 +487,13 @@ function workshopSound(type: string): string {
 }
 
 /** Mine: consume 1 food (most-stocked), decrement a subsurface resource, produce ore. */
-function runMine(world: World, geom: Geometry, events: EventSink, b: Building, def: BuildingDef): void {
+function runMine(
+  world: World,
+  geom: Geometry,
+  events: EventSink,
+  b: Building,
+  def: BuildingDef,
+): void {
   if (b.workTimer > 0) {
     b.workTimer--;
     if (b.workTimer === 0 && def.outputs.length > 0) b.outputQueue.push(def.outputs[0]);
@@ -480,7 +521,13 @@ function runMine(world: World, geom: Geometry, events: EventSink, b: Building, d
   b.inputStock[foodIdx]--; // consume 1 food
   world.resource[resNode] = world.resource[resNode] - 1; // reserve + decrement the resource
   b.workTimer = def.workTicks;
-  events.emit({ type: 'WorkStarted', kind: 'mining', buildingId: b.id, node: b.node, player: b.player });
+  events.emit({
+    type: 'WorkStarted',
+    kind: 'mining',
+    buildingId: b.id,
+    node: b.node,
+    player: b.player,
+  });
 }
 
 /**
@@ -504,7 +551,13 @@ function runShipyard(
   if (!playerHasDockedHarbor(world, geom, b.player)) return;
   b.inputStock[0] -= SEA.shipPlankCost;
   b.workTimer = def.workTicks;
-  events.emit({ type: 'WorkStarted', kind: 'shipbuilding', buildingId: b.id, node: b.node, player: b.player });
+  events.emit({
+    type: 'WorkStarted',
+    kind: 'shipbuilding',
+    buildingId: b.id,
+    node: b.node,
+    player: b.player,
+  });
 }
 
 /** Dispatch a harvester building to the right find/harvest behaviour by type. */
@@ -521,8 +574,15 @@ function runHarvesterFor(
   switch (b.type) {
     case BUILDING.woodcutter:
       runHarvester(
-        world, geom, rules, b, worker,
-        () => nearestReachable(world, geom, rules, b.node, radius, (n) => isTreeType(world.objectType[n])),
+        world,
+        geom,
+        rules,
+        b,
+        worker,
+        () =>
+          nearestReachable(world, geom, rules, b.node, radius, (n) =>
+            isTreeType(world.objectType[n]),
+          ),
         def.workTicks,
         (node) => {
           if (!isTreeType(world.objectType[node])) return false;
@@ -536,8 +596,20 @@ function runHarvesterFor(
       break;
     case BUILDING.quarry:
       runHarvester(
-        world, geom, rules, b, worker,
-        () => nearestReachable(world, geom, rules, b.node, radius, (n) => isGraniteType(world.objectType[n]) && graniteStock(world.objectIndex[n]) > 0),
+        world,
+        geom,
+        rules,
+        b,
+        worker,
+        () =>
+          nearestReachable(
+            world,
+            geom,
+            rules,
+            b.node,
+            radius,
+            (n) => isGraniteType(world.objectType[n]) && graniteStock(world.objectIndex[n]) > 0,
+          ),
         def.workTicks,
         (node) => {
           if (!isGraniteType(world.objectType[node])) return false;
@@ -554,8 +626,13 @@ function runHarvesterFor(
       break;
     case BUILDING.forester:
       runHarvester(
-        world, geom, rules, b, worker,
-        () => nearestReachable(world, geom, rules, b.node, radius, (n) => plantable(world, rules, n)),
+        world,
+        geom,
+        rules,
+        b,
+        worker,
+        () =>
+          nearestReachable(world, geom, rules, b.node, radius, (n) => plantable(world, rules, n)),
         def.workTicks,
         (node) => {
           if (!plantable(world, rules, node)) return false;
@@ -571,8 +648,20 @@ function runHarvesterFor(
       // Fish live in water (which the fisher can't walk into), so the fisher
       // stands on reachable shore next to a fish-bearing water node and fishes it.
       runHarvester(
-        world, geom, rules, b, worker,
-        () => nearestReachable(world, geom, rules, b.node, radius, (n) => adjacentFish(world, geom, n) >= 0),
+        world,
+        geom,
+        rules,
+        b,
+        worker,
+        () =>
+          nearestReachable(
+            world,
+            geom,
+            rules,
+            b.node,
+            radius,
+            (n) => adjacentFish(world, geom, n) >= 0,
+          ),
         def.workTicks,
         (standNode) => {
           const fishNode = adjacentFish(world, geom, standNode);

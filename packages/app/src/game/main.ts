@@ -235,10 +235,15 @@ async function boot(): Promise<void> {
 
   clear(root);
   const canvas = el('canvas', { class: 'game-canvas', attrs: { 'data-testid': 'game-canvas' } });
-  const mapSelect = createDropdown([], '', (name) => {
-    const entry = index.find((m) => m.name === name);
-    if (entry) void switchMap(entry);
-  }, { 'data-testid': 'map-select' });
+  const mapSelect = createDropdown(
+    [],
+    '',
+    (name) => {
+      const entry = index.find((m) => m.name === name);
+      if (entry) void switchMap(entry);
+    },
+    { 'data-testid': 'map-select' },
+  );
   const zoomButton = el('button', {
     text: 'Zoom 1x',
     attrs: { 'data-testid': 'zoom-toggle', type: 'button' },
@@ -1092,7 +1097,13 @@ async function boot(): Promise<void> {
       const objectArchive = objectAtlasForLandscape(landscape);
       const nationArchive = buildingArchiveForLandscape(landscape);
       for (let p = 0; p < session.playerCount; p++) {
-        for (const s of borderStoneSprites(session.world, borderCache[p] ?? [], p, vis, nationArchive)) {
+        for (const s of borderStoneSprites(
+          session.world,
+          borderCache[p] ?? [],
+          p,
+          vis,
+          nationArchive,
+        )) {
           borderStones.push(s);
         }
       }
@@ -1125,10 +1136,25 @@ async function boot(): Promise<void> {
       const preview = interaction.roadPreview;
       if (preview && preview.node >= 0) {
         if (preview.valid && preview.path) {
-          roads.render(camera, pathSegments(session.world, session.geom, preview.path), [0.5, 0.8, 1.0, 0.5], false);
-          roads.render(camera, nodeMarkerSegments(session.world, preview.node), [0.4, 1.0, 0.5, 0.85], false);
+          roads.render(
+            camera,
+            pathSegments(session.world, session.geom, preview.path),
+            [0.5, 0.8, 1.0, 0.5],
+            false,
+          );
+          roads.render(
+            camera,
+            nodeMarkerSegments(session.world, preview.node),
+            [0.4, 1.0, 0.5, 0.85],
+            false,
+          );
         } else {
-          roads.render(camera, nodeMarkerSegments(session.world, preview.node), [1.0, 0.3, 0.3, 0.85], false);
+          roads.render(
+            camera,
+            nodeMarkerSegments(session.world, preview.node),
+            [1.0, 0.3, 0.3, 0.85],
+            false,
+          );
         }
       }
     }

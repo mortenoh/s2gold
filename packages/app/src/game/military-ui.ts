@@ -136,7 +136,9 @@ export class MilitaryPanel {
       );
     }
     if (rows.length === 0) {
-      rows.push(el('div', { class: 'mil-rank mil-empty', text: view.occupied ? 'Empty' : 'Unoccupied' }));
+      rows.push(
+        el('div', { class: 'mil-rank mil-empty', text: view.occupied ? 'Empty' : 'Unoccupied' }),
+      );
     }
     return el(
       'div',

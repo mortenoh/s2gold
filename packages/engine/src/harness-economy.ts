@@ -139,7 +139,13 @@ export function connectToHq(
   buildingNode: number,
   player = 0,
 ): number[] | null {
-  return connectRoad(world, geom, hqFlagNode(world, geom, player), doorFlagNode(geom, buildingNode), player);
+  return connectRoad(
+    world,
+    geom,
+    hqFlagNode(world, geom, player),
+    doorFlagNode(geom, buildingNode),
+    player,
+  );
 }
 
 /** Build a direct road between two buildings' door flags. */
@@ -170,6 +176,12 @@ export function placeBuildingAndTick(
   type: BuildingType,
   player = 0,
 ): void {
-  applyCommand(world, { tick: world.tick, player, type: 'placeBuilding', node, buildingType: type });
+  applyCommand(world, {
+    tick: world.tick,
+    player,
+    type: 'placeBuilding',
+    node,
+    buildingType: type,
+  });
   tickWorld(world);
 }

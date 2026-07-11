@@ -205,7 +205,13 @@ function place(world: World, node: number, type: BuildingType, tick: number): vo
   applyCommand(world, { tick, player: 0, type: 'placeBuilding', node, buildingType: type });
 }
 
-function connect(world: World, geom: Geometry, fromFlagNode: number, buildingNode: number, tick: number): void {
+function connect(
+  world: World,
+  geom: Geometry,
+  fromFlagNode: number,
+  buildingNode: number,
+  tick: number,
+): void {
   if (buildingNode < 0) return;
   const toFlagNode = geom.neighbour(buildingNode, 'SE');
   const walk = findWalkPath(world, geom, GREENLAND_RULES, fromFlagNode, toFlagNode);

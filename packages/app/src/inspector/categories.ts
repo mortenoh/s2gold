@@ -558,7 +558,11 @@ function discoverTextFiles(payload: Json): TextFile[] {
         }
         if (typeof entry === 'string') {
           const base = entry.replace(/\.json$/i, '');
-          out.push({ lang, name: base, rel: entry.includes('/') ? entry : `texts/${lang}/${base}.json` });
+          out.push({
+            lang,
+            name: base,
+            rel: entry.includes('/') ? entry : `texts/${lang}/${base}.json`,
+          });
         }
       }
     }

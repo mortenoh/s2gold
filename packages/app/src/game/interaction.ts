@@ -424,7 +424,11 @@ export class Interaction {
         `ctx-${type}`,
       ),
     );
-    const sub = el('div', { class: 'ctx-menu ctx-submenu', attrs: { 'data-testid': 'ctx-submenu' } }, ...items);
+    const sub = el(
+      'div',
+      { class: 'ctx-menu ctx-submenu', attrs: { 'data-testid': 'ctx-submenu' } },
+      ...items,
+    );
     trigger.classList.add('active');
     this.deps.root.append(sub);
     const tr = trigger.getBoundingClientRect();
@@ -562,7 +566,13 @@ export class Interaction {
 
 /** Slugify a menu label for a stable test id (first word, lowercased). */
 function slug(text: string): string {
-  return text.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '').split('-')[0] ?? 'item';
+  return (
+    text
+      .toLowerCase()
+      .replace(/[^a-z]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .split('-')[0] ?? 'item'
+  );
 }
 
 /** Title-case a building id as a last-resort label (e.g. "pigfarm" -> "Pigfarm"). */

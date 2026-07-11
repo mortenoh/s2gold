@@ -103,7 +103,13 @@ export {
   waterNeighbours,
   waterNeighbourCount,
 } from './water';
-export { findWalkPath, findWaterPath, findFlagRoute, buildFlagGraph, roadBetween } from './pathfinding';
+export {
+  findWalkPath,
+  findWaterPath,
+  findFlagRoute,
+  buildFlagGraph,
+  roadBetween,
+} from './pathfinding';
 export type { GameEvent } from './events';
 export * from './constants';
 
@@ -167,8 +173,8 @@ export function settlersInRect(
   for (const s of storeLive(world.settlers)) {
     const sx = s.node % world.width;
     const sy = Math.floor(s.node / world.width);
-    const dx = ((sx - rect.x) % world.width + world.width) % world.width;
-    const dy = ((sy - rect.y) % world.height + world.height) % world.height;
+    const dx = (((sx - rect.x) % world.width) + world.width) % world.width;
+    const dy = (((sy - rect.y) % world.height) + world.height) % world.height;
     if (dx < rect.w && dy < rect.h) out.push(s);
   }
   return out;
