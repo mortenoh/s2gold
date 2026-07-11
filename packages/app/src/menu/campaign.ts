@@ -66,7 +66,7 @@ export async function renderCampaign(root: HTMLElement): Promise<void> {
 
     const badge = el('span', {
       class: 'chapter-badge',
-      text: completed ? '✓' : unlocked ? '' : '🔒',
+      text: completed ? '✓' : unlocked ? '' : '✕',
     });
     const label = el('span', { class: 'chapter-label', text: chapter.title });
     const status = el('span', {

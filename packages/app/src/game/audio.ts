@@ -130,19 +130,35 @@ export class AudioEngine {
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.value = this.muted ? 0 : this.sfxVolume;
       this.masterGain.connect(this.ctx.destination);
-      void this.loadIndexes();
     }
+    // Retry on every gesture until both indexes are in: one transient fetch
+    // failure (server restart, network blip) must not mean permanent silence.
+    if (!this.sfxIndex || !this.musicIndexLoaded) void this.loadIndexes();
     if (this.ctx.state === 'suspended') void this.ctx.resume();
     this.music.unlock();
   }
 
+  private indexesLoading = false;
+  private musicIndexLoaded = false;
+
   private async loadIndexes(): Promise<void> {
-    if (!this.sfxIndex) {
-      const idx = await fetchJson<SfxIndex>(assetUrl('sfx/index.json'));
-      if (idx) this.sfxIndex = idx;
+    if (this.indexesLoading) return;
+    this.indexesLoading = true;
+    try {
+      if (!this.sfxIndex) {
+        const idx = await fetchJson<SfxIndex>(assetUrl('sfx/index.json'));
+        if (idx) this.sfxIndex = idx;
+      }
+      if (!this.musicIndexLoaded) {
+        const midx = await fetchJson<MusicIndex>(assetUrl('music/index.json'));
+        if (midx) {
+          this.music.setPlaylist(midx);
+          this.musicIndexLoaded = true;
+        }
+      }
+    } finally {
+      this.indexesLoading = false;
     }
-    const midx = await fetchJson<MusicIndex>(assetUrl('music/index.json'));
-    if (midx) this.music.setPlaylist(midx);
   }
 
   setMuted(muted: boolean): void {
@@ -176,12 +192,16 @@ export class AudioEngine {
     if (!ctx) return;
     try {
       const res = await fetch(assetUrl(file), { cache: 'force-cache' });
-      if (!res.ok) return;
+      if (!res.ok) {
+        this.requested.delete(id); // retry on a later play attempt
+        return;
+      }
       const raw = await res.arrayBuffer();
       const buf = await ctx.decodeAudioData(raw);
       this.buffers.set(id, buf);
       this.buffersLoaded++;
     } catch (err) {
+      this.requested.delete(id); // retry on a later play attempt
       console.warn(`[s2gold] failed to decode sfx ${id}`, err);
     }
   }

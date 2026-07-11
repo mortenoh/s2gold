@@ -994,6 +994,22 @@ async function boot(): Promise<void> {
     toast: saveToast,
     onVisibility: (open) => syncHudPanelButton(menuButton, open),
   });
+  // WebGL context loss (GPU reset, driver update, background eviction): the
+  // GL resources are gone and nothing rebuilds them, so without handling this
+  // the canvas silently freezes while the sim keeps running. Quicksave, tell
+  // the user, and reload once the browser restores the context.
+  canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault(); // allow the browser to restore the context
+    if (session) {
+      session.paused = true;
+      saveMenu.quicksave();
+    }
+    saveToast('Graphics context lost - reloading when restored...');
+  });
+  canvas.addEventListener('webglcontextrestored', () => {
+    window.location.reload();
+  });
+
   wireHudPanel(menuButton, {
     isOpen: () => saveMenu.isOpen,
     open: () => saveMenu.open(),

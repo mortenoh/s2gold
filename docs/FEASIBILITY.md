@@ -28,14 +28,14 @@ image is _not_ required (it's the DOSBox-mounted CD; game data ships separately)
 
 | Path                                         | Contents                                                   | Format                                  | Status                                              |
 | -------------------------------------------- | ---------------------------------------------------------- | --------------------------------------- | --------------------------------------------------- |
-| `DATA/*.LST`, `DATA/MBOB/*`                  | All sprites: map objects, buildings (4 nations), UI, icons | LST container, magic `0x4E20`, verified | ✅ parsed count OK                                  |
+| `DATA/*.LST`, `DATA/MBOB/*`                  | All sprites: map objects, buildings (4 nations), UI, icons | LST container, magic `0x4E20`, verified | ✓ parsed count OK                                  |
 | `DATA/BOBS/*.BOB`                            | Carrier/settler body-part animations                       | BOB format                              | header verified                                     |
-| `GFX/TEXTURES/TEX5/6/7.LBM`                  | Terrain tilesets (Greenland/Wasteland/Winter)              | IFF PBM, PackBits                       | ✅ **decoded to PNG (PoC)**                         |
-| `GFX/PALETTE/*.BBM`                          | 256-color palettes                                         | IFF CMAP                                | ✅ decoded                                          |
+| `GFX/TEXTURES/TEX5/6/7.LBM`                  | Terrain tilesets (Greenland/Wasteland/Winter)              | IFF PBM, PackBits                       | ✓ **decoded to PNG (PoC)**                         |
+| `GFX/PALETTE/*.BBM`                          | 256-color palettes                                         | IFF CMAP                                | ✓ decoded                                          |
 | `DATA/TEXTURES/GOU*.DAT`                     | Gouraud shading tables for terrain lighting                | raw tables                              | present                                             |
-| `DATA/SOUNDDAT/SOUND.LST`                    | 199 sound effects                                          | raw 8-bit unsigned PCM ~11 kHz          | ✅ **wrapped to WAV, validated with ffprobe (PoC)** |
-| `DATA/SOUNDDAT/SNG/SNG_*.DAT`                | 25+ music tracks                                           | XMIDI (FORM XDIR/CAT XMID)              | ✅ header verified                                  |
-| `DATA/MAPS*, WORLDS`                         | Campaign + free-play maps                                  | `WORLD_V1.0` (SWD/WLD)                  | ✅ header verified                                  |
+| `DATA/SOUNDDAT/SOUND.LST`                    | 199 sound effects                                          | raw 8-bit unsigned PCM ~11 kHz          | ✓ **wrapped to WAV, validated with ffprobe (PoC)** |
+| `DATA/SOUNDDAT/SNG/SNG_*.DAT`                | 25+ music tracks                                           | XMIDI (FORM XDIR/CAT XMID)              | ✓ header verified                                  |
+| `DATA/MAPS*, WORLDS`                         | Campaign + free-play maps                                  | `WORLD_V1.0` (SWD/WLD)                  | ✓ header verified                                  |
 | `DATA/TXT*/*.ENG/GER`, `DATA/MISSIONS/*.RTX` | All game text, mission briefings                           | GER/ENG text container (magic `0xFDE7`) | verified                                            |
 | `DATA/IO/*.DAT/IDX`, `IO.LST`                | UI graphics, `FONT14.FNT` fonts                            | LST-family                              | present                                             |
 | `VIDEO/INTRO.SMK`                            | Intro video, 320×200, 2224 frames                          | Smacker v2                              | identified by `file`                                |
