@@ -20,6 +20,7 @@ import {
   buildingDef,
   DIRECTIONS,
   isWaterNode,
+  JOB,
   RESOURCE,
   resourceAmount,
   resourceType,
@@ -148,6 +149,30 @@ const FLAG_SPRITE_BASE = 100;
 const FLAG_SHADOW_BASE = 110;
 const FLAG_FRAMES = 8;
 const BOB_WALK_FRAMES = 8;
+
+/**
+ * Pack-donkey walk animation in the MAPBOBS family (map_?_z.lst / mapbobs*): a
+ * 6-direction x 8-step block of the brown pack donkey (FACTS: RttR draws the
+ * donkey-road second carrier from the map bobs, `GetMapImageN(2000 + ...)`).
+ * Verified by decoding the atlas — sprites 2000..2047 are the donkey filmstrip
+ * (shared across all three mapbobs landscape variants). The map-bob direction
+ * slots run E, NE, NW, W, SW, SE, i.e. the vertical component is flipped from the
+ * engine's E/SE/SW/W/NW/NE order, so a donkey walking SE must draw the row that
+ * faces down-right. {@link donkeySprite} applies the `(6 - dir) % 6` remap.
+ */
+const DONKEY_SPRITE_BASE = 2000;
+const DONKEY_DIR_STRIDE = 8;
+const DONKEY_WALK_FRAMES = 8;
+
+/**
+ * MAPBOBS sprite index of the pack donkey facing engine direction `dir`
+ * (0=E..5=NE) at walk `step`. The map-bob rows are ordered E/NE/NW/W/SW/SE, the
+ * mirror of the engine's E/SE/SW/W/NW/NE, so remap the direction by `(6-dir)%6`.
+ */
+export function donkeySprite(dir: number, step: number): number {
+  const row = (6 - (((dir % 6) + 6) % 6)) % 6;
+  return DONKEY_SPRITE_BASE + row * DONKEY_DIR_STRIDE + (((step % DONKEY_WALK_FRAMES) + DONKEY_WALK_FRAMES) % DONKEY_WALK_FRAMES);
+}
 
 /** carrier BOB job (GoodType) id for each carried ware. */
 export const WARE_JOB: Readonly<Record<WareType, number>> = {
@@ -537,6 +562,23 @@ export function buildDynamics(
     // figures hold step 0. Never keyed off sim state beyond reading `state`.
     const animating = pos.moving || s.state === 'working';
     const step = animating ? (anim.walkFrame + s.id) % BOB_WALK_FRAMES : 0;
+
+    // Pack donkey (the second carrier on an upgraded donkey road): a plain brown
+    // animal drawn from the MAPBOBS filmstrip, never player-tinted (the original
+    // donkey is not recoloured), walking along the road with the 8-step cycle. It
+    // carries no profession overlay and no carrier ware sprite — the carrier BOB's
+    // ware overlay bakes in a human torso holding the good, so blitting it on the
+    // donkey would render a person riding it; the animal alone reads as the hauler.
+    if (s.job === JOB.packdonkey) {
+      out.push({
+        worldX: pos.x,
+        worldY: pos.y,
+        archive: objectArchive,
+        spriteIndex: donkeySprite(dir, animating ? anim.walkFrame + s.id : 0),
+      });
+      continue;
+    }
+
     const jobBob = JOB_BOB_ID[s.job];
 
     // A duel is fought on the attacking soldier alone (the defender is virtual);
@@ -677,6 +719,20 @@ export function roadSegments(world: World, geom: Geometry): RoadSegment[] {
   const out: RoadSegment[] = [];
   for (const road of world.roads.items) {
     if (!road) continue;
+    pathSegments(world, geom, road.path, out);
+  }
+  return out;
+}
+
+/**
+ * Seam-correct segments for only the *upgraded* (donkey) roads. Drawn on top of
+ * the base road pass in a distinct paved colour so an upgraded road reads as the
+ * darker cobbled path the original game lays once a road earns its donkey.
+ */
+export function upgradedRoadSegments(world: World, geom: Geometry): RoadSegment[] {
+  const out: RoadSegment[] = [];
+  for (const road of world.roads.items) {
+    if (!road || !road.upgraded) continue;
     pathSegments(world, geom, road.path, out);
   }
   return out;

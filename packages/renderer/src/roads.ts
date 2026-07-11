@@ -16,6 +16,14 @@ import { TR_H, TR_W } from './terrain-data';
 /** Default committed-road colour (opaque dirt path). */
 const DIRT_COLOR: readonly [number, number, number, number] = [0.72, 0.6, 0.42, 1.0];
 
+/**
+ * Upgraded (donkey) road colour: a darker, cooler cobbled path drawn over the
+ * dirt pass so a road that earned its pack donkey reads as the paved variant the
+ * original game swaps in. Pair it with a slightly larger `halfWidth` for a road
+ * that looks visibly heavier-trafficked.
+ */
+export const DONKEY_ROAD_COLOR: readonly [number, number, number, number] = [0.46, 0.42, 0.38, 1.0];
+
 /** A road edge as two world-pixel endpoints (a node-to-node step). */
 export interface RoadSegment {
   readonly x0: number;
@@ -130,6 +138,7 @@ export class RoadRenderer {
     segments: readonly RoadSegment[],
     color: readonly [number, number, number, number] = DIRT_COLOR,
     onGround = true,
+    halfWidth: number = ROAD_HALF_WIDTH,
   ): void {
     if (segments.length === 0 || this.worldW === 0) return;
     const gl = this.gl;
@@ -164,7 +173,7 @@ export class RoadRenderer {
           const miny = Math.min(ay, by);
           const maxy = Math.max(ay, by);
           if (maxx < -TR_W || minx > viewW + TR_W || maxy < -TR_H || miny > viewH + TR_H) continue;
-          o = this.writeSegment(buf, o, ax, ay, bx, by);
+          o = this.writeSegment(buf, o, ax, ay, bx, by, halfWidth);
           quads++;
         }
       }
@@ -201,6 +210,7 @@ export class RoadRenderer {
     ay: number,
     bx: number,
     by: number,
+    halfWidth: number = ROAD_HALF_WIDTH,
   ): number {
     let dx = bx - ax;
     let dy = by - ay;
@@ -208,8 +218,8 @@ export class RoadRenderer {
     dx /= len;
     dy /= len;
     // Perpendicular, scaled to half-width.
-    const px = -dy * ROAD_HALF_WIDTH;
-    const py = dx * ROAD_HALF_WIDTH;
+    const px = -dy * halfWidth;
+    const py = dx * halfWidth;
     let o = start;
     const push = (x: number, y: number): void => {
       buf[o++] = x;

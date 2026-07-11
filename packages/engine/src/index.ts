@@ -128,7 +128,7 @@ export function tickWorld(world: World, rules: TerrainRules = GREENLAND_RULES): 
   runProduction(world, geom, rules, events); // 3. production (+ worker steps)
   runMilitary(world, geom, rules, events); // 4. military (occupy/fight/promote/catapult)
   runDispatch(world, geom, events); // 5a. ware routing + delivery
-  runCarriers(world, events); // 5b. carriers
+  runCarriers(world, geom, rules, events); // 5b. carriers (+ donkey-road upgrades)
   runGeologists(world, geom, rules, events); // 5b'. geologist survey walks
   runSeafaring(world, geom, events); // 5c. ships, sea transport, expeditions (P7)
   world.tick++;

@@ -1,4 +1,5 @@
 import {
+  Geometry,
   JOB,
   JOB_TYPES,
   makeResource,
@@ -13,11 +14,13 @@ import {
   BUILDING_ARCHIVE,
   WINTER_BUILDING_ARCHIVE,
   buildingArchiveForLandscape,
+  donkeySprite,
   HELPER_BOB_ID,
   JOB_BOB_ID,
   roadSegments,
   signSizeOffset,
   signSprites,
+  upgradedRoadSegments,
   WORK_ANIM,
   workerIsIndoors,
   workSprite,
@@ -255,20 +258,90 @@ describe('workerIsIndoors', () => {
   });
 });
 
+describe('donkeySprite', () => {
+  it('bases the filmstrip at the MAPBOBS donkey block (2000)', () => {
+    // Facing east, first step = block base.
+    expect(donkeySprite(0, 0)).toBe(2000);
+  });
+
+  it('mirrors the engine E/SE/SW/W/NW/NE order onto the map-bob E/NE/NW/W/SW/SE rows', () => {
+    // Horizontal directions line up 1:1; the vertical ones flip (a donkey walking
+    // SE must draw the down-right row, which is the last map-bob block, not the
+    // second). Rows are 8 frames apart.
+    expect(donkeySprite(0, 0)).toBe(2000); // E   -> row 0
+    expect(donkeySprite(3, 0)).toBe(2024); // W   -> row 3
+    expect(donkeySprite(1, 0)).toBe(2040); // SE  -> row 5 (down-right)
+    expect(donkeySprite(2, 0)).toBe(2032); // SW  -> row 4 (down-left)
+    expect(donkeySprite(4, 0)).toBe(2016); // NW  -> row 2 (up-left)
+    expect(donkeySprite(5, 0)).toBe(2008); // NE  -> row 1 (up-right)
+  });
+
+  it('wraps the walk step within the 8-frame block', () => {
+    expect(donkeySprite(0, 8)).toBe(2000);
+    expect(donkeySprite(0, 9)).toBe(2001);
+    expect(donkeySprite(3, 15)).toBe(2031);
+  });
+});
+
+/** Flat single-row world carrying `roads` (each an {@link RoadDef}) for segments. */
+function roadWorld(width: number, roads: readonly { path: number[]; upgraded: boolean }[]): World {
+  return {
+    width,
+    height: 1,
+    heightMap: new Uint8Array(width),
+    roads: { items: roads },
+  } as unknown as World;
+}
+
+describe('upgradedRoadSegments', () => {
+  it('returns edges only for upgraded (donkey) roads', () => {
+    const world = roadWorld(6, [
+      { path: [0, 1, 2], upgraded: false },
+      { path: [3, 4, 5], upgraded: true },
+    ]);
+    const geom = new Geometry(6, 1);
+    // Base pass still draws every road edge (2 + 2 = 4).
+    expect(roadSegments(world, geom)).toHaveLength(4);
+    // Only the upgraded road (3->4->5) contributes to the paved overlay.
+    expect(upgradedRoadSegments(world, geom)).toHaveLength(2);
+  });
+
+  it('is empty when no road has upgraded', () => {
+    const world = roadWorld(4, [{ path: [0, 1, 2, 3], upgraded: false }]);
+    expect(upgradedRoadSegments(world, new Geometry(4, 1))).toHaveLength(0);
+  });
+});
+
 describe('workSprite', () => {
   it('returns null for jobs without an action animation (walk-cycle fallback)', () => {
     expect(workSprite(JOB.carrier, 0)).toBeNull();
     expect(workSprite(JOB.miner, 3)).toBeNull();
-    expect(workSprite(JOB.stonemason, 0)).toBeNull();
+    expect(workSprite(JOB.sawmiller, 0)).toBeNull();
   });
 
   it('maps the verified outdoor jobs to their CBOB frame runs', () => {
     // Frame 0 lands on each block's first frame (empirically verified: woodcutter
-    // axe swing, forester planting, fisher rod cast, farmer scythe).
+    // axe swing, stonemason pickaxe swing, forester planting, fisher rod cast,
+    // farmer scythe).
     expect(workSprite(JOB.woodcutter, 0)).toBe(16);
+    expect(workSprite(JOB.stonemason, 0)).toBe(40);
     expect(workSprite(JOB.forester, 0)).toBe(48);
     expect(workSprite(JOB.fisher, 0)).toBe(108);
     expect(workSprite(JOB.farmer, 0)).toBe(132);
+  });
+
+  it('gives the stonemason the purple-cap pickaxe block (40..47), not the fallback', () => {
+    const sm = WORK_ANIM.stonemason;
+    if (!sm) throw new Error('stonemason work anim expected');
+    expect(sm).toEqual({ start: 40, frames: 8 });
+    // Every frame of the loop stays inside the 8-frame purple-cap run.
+    for (const f of [0, 1, 7, 8, 25]) {
+      const idx = workSprite(JOB.stonemason, f);
+      expect(idx).not.toBeNull();
+      expect(idx).toBeGreaterThanOrEqual(40);
+      expect(idx).toBeLessThan(48);
+    }
+    expect(workSprite(JOB.stonemason, 8)).toBe(workSprite(JOB.stonemason, 0));
   });
 
   it('loops each run within its own frame range', () => {

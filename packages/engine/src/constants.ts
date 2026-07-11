@@ -140,6 +140,11 @@ export const JOB = {
   scout: 'scout',
   shipwright: 'shipwright', // P7: builds ships at the shipyard (CONSTANTS.md §3 id 27)
   geologist: 'geologist', // §6 Geologist: surveys mountains for ore (drawn from the Helper pool)
+  // PackDonkey (CONSTANTS.md §3 job 29): the second carrier on an upgraded (donkey)
+  // road. Bred at the donkey breeder, drawn from the player's donkey pool — NOT
+  // from the Helper pool, so it is deliberately absent from JOB_TYPES (which sizes
+  // the per-player worker record; a donkey is never a recruitable worker slot).
+  packdonkey: 'packdonkey',
 } as const;
 export type JobType = string;
 
@@ -288,7 +293,7 @@ export interface BuildingDef {
   resource?: number;
   /** Metalworks: output ware is chosen from the player's tool priority list. */
   producesTool?: boolean;
-  /** Donkey breeder: cycle breeds a PackDonkey (stubbed as a player-pool count). */
+  /** Donkey breeder: each cycle breeds a PackDonkey into the player's donkey pool. */
   breedsDonkey?: boolean;
   /** Military: max garrisoned soldiers (MILITARY.md §2 NUM_TROOPS). */
   maxTroops?: number;
@@ -335,7 +340,7 @@ export const BUILDING_DEFS: Readonly<Record<string, BuildingDef>> = {
   armory: { id: 24, cost: { boards: 2, stones: 2 }, size: 'house', kind: 'workshop', worker: JOB.armorer, inputs: [WARE.iron, WARE.coal], inputCap: CAP, useOneEach: true, outputs: [WARE.sword, WARE.shield], alternate: true, workTicks: 940 }, // §5 Armorer Iron+Coal->Sword/Shield alternating, work=940
   metalworks: { id: 25, cost: { boards: 2, stones: 2 }, size: 'house', kind: 'workshop', worker: JOB.metalworker, inputs: [WARE.iron, WARE.plank], inputCap: CAP, useOneEach: true, outputs: [WARE.scythe], producesTool: true, workTicks: 850 }, // §5/§7 Metalworker Iron+Boards->1 tool (by tool priority), work=850
   mint: { id: 34, cost: { boards: 2, stones: 2 }, size: 'house', kind: 'workshop', worker: JOB.minter, inputs: [WARE.gold, WARE.coal], inputCap: CAP, useOneEach: true, outputs: [WARE.coins], workTicks: 1050 }, // §5 Minter Gold+Coal->Coins, work=1050
-  donkeybreeder: { id: 38, cost: { boards: 3, stones: 3 }, size: 'castle', kind: 'workshop', worker: JOB.donkeybreeder, inputs: [WARE.grain, WARE.water], inputCap: CAP, useOneEach: true, outputs: [], breedsDonkey: true, workTicks: 370 }, // §5 DonkeyBreeder Grain+Water->PackDonkey (stubbed to a player pool count), work=370
+  donkeybreeder: { id: 38, cost: { boards: 3, stones: 3 }, size: 'castle', kind: 'workshop', worker: JOB.donkeybreeder, inputs: [WARE.grain, WARE.water], inputCap: CAP, useOneEach: true, outputs: [], breedsDonkey: true, workTicks: 370 }, // §5 DonkeyBreeder Grain+Water->PackDonkey (into the player donkey pool), work=370
 
   // Mines (consume 1 food; decrement a subsurface resource within radius 2).
   coalmine: { id: 11, cost: { boards: 4, stones: 0 }, size: 'mine', kind: 'mine', worker: JOB.miner, inputs: [WARE.fish, WARE.meat, WARE.bread], inputCap: MINE_CAP, useOneEach: false, outputs: [WARE.coal], workTicks: 583, radius: 2, resource: 3 }, // §5 Miner food->Coal, work=583; OBJECTS §5a Coal nibble 3
@@ -455,6 +460,28 @@ export const RADIUS = {
 export const FLAG_MIN_DISTANCE = 2;
 /** Maximum wares that may queue at a single flag. CONSTANTS.md §4: noFlag holds 8. */
 export const FLAG_WARE_CAPACITY = 8;
+
+// --- Donkey road upgrade (CONSTANTS.md §4 "Productivity / donkey upgrade") -----
+/**
+ * The window (in game frames) over which a road's carrier productivity is
+ * measured. RttR: `PRODUCTIVITY_GF = 6000` GF (5 min at Normal); at each window
+ * boundary the road's busy time is compared against the upgrade threshold and the
+ * window resets. Source: gameData `nofCarrier` productivity constants.
+ */
+export const PRODUCTIVITY_GF = 6000; // §4 PRODUCTIVITY_GF (measurement window)
+/**
+ * Productivity percentage at/above which a road auto-upgrades to a donkey road.
+ * RttR: `DONKEY_PRODUCTIVITY = 80` (%). A carrier busy hauling for >= 80% of the
+ * window has demonstrated enough sustained ware traffic to warrant a second
+ * carrier. Source: `HandleDerivedEvent` -> `UpgradeDonkeyRoad`.
+ */
+export const DONKEY_PRODUCTIVITY = 80; // §4 DONKEY_PRODUCTIVITY (% threshold)
+/**
+ * Busy game frames within one {@link PRODUCTIVITY_GF} window that trigger the
+ * upgrade: 80% of 6000 = 4800 GF spent carrying/fetching wares. Expressed as a
+ * derived integer so the check stays integer-only and deterministic.
+ */
+export const DONKEY_UPGRADE_BUSY_GF = (PRODUCTIVITY_GF * DONKEY_PRODUCTIVITY) / 100; // 4800
 
 /**
  * Default per-ware transport priority (lower number = fetched first). CONSTANTS.md

@@ -127,10 +127,20 @@ export interface SettlerRecruited {
   player: number;
 }
 
-/** A donkey breeder bred a pack donkey (road-capacity upgrade stub). */
+/** A donkey breeder bred a pack donkey (joins the player's donkey pool). */
 export interface DonkeyBred {
   type: 'DonkeyBred';
   buildingId: number;
+  player: number;
+}
+
+/**
+ * A road auto-upgraded to a donkey road after sustained carrier productivity
+ * (CONSTANTS.md §4); it now requests a second (pack-donkey) carrier.
+ */
+export interface RoadUpgraded {
+  type: 'RoadUpgraded';
+  roadId: number;
   player: number;
 }
 
@@ -257,6 +267,7 @@ export type GameEvent =
   | MineDepleted
   | SettlerRecruited
   | DonkeyBred
+  | RoadUpgraded
   | SoldierRecruited
   | MilitaryOccupied
   | TerritoryChanged

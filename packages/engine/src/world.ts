@@ -64,6 +64,16 @@ export interface Road {
   flagB: number;
   /** Serving carrier settler id (-1 until assigned). */
   carrierId: number;
+  /**
+   * Carrier productivity accumulator (CONSTANTS.md §4): game frames the primary
+   * carrier spent hauling/fetching within the current PRODUCTIVITY_GF window.
+   * Compared against DONKEY_UPGRADE_BUSY_GF at each window boundary, then reset.
+   */
+  busyGf: number;
+  /** True once the road has auto-upgraded to a donkey road (gets a 2nd carrier). */
+  upgraded: boolean;
+  /** Second (pack-donkey) carrier settler id on an upgraded road (-1 = none). */
+  donkeyId: number;
 }
 
 /** A building or construction site. */
@@ -219,6 +229,7 @@ export type SettlerState =
   | 'working' // running a work timer at destination
   | 'home' // returning to workplace after field work
   | 'carrierIdle' // carrier resting at road middle
+  | 'donkeyToRoad' // pack donkey walking from its warehouse out to the road middle
   | 'carrierToPickup' // carrier walking to an end flag to collect a ware
   | 'carrierToDropoff' // carrier carrying a ware to the far flag
   | 'soldierToOccupy' // soldier walking in to garrison a military building
@@ -233,7 +244,11 @@ export interface Player {
   wares: Record<WareType, number>;
   /** Job type -> idle worker count available for dispatch/recruitment. */
   workers: Record<JobType, number>;
-  /** Bred pack donkeys (road-capacity upgrade; stubbed as a count). CONSTANTS.md §4. */
+  /**
+   * Bred pack donkeys available to staff upgraded (donkey) roads as a second
+   * carrier. Filled by the donkey breeder, drained when a donkey is assigned to a
+   * road, refilled if that road is destroyed. CONSTANTS.md §4.
+   */
   donkeys: number;
   /**
    * Ordered tool ware list the metalworks cycles through (player tool-priority,

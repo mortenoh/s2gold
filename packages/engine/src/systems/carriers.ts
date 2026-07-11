@@ -8,8 +8,18 @@
  * pool.
  */
 
-import { buildingDef, FLAG_WARE_CAPACITY, JOB, TICKS } from '../constants';
+import {
+  buildingDef,
+  DONKEY_UPGRADE_BUSY_GF,
+  FLAG_WARE_CAPACITY,
+  JOB,
+  PRODUCTIVITY_GF,
+  TICKS,
+} from '../constants';
 import type { EventSink } from '../events';
+import type { Geometry } from '../geometry';
+import { findWalkPath } from '../pathfinding';
+import type { TerrainRules } from '../terrain';
 import {
   getFlag,
   getRoad,
@@ -61,6 +71,63 @@ function assignCarriers(world: World, events: EventSink): void {
     player.workers[JOB.carrier]--;
     events.emit({ type: 'SettlerSpawned', settlerId: carrier.id, job: JOB.carrier, player: road.player });
   }
+}
+
+/**
+ * At each PRODUCTIVITY_GF window boundary, upgrade any road whose primary carrier
+ * was busy for at least DONKEY_UPGRADE_BUSY_GF of the window (CONSTANTS.md §4:
+ * productivity >= DONKEY_PRODUCTIVITY = 80% -> UpgradeDonkeyRoad), then reset the
+ * accumulator for the next window. Global boundaries (world.tick % window) keep
+ * evaluation deterministic and independent of per-road build times.
+ */
+function evaluateUpgrades(world: World, events: EventSink): void {
+  if (world.tick === 0 || world.tick % PRODUCTIVITY_GF !== 0) return;
+  for (const road of storeLive(world.roads)) {
+    if (!road.upgraded && road.busyGf >= DONKEY_UPGRADE_BUSY_GF) {
+      road.upgraded = true;
+      events.emit({ type: 'RoadUpgraded', roadId: road.id, player: road.player });
+    }
+    road.busyGf = 0;
+  }
+}
+
+/**
+ * Assign a pack donkey to each upgraded road that lacks one, drawing from the
+ * player's bred-donkey pool (NOT the Helper pool). The donkey spawns at the
+ * player's HQ (a warehouse) and walks out to the road middle like a fresh carrier;
+ * once there it hauls wares alongside the human carrier (two carriers per road,
+ * ~doubling throughput). CONSTANTS.md §4 "Donkey (PackDonkey)".
+ */
+function assignDonkeys(world: World, geom: Geometry, rules: TerrainRules, events: EventSink): void {
+  for (const road of storeLive(world.roads)) {
+    if (!road.upgraded) continue;
+    if (road.donkeyId >= 0 && world.settlers.items[road.donkeyId]) continue;
+    const player = world.players[road.player];
+    if (!player || player.donkeys <= 0) continue;
+    const midNode = road.path[Math.floor(road.path.length / 2)];
+    const hq = player.hqBuildingId >= 0 ? world.buildings.items[player.hqBuildingId] : null;
+    const startNode = hq ? hq.node : midNode;
+    const donkey = spawnSettler(world, JOB.packdonkey, road.player, startNode);
+    donkey.roadId = road.id;
+    const path = startNode === midNode ? null : findWalkPath(world, geom, rules, startNode, midNode);
+    if (path && path.length > 0) {
+      donkey.state = 'donkeyToRoad';
+      donkey.targetNode = midNode;
+      beginWalk(donkey, path, TICKS.walkPerEdge);
+    } else {
+      donkey.node = midNode;
+      donkey.state = 'carrierIdle';
+    }
+    road.donkeyId = donkey.id;
+    player.donkeys--;
+    events.emit({ type: 'SettlerSpawned', settlerId: donkey.id, job: JOB.packdonkey, player: road.player });
+  }
+}
+
+/** Walk a freshly assigned donkey out to its road middle, then rest there. */
+function stepDonkeyToRoad(donkey: Settler): void {
+  const arrived = walkDone(donkey) ? true : stepWalk(donkey);
+  if (arrived) donkey.state = 'carrierIdle';
 }
 
 /** Step one carrier through its pickup / carry / dropoff cycle. */
@@ -217,10 +284,22 @@ function stepCarrier(world: World, carrier: Settler, events: EventSink): void {
 }
 
 /** Run the carrier system for one tick. */
-export function runCarriers(world: World, events: EventSink): void {
+export function runCarriers(world: World, geom: Geometry, rules: TerrainRules, events: EventSink): void {
+  evaluateUpgrades(world, events);
   assignCarriers(world, events);
+  assignDonkeys(world, geom, rules, events);
   for (const s of storeLive(world.settlers)) {
-    if (s.job === JOB.carrier && s.roadId >= 0) stepCarrier(world, s, events);
+    if (s.roadId < 0) continue;
+    if (s.job !== JOB.carrier && s.job !== JOB.packdonkey) continue;
+    if (s.state === 'donkeyToRoad') {
+      stepDonkeyToRoad(s);
+      continue;
+    }
+    stepCarrier(world, s, events);
+    // Productivity is measured on the primary (human) carrier only: a tick counts
+    // as busy whenever it is walking to fetch or deliver (i.e. not resting idle).
+    const road = world.roads.items[s.roadId];
+    if (road && s.id === road.carrierId && s.state !== 'carrierIdle') road.busyGf++;
   }
 }
 

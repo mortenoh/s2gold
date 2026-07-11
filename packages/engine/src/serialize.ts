@@ -26,6 +26,18 @@ export function deserializeWorld(data: string): World {
   parsed.ships ??= { items: [], free: [] };
   parsed.expeditions ??= [];
   parsed.signs ??= [];
+  // Donkey-road upgrade state (added without a version bump): back-patch so saves
+  // written before it still load. Roads default to un-upgraded with no donkey and
+  // a zeroed productivity window; players default to an empty donkey pool.
+  for (const road of parsed.roads?.items ?? []) {
+    if (!road) continue;
+    road.busyGf ??= 0;
+    road.upgraded ??= false;
+    road.donkeyId ??= -1;
+  }
+  for (const player of parsed.players ?? []) {
+    if (player) player.donkeys ??= 0;
+  }
   return parsed;
 }
 

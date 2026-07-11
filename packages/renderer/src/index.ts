@@ -65,4 +65,4 @@ export {
 
 export { SpriteRenderer, type AtlasPage, type SpriteDrawStats } from './sprites';
 
-export { RoadRenderer, type RoadSegment } from './roads';
+export { RoadRenderer, DONKEY_ROAD_COLOR, type RoadSegment } from './roads';

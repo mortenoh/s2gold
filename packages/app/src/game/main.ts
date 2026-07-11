@@ -8,6 +8,7 @@
 import './styles.css';
 import {
   Camera,
+  DONKEY_ROAD_COLOR,
   PLAYER_COLORS,
   RoadRenderer,
   SpriteRenderer,
@@ -36,7 +37,9 @@ import {
   nodeMarkerSegments,
   pathSegments,
   roadSegments,
+  upgradedRoadSegments,
   BUILDING_ARCHIVE,
+  buildingArchiveForLandscape,
   BOB_ARCHIVE,
   SHIP_ARCHIVE,
   WORK_ARCHIVE,
@@ -1053,6 +1056,10 @@ async function boot(): Promise<void> {
     renderer.render(camera);
     if (session) {
       roads.render(camera, roadSegments(session.world, session.geom));
+      // Upgraded (donkey) roads: repaint their edges in the darker paved colour,
+      // a touch wider, on top of the base dirt pass.
+      const upgraded = upgradedRoadSegments(session.world, session.geom);
+      if (upgraded.length > 0) roads.render(camera, upgraded, DONKEY_ROAD_COLOR, true, 4.5);
     }
 
     const waveFrame = Math.floor(now / ANIM_FRAME_MS);

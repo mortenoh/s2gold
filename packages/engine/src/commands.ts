@@ -44,6 +44,7 @@ import {
   storeLive,
   type Building,
   type Flag,
+  type Road,
   type World,
 } from './world';
 import { execAttack } from './systems/military';
@@ -391,6 +392,20 @@ function freeCarrier(world: World, carrierId: number, dropFlags: number[]): void
 }
 
 /**
+ * Release an upgraded road's pack donkey when the road is destroyed: re-home any
+ * carried ware (like {@link freeCarrier}) and return the donkey to the player's
+ * bred-donkey pool so it can serve a future donkey road. Clears road.donkeyId.
+ */
+function freeDonkey(world: World, road: Road, dropFlags: number[]): void {
+  const donkeyId = road.donkeyId;
+  if (donkeyId < 0) return;
+  freeCarrier(world, donkeyId, dropFlags);
+  road.donkeyId = -1;
+  const pl = world.players[road.player];
+  if (pl) pl.donkeys++;
+}
+
+/**
  * Split every road whose interior passes through `node` into two roads meeting
  * at the new flag `flagId`. The original road's carrier is released; the carrier
  * system re-staffs both halves next tick.
@@ -407,9 +422,12 @@ function splitRoadsAt(world: World, flagId: number, node: number): void {
       // ware can drop on either endpoint or the new flag and re-route.
       freeCarrier(world, road.carrierId, [flagId, flagA, flagB]);
     }
+    // A donkey on the original road returns to the player's bred-donkey pool; the
+    // two fresh halves each re-earn their own upgrade from scratch.
+    if (road.donkeyId >= 0) freeDonkey(world, road, [flagId, flagA, flagB]);
     storeFree(world.roads, road.id);
-    storeAlloc(world.roads, (rid) => ({ id: rid, player, path: left, flagA, flagB: flagId, carrierId: -1 }));
-    storeAlloc(world.roads, (rid) => ({ id: rid, player, path: right, flagA: flagId, flagB, carrierId: -1 }));
+    storeAlloc(world.roads, (rid) => ({ id: rid, player, path: left, flagA, flagB: flagId, carrierId: -1, busyGf: 0, upgraded: false, donkeyId: -1 }));
+    storeAlloc(world.roads, (rid) => ({ id: rid, player, path: right, flagA: flagId, flagB, carrierId: -1, busyGf: 0, upgraded: false, donkeyId: -1 }));
   }
 }
 
@@ -455,6 +473,9 @@ function execBuildRoad(
     flagA,
     flagB,
     carrierId: -1,
+    busyGf: 0,
+    upgraded: false,
+    donkeyId: -1,
   }));
   events.emit({ type: 'RoadBuilt', roadId: id, from: start, to: end, player });
 }
@@ -603,6 +624,10 @@ function execDemolishFlag(world: World, player: number, node: number): void {
     if (road.carrierId >= 0) {
       const farFlag = road.flagA === flagId ? road.flagB : road.flagA;
       freeCarrier(world, road.carrierId, [farFlag]);
+    }
+    if (road.donkeyId >= 0) {
+      const farFlag = road.flagA === flagId ? road.flagB : road.flagA;
+      freeDonkey(world, road, [farFlag]);
     }
     storeFree(world.roads, road.id);
   }
