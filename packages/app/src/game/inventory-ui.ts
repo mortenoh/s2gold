@@ -7,6 +7,11 @@
  *
  * Ware naming follows the original UI (Wood, Boards, ...) even though the engine
  * keeps its internal keys (trunk, plank, ...).
+ *
+ * Liveness: the grid DOM is built once on open; {@link GoodsPanel.update} is
+ * called from the game's per-frame loop (like the HUD resources readout) and
+ * patches the count cells in place, so the figures track the running economy
+ * without reopening the panel.
  */
 
 import { clear, el } from '../lib/dom';
@@ -71,6 +76,26 @@ const GROUPS: readonly GoodsGroup[] = [
   },
 ];
 
+/** One resolved ware row (engine key, display label, current count). */
+export interface GoodsEntry {
+  readonly key: string;
+  readonly label: string;
+  readonly count: number;
+}
+
+/**
+ * Flatten the grouped ware table to per-ware counts from a goods snapshot.
+ * Pure and DOM-free so the panel's live-update logic is unit-testable in a
+ * non-DOM environment (vitest runs in the node env here).
+ */
+export function goodsEntries(goods: Record<string, number>): GoodsEntry[] {
+  const out: GoodsEntry[] = [];
+  for (const group of GROUPS) {
+    for (const [key, label] of group.wares) out.push({ key, label, count: goods[key] ?? 0 });
+  }
+  return out;
+}
+
 export interface GoodsPanelDeps {
   readonly root: HTMLElement;
   session(): GameSession | null;
@@ -80,8 +105,9 @@ export interface GoodsPanelDeps {
 
 export class GoodsPanel {
   private panel: HTMLElement | null = null;
-  private refreshTimer = 0;
   private body: HTMLElement | null = null;
+  /** Live count-cell references per ware key, for in-place per-frame updates. */
+  private readonly cells = new Map<string, { row: HTMLElement; count: HTMLElement }>();
 
   constructor(private readonly deps: GoodsPanelDeps) {}
 
@@ -95,15 +121,12 @@ export class GoodsPanel {
   }
 
   close(): void {
-    if (this.refreshTimer) {
-      window.clearInterval(this.refreshTimer);
-      this.refreshTimer = 0;
-    }
     if (this.panel) {
       this.panel.remove();
       this.panel = null;
     }
     this.body = null;
+    this.cells.clear();
     this.deps.onVisibility?.(false);
   }
 
@@ -131,29 +154,30 @@ export class GoodsPanel {
     );
     this.deps.root.append(this.panel);
     makeDraggable(this.panel, head, closeButton);
-    this.render();
-    this.refreshTimer = window.setInterval(() => this.render(), 500);
+    this.build();
+    this.update();
     this.deps.onVisibility?.(true);
   }
 
-  private render(): void {
-    const session = this.deps.session();
-    if (!this.body || !session) return;
-    const wares = session.goods;
+  /** Build the grouped grid once, caching each ware's count cell for updates. */
+  private build(): void {
+    if (!this.body) return;
     clear(this.body);
+    this.cells.clear();
     for (const group of GROUPS) {
       const rows = group.wares.map(([key, label]) => {
-        const count = wares[key] ?? 0;
-        return el(
+        const count = el('span', {
+          class: 'goods-count',
+          attrs: { 'data-testid': `goods-${key}` },
+        });
+        const row = el(
           'div',
-          { class: `goods-row${count === 0 ? ' goods-zero' : ''}` },
+          { class: 'goods-row' },
           el('span', { class: 'goods-name', text: label }),
-          el('span', {
-            class: 'goods-count',
-            text: String(count),
-            attrs: { 'data-testid': `goods-${key}` },
-          }),
+          count,
         );
+        this.cells.set(key, { row, count });
+        return row;
       });
       this.body.append(
         el(
@@ -163,6 +187,24 @@ export class GoodsPanel {
           el('div', { class: 'goods-grid' }, ...rows),
         ),
       );
+    }
+  }
+
+  /**
+   * Refresh the count cells from live session state. Called from the game's
+   * per-frame loop while open (a no-op when closed); patches only the changed
+   * text/zero-class so it is cheap enough to run every frame.
+   */
+  update(): void {
+    const session = this.deps.session();
+    if (!this.body || !session) return;
+    const goods = session.goods;
+    for (const { key, count } of goodsEntries(goods)) {
+      const cell = this.cells.get(key);
+      if (!cell) continue;
+      const text = String(count);
+      if (cell.count.textContent !== text) cell.count.textContent = text;
+      cell.row.classList.toggle('goods-zero', count === 0);
     }
   }
 }

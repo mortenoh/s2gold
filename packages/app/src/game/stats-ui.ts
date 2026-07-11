@@ -48,9 +48,10 @@ function playerRgb(player: number): string {
 
 export class StatsPanel {
   private panel: HTMLElement | null = null;
-  private refreshTimer = 0;
   private readonly canvases = new Map<keyof StatsSeries, HTMLCanvasElement>();
   private legend: HTMLElement | null = null;
+  /** Tick of the newest stats sample last drawn; -1 forces the next redraw. */
+  private lastSampleTick = -1;
 
   constructor(private readonly deps: StatsPanelDeps) {}
 
@@ -65,16 +66,13 @@ export class StatsPanel {
   }
 
   close(): void {
-    if (this.refreshTimer) {
-      window.clearInterval(this.refreshTimer);
-      this.refreshTimer = 0;
-    }
     if (this.panel) {
       this.panel.remove();
       this.panel = null;
     }
     this.canvases.clear();
     this.legend = null;
+    this.lastSampleTick = -1;
     this.deps.onVisibility?.(false);
   }
 
@@ -126,15 +124,33 @@ export class StatsPanel {
     );
     this.deps.root.append(this.panel);
     this.render();
-    // Redraw while open so the lines and legend track the running economy.
-    this.refreshTimer = window.setInterval(() => this.render(), 500);
     this.deps.onVisibility?.(true);
+  }
+
+  /**
+   * Redraw the charts + legend from live session state when a new statistics
+   * sample has been recorded. Called from the game's per-frame loop while open
+   * (a no-op when closed). Samples are appended only every STATS_INTERVAL
+   * ticks, so gating on the newest sample's tick keeps the per-frame cost to one
+   * comparison and still tracks the running economy (robust once the ring buffer
+   * saturates and its length stops growing).
+   */
+  update(): void {
+    if (!this.panel) return;
+    const session = this.deps.session();
+    if (!session) return;
+    const ticks = session.statsTicks;
+    const newest = ticks.length > 0 ? (ticks[ticks.length - 1] ?? -1) : -1;
+    if (newest === this.lastSampleTick) return;
+    this.render();
   }
 
   private render(): void {
     if (!this.panel) return;
     const session = this.deps.session();
     if (!session) return;
+    const ticks = session.statsTicks;
+    this.lastSampleTick = ticks.length > 0 ? (ticks[ticks.length - 1] ?? -1) : -1;
     const playerCount = session.statsSeries.length;
     for (const def of CHARTS) {
       const canvas = this.canvases.get(def.key);

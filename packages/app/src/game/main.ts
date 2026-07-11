@@ -1112,6 +1112,9 @@ async function boot(): Promise<void> {
     minimap.draw(camera, canvas.width, canvas.height);
 
     updateHud(stats.quads, stats.drawCalls);
+    // Keep the open floating panels tracking live state (no-ops while closed).
+    goodsPanel.update();
+    statsPanel.update();
 
     frames++;
     if (now - fpsWindowStart >= 500) {
