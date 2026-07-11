@@ -35,7 +35,7 @@
 import { describe, expect, it } from 'vitest';
 import { createWorld, tickWorld, worldGeometry, type World } from './index';
 import { makeFlatMap } from './harness';
-import { claimArea, connectToHq, spawnBuilding } from './harness-economy';
+import { claimArea, connectToHq, placeBuildingAndTick, spawnBuilding } from './harness-economy';
 import { getBuilding, type Building } from './world';
 
 /** Convert a freshly-spawned building into a never-completing construction site:
@@ -127,4 +127,33 @@ describe('star-network transport deadlock', () => {
     // Sustained rate: well over one stone delivered per 100 ticks in the tail.
     expect(endStone - midStone).toBeGreaterThan(100);
   }, 120_000);
+});
+
+/**
+ * Regression: the warehouse door must NOT swallow deliveries bound for a
+ * warehouse-kind building that is still a construction site. Pre-fix, every
+ * plank/stone carried to a storehouse (or harbor) site was absorbed into
+ * player stock at the door instead of crediting deliveredBoards/Stones, so
+ * the site never completed and dispatch re-sent materials forever.
+ */
+describe('warehouse construction site deliveries', () => {
+  it('a road-connected storehouse site receives its materials and completes', () => {
+    const world = createWorld(makeFlatMap(40, 40, 20, 20), { seed: 9, players: 1 });
+    const geom = worldGeometry(world);
+    claimArea(world, geom, 5, 5, 35, 35);
+    const node = geom.index(26, 20);
+    placeBuildingAndTick(world, node, 'storehouse');
+    expect(connectToHq(world, geom, node)).toBeTruthy();
+    tickWorld(world); // execute the road command
+
+    let completed = false;
+    for (let i = 0; i < 20_000 && !completed; i++) {
+      for (const e of tickWorld(world)) {
+        if (e.type === 'BuildingCompleted') completed = true;
+      }
+    }
+    expect(completed).toBe(true);
+    const b = getBuilding(world, world.buildingAtNode[node]);
+    expect(b.state).toBe('working');
+  }, 60_000);
 });
