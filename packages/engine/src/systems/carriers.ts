@@ -8,10 +8,25 @@
  * pool.
  */
 
-import { FLAG_WARE_CAPACITY, JOB, TICKS } from '../constants';
+import { buildingDef, FLAG_WARE_CAPACITY, JOB, TICKS } from '../constants';
 import type { EventSink } from '../events';
-import { getFlag, getRoad, storeLive, type Road, type Settler, type World } from '../world';
+import {
+  getFlag,
+  getRoad,
+  storeFree,
+  storeLive,
+  type Building,
+  type Road,
+  type Settler,
+  type World,
+} from '../world';
 import { beginWalk, spawnSettler, stepWalk, walkDone } from './movement';
+
+/** True when a building accepts wares straight into stock (HQ or storehouse). */
+function isWarehouse(b: Building): boolean {
+  const def = buildingDef(b.type);
+  return !!def && (def.kind === 'hq' || def.kind === 'warehouse');
+}
 
 /** Nodes along a road from `fromNode` to `toNode` (excludes from, includes to). */
 function roadSubPath(road: Road, fromNode: number, toNode: number): number[] {
@@ -49,7 +64,7 @@ function assignCarriers(world: World, events: EventSink): void {
 }
 
 /** Step one carrier through its pickup / carry / dropoff cycle. */
-function stepCarrier(world: World, carrier: Settler): void {
+function stepCarrier(world: World, carrier: Settler, events: EventSink): void {
   const road = world.roads.items[carrier.roadId];
   if (!road) {
     carrier.state = 'idle';
@@ -115,6 +130,24 @@ function stepCarrier(world: World, carrier: Settler): void {
     if (!arrived) return;
     const dropFlagId = carrier.node === nodeA ? road.flagA : road.flagB;
     const flag = getFlag(world, dropFlagId);
+    // Warehouse door: a ware terminating at a warehouse (HQ/storehouse) on this
+    // flag enters the building's stock directly, never occupying one of the
+    // flag's 8 transit slots (S2/RttR: the warehouse door is not the flag). The
+    // HQ flag doubles as the distribution hub, so it can sit full of outbound
+    // wares; without the door, inbound deliveries to the warehouse deadlock
+    // behind them and the whole economy freezes (transport-deadlock.test.ts).
+    {
+      const carried = world.wares.items[carrier.carryingWareId];
+      const tgt = carried ? world.buildings.items[carried.targetBuildingId] : undefined;
+      if (carried && tgt && tgt.flagId === dropFlagId && isWarehouse(tgt)) {
+        world.players[tgt.player].wares[carried.type]++;
+        storeFree(world.wares, carried.id);
+        carrier.carryingWareId = -1;
+        carrier.state = 'carrierIdle';
+        events.emit({ type: 'WareDelivered', wareType: carried.type, buildingId: tgt.id, player: tgt.player });
+        return;
+      }
+    }
     if (flag.wares.length >= FLAG_WARE_CAPACITY) {
       // Full flag: swap with a waiting ware headed back across this road (S2
       // carriers exchange wares at flags). The slot count stays constant, and
@@ -187,7 +220,7 @@ function stepCarrier(world: World, carrier: Settler): void {
 export function runCarriers(world: World, events: EventSink): void {
   assignCarriers(world, events);
   for (const s of storeLive(world.settlers)) {
-    if (s.job === JOB.carrier && s.roadId >= 0) stepCarrier(world, s);
+    if (s.job === JOB.carrier && s.roadId >= 0) stepCarrier(world, s, events);
   }
 }
 
