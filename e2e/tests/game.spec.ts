@@ -921,6 +921,7 @@ interface S2Sea {
   counters: Record<string, number>;
   nodeOf(x: number, y: number): number;
   canBuild(node: number, type: string): boolean;
+  debugCanPlaceHarbor(node: number): boolean;
   debugWaterConnected(a: number, b: number): boolean;
   debugSpawnHarbor(player: number, node: number): number;
   debugSpawnShip(player: number, harborId: number): number;
@@ -965,11 +966,14 @@ test('P7: seafaring — harbor + ship + expedition founds a harbor on another is
     const hq = d.hqNode;
     const hx = hq % W;
     const hy = Math.floor(hq / W);
+    // The harbor is cheat-founded (debugSpawnHarbor bypasses territory), so scan
+    // for valid coastal sites with the matching ownership-free check rather than
+    // canBuild, which is player-enforced and would exclude unclaimed coast.
     const sites: number[] = [];
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
         const n = d.nodeOf(x, y);
-        if (d.canBuild(n, 'harbor')) sites.push(n);
+        if (d.debugCanPlaceHarbor(n)) sites.push(n);
       }
     }
     let near = -1;

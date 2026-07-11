@@ -170,6 +170,8 @@ interface S2Debug {
   startExpedition(harborId: number, targetSpot: number): void;
   /** Cheat: found a fully-working harbor for a player at a coastal node (-1 fail). */
   debugSpawnHarbor(player: number, node: number): number;
+  /** Whether a node is a valid coastal harbor site, ignoring territory ownership. */
+  debugCanPlaceHarbor(node: number): boolean;
   /** Cheat: dock an idle ship of a player at a harbor (-1 fail). */
   debugSpawnShip(player: number, harborId: number): number;
   /** Cheat: grant a player an expedition kit worth of boards/stones + a builder. */
@@ -709,6 +711,7 @@ async function boot(): Promise<void> {
       prepareExpedition: (harborId) => s.prepareExpedition(harborId),
       startExpedition: (harborId, targetSpot) => s.startExpedition(harborId, targetSpot),
       debugSpawnHarbor: (player, node) => s.debugSpawnHarbor(player, node),
+      debugCanPlaceHarbor: (node) => s.debugCanPlaceHarbor(node),
       debugSpawnShip: (player, harborId) => s.debugSpawnShip(player, harborId),
       debugGrantExpeditionSupplies: (player) => s.debugGrantExpeditionSupplies(player),
       debugWaterConnected: (nodeA, nodeB) => s.debugWaterConnected(nodeA, nodeB),

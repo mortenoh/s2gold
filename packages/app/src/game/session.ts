@@ -92,6 +92,17 @@ export interface StatsSeries {
   goods: number[];
 }
 
+/**
+ * JSON-safe snapshot of the stats ring buffers, embedded in a save so the
+ * history graphs reload consistent with the save's timeline. Parallel to the
+ * live {@link GameSession.statsTicks}/{@link GameSession.statsSeries} state.
+ */
+export interface SerializedStats {
+  ticks: number[];
+  nextTick: number;
+  series: StatsSeries[];
+}
+
 /** Debug/event counters exposed for tests and the HUD. */
 export interface GameCounters {
   treesFelled: number;
@@ -341,37 +352,73 @@ export class GameSession {
   // --- Save / load ----------------------------------------------------------
 
   /**
-   * Canonical, JSON-safe save payload: `{ world, ai }` where `ai` maps each
-   * computer player's index to its serializable {@link AiState}. The AI map is
-   * omitted (absent, not empty) when there are no computer players, so a
-   * human-only save is byte-identical apart from the `world` wrapper.
+   * Canonical, JSON-safe save payload: `{ world, counters, stats, ai }`.
+   * `counters` and `stats` are presentation-side tallies (the Stats panel HUD
+   * and its history graphs) that the deterministic engine does not track, so
+   * they ride alongside the world to stay consistent with the save's timeline.
+   * `ai` maps each computer player's index to its serializable {@link AiState}
+   * and is omitted (absent, not empty) when there are no computer players.
    *
    * Backward compatibility: {@link loadWorld} still accepts a bare world object
-   * (the pre-AI save shape), in which case the running session's AI states are
-   * preserved rather than reset.
+   * (the pre-wrapper save shape). In that case AI states are preserved and the
+   * counters/stats reset to zero — there is nothing to restore them from.
    */
   serialize(): unknown {
     const world = JSON.parse(serializeWorld(this.world)) as unknown;
-    if (this.aiStates.length === 0) return { world };
-    const ai: Record<number, AiState> = {};
-    for (const s of this.aiStates) ai[s.playerId] = s;
-    return { world, ai };
+    const payload: {
+      world: unknown;
+      counters: GameCounters;
+      stats: SerializedStats;
+      ai?: Record<number, AiState>;
+    } = { world, counters: { ...this.counters }, stats: this.serializeStats() };
+    if (this.aiStates.length > 0) {
+      const ai: Record<number, AiState> = {};
+      for (const s of this.aiStates) ai[s.playerId] = s;
+      payload.ai = ai;
+    }
+    return payload;
+  }
+
+  /** Snapshot the stats ring buffers into a JSON-safe (deep-copied) shape. */
+  private serializeStats(): SerializedStats {
+    return {
+      ticks: this.statsTicks.slice(),
+      nextTick: this.nextStatsTick,
+      series: this.statsSeries.map((s) => ({
+        land: s.land.slice(),
+        buildings: s.buildings.slice(),
+        soldiers: s.soldiers.slice(),
+        goods: s.goods.slice(),
+      })),
+    };
   }
 
   /**
    * Replace the live world from serialized save data (as produced by
-   * {@link serialize}). Accepts either the current `{ world, ai }` shape or a
-   * bare pre-AI world object. The tick loop keeps running against the new world;
-   * geometry is rebuilt and statics are flagged dirty so the renderer refreshes.
+   * {@link serialize}). Accepts either the current `{ world, counters, stats, ai }`
+   * shape or a bare pre-wrapper world object. The tick loop keeps running against
+   * the new world; geometry is rebuilt and statics are flagged dirty so the
+   * renderer refreshes. Presentation counters and stats history are restored from
+   * the save when present, or reset to zero for a bare (old-format) world so the
+   * Stats panel reflects the loaded timeline rather than the pre-load one.
    * Throws if the world data is not a compatible version.
    */
   loadWorld(data: unknown): void {
     let worldData: unknown = data;
     let aiData: Record<string, AiState> | undefined;
+    let counterData: unknown;
+    let statsData: unknown;
     if (data && typeof data === 'object' && 'world' in data) {
-      const wrapped = data as { world: unknown; ai?: Record<string, AiState> };
+      const wrapped = data as {
+        world: unknown;
+        ai?: Record<string, AiState>;
+        counters?: unknown;
+        stats?: unknown;
+      };
       worldData = wrapped.world;
       aiData = wrapped.ai;
+      counterData = wrapped.counters;
+      statsData = wrapped.stats;
     }
     const next = deserializeWorld(JSON.stringify(worldData));
     this.world = next;
@@ -389,7 +436,60 @@ export class GameSession {
     this.soundCues.length = 0;
     this.visibility.fill(FOG.unexplored);
     this.recomputeVisibility();
-    this.initStats();
+    // Presentation-side tallies are not part of the world, so restore them
+    // explicitly. Old-format saves carry neither and correctly reset to zero.
+    this.restoreCounters(counterData);
+    if (!this.restoreStats(statsData)) this.initStats();
+  }
+
+  /** Overwrite the live counters from a save, zeroing any absent/invalid field. */
+  private restoreCounters(source: unknown): void {
+    const zeroed = zeroCounters();
+    if (source && typeof source === 'object') {
+      const src = source as Record<string, unknown>;
+      for (const key of Object.keys(zeroed) as (keyof GameCounters)[]) {
+        const v = src[key];
+        if (typeof v === 'number' && Number.isFinite(v)) zeroed[key] = v;
+      }
+    }
+    Object.assign(this.counters, zeroed);
+  }
+
+  /**
+   * Restore the stats ring buffers from a save. Returns false (leaving stats
+   * untouched) when the payload is missing or does not match the loaded world's
+   * player count, so the caller falls back to a fresh {@link initStats}.
+   */
+  private restoreStats(source: unknown): boolean {
+    if (!source || typeof source !== 'object') return false;
+    const s = source as { ticks?: unknown; nextTick?: unknown; series?: unknown };
+    if (!Array.isArray(s.ticks) || !Array.isArray(s.series)) return false;
+    if (s.series.length !== this.playerCount) return false;
+    const series: StatsSeries[] = [];
+    for (const raw of s.series) {
+      if (!raw || typeof raw !== 'object') return false;
+      const r = raw as Record<string, unknown>;
+      const { land, buildings, soldiers, goods } = r;
+      if (
+        !Array.isArray(land) ||
+        !Array.isArray(buildings) ||
+        !Array.isArray(soldiers) ||
+        !Array.isArray(goods)
+      ) {
+        return false;
+      }
+      series.push({
+        land: (land as number[]).slice(),
+        buildings: (buildings as number[]).slice(),
+        soldiers: (soldiers as number[]).slice(),
+        goods: (goods as number[]).slice(),
+      });
+    }
+    this.statsTicks = (s.ticks as number[]).slice();
+    this.statsSeries = series;
+    this.nextStatsTick =
+      typeof s.nextTick === 'number' ? s.nextTick : this.world.tick + STATS_INTERVAL;
+    return true;
   }
 
   /**
@@ -549,11 +649,21 @@ export class GameSession {
   // --- Queries --------------------------------------------------------------
 
   canFlag(node: number): boolean {
-    return canPlaceFlag(this.world, this.geom, this.rules, node);
+    return canPlaceFlag(this.world, this.geom, this.rules, node, this.localPlayer);
   }
 
   canBuild(node: number, buildingType: BuildingType): boolean {
-    return canPlaceBuilding(this.world, this.geom, this.rules, node, buildingType);
+    return canPlaceBuilding(this.world, this.geom, this.rules, node, buildingType, this.localPlayer);
+  }
+
+  /**
+   * Debug/e2e: is `node` a valid coastal harbor site ignoring territory ownership?
+   * Mirrors {@link debugSpawnHarbor}'s bypass so a test can locate the sites the
+   * cheat can actually found (the real build UI uses the player-enforced
+   * {@link canBuild}).
+   */
+  debugCanPlaceHarbor(node: number): boolean {
+    return canPlaceHarbor(this.world, this.geom, this.rules, node);
   }
 
   /** The flag id at a node for player 0, or -1. */
@@ -722,6 +832,9 @@ export class GameSession {
   debugSpawnHarbor(player: number, node: number): number {
     const world = this.world;
     const geom = this.geom;
+    // Cheat path: bypass territory ownership (pass no player) so a test can found
+    // a harbor on any valid coastal site, including unclaimed coast. The real
+    // build/preview paths (canBuild) stay player-enforced.
     if (!canPlaceHarbor(world, geom, this.rules, node)) return -1;
     const def = buildingDef('harbor');
     if (!def) return -1;
