@@ -11,7 +11,8 @@
  */
 
 import { SOLDIER_RANK_NAMES, type MilitaryView } from '@s2gold/engine';
-import { clear, el } from '../lib/dom';
+import { el } from '../lib/dom';
+import { BuildingPanel } from './building-panel';
 import type { GameSession } from './session';
 
 /** Prettified rank labels indexed by rank 0..4. */
@@ -28,75 +29,19 @@ export interface MilitaryPanelDeps {
   session(): GameSession;
 }
 
-export class MilitaryPanel {
-  private panel: HTMLElement | null = null;
-  private node = -1;
-  private buildingId = -1;
-  private refreshTimer = 0;
-
+export class MilitaryPanel extends BuildingPanel {
   constructor(private readonly deps: MilitaryPanelDeps) {
-    window.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Escape') this.close();
-    });
+    super(deps.root, 'military-panel', 'military-panel');
   }
 
-  /** True when the panel is open. */
-  get isOpen(): boolean {
-    return this.panel !== null;
+  protected idAt(node: number): number {
+    return this.deps.session().militaryAt(node)?.buildingId ?? -1;
   }
 
-  /**
-   * Try to open the panel for the building at `node`. Returns true when a
-   * military building was found there (own, or an enemy — even out of reach, so
-   * the player sees why they cannot attack). Returns false otherwise, so the
-   * caller can fall back to the normal build context menu.
-   */
-  openAt(node: number, clientX: number, clientY: number): boolean {
-    const session = this.deps.session();
-    const view = session.militaryAt(node);
-    if (!view) return false;
-    this.close();
-    this.node = node;
-    this.buildingId = view.buildingId;
-    const panel = el('div', {
-      class: 'military-panel',
-      attrs: { 'data-testid': 'military-panel' },
-    });
-    panel.style.left = `${clientX + 4}px`;
-    panel.style.top = `${clientY + 4}px`;
-    this.panel = panel;
-    this.deps.root.append(panel);
-    this.render();
-    // Live refresh while open (garrison fills, coins arrive, attack resolves).
-    this.refreshTimer = window.setInterval(() => this.render(), 400);
-    return true;
-  }
-
-  close(): void {
-    if (this.refreshTimer) {
-      window.clearInterval(this.refreshTimer);
-      this.refreshTimer = 0;
-    }
-    if (this.panel) {
-      this.panel.remove();
-      this.panel = null;
-    }
-    this.node = -1;
-    this.buildingId = -1;
-  }
-
-  private render(): void {
-    const panel = this.panel;
-    if (!panel) return;
+  protected renderBody(panel: HTMLElement): void {
     const session = this.deps.session();
     const view = session.militaryAt(this.node);
-    if (!view || view.buildingId !== this.buildingId) {
-      // The building was captured/razed while open: dismiss the panel (the
-      // refresh interval dies with it) rather than showing a dead shell.
-      this.close();
-      return;
-    }
-    clear(panel);
+    if (!view) return; // render() has already verified the id; belt and braces
     const own = view.player === session.localPlayer;
     panel.append(this.header(view, own));
     panel.append(this.garrisonList(view));
@@ -205,14 +150,5 @@ export class MilitaryPanel {
         ),
       ),
     );
-  }
-
-  private button(text: string, run: () => void, testid: string): HTMLElement {
-    const btn = el('button', { text, attrs: { type: 'button', 'data-testid': testid } });
-    btn.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      run();
-    });
-    return btn;
   }
 }

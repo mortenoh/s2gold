@@ -15,7 +15,8 @@
  * launched expedition's disappearance stay current (mirrors the military panel).
  */
 
-import { clear, el } from '../lib/dom';
+import { el } from '../lib/dom';
+import { BuildingPanel } from './building-panel';
 import type { GameSession } from './session';
 
 /** Dependencies the panel reads live (they change on map switch). */
@@ -26,71 +27,21 @@ export interface HarborPanelDeps {
   beginExpeditionTarget(harborId: number): void;
 }
 
-export class HarborPanel {
-  private panel: HTMLElement | null = null;
-  private node = -1;
+export class HarborPanel extends BuildingPanel {
+  /** The tracked harbor's building id while open (-1 otherwise). */
   private harborId = -1;
-  private refreshTimer = 0;
 
   constructor(private readonly deps: HarborPanelDeps) {
-    window.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Escape') this.close();
-    });
+    super(deps.root, 'military-panel harbor-panel', 'harbor-panel');
   }
 
-  /** True when the panel is open. */
-  get isOpen(): boolean {
-    return this.panel !== null;
+  protected idAt(node: number): number {
+    return this.deps.session().harborAt(node)?.id ?? -1;
   }
 
-  /**
-   * Try to open the panel for the harbor at `node`. Returns true when an own
-   * working harbor was found there (so the caller suppresses the build menu).
-   */
-  openAt(node: number, clientX: number, clientY: number): boolean {
+  protected renderBody(panel: HTMLElement, trackedId: number): void {
+    this.harborId = trackedId;
     const session = this.deps.session();
-    const harbor = session.harborAt(node);
-    if (!harbor) return false;
-    this.close();
-    this.node = node;
-    this.harborId = harbor.id;
-    const panel = el('div', {
-      class: 'military-panel harbor-panel',
-      attrs: { 'data-testid': 'harbor-panel' },
-    });
-    panel.style.left = `${clientX + 4}px`;
-    panel.style.top = `${clientY + 4}px`;
-    this.panel = panel;
-    this.deps.root.append(panel);
-    this.render();
-    this.refreshTimer = window.setInterval(() => this.render(), 400);
-    return true;
-  }
-
-  close(): void {
-    if (this.refreshTimer) {
-      window.clearInterval(this.refreshTimer);
-      this.refreshTimer = 0;
-    }
-    if (this.panel) {
-      this.panel.remove();
-      this.panel = null;
-    }
-    this.node = -1;
-    this.harborId = -1;
-  }
-
-  private render(): void {
-    const panel = this.panel;
-    if (!panel) return;
-    const session = this.deps.session();
-    // The harbor may have been demolished/captured while open.
-    if (!session.harborAt(this.node) || session.harborAt(this.node)?.id !== this.harborId) {
-      // Demolished/captured while open: dismiss instead of a dead shell.
-      this.close();
-      return;
-    }
-    clear(panel);
     panel.append(
       el(
         'div',
@@ -179,14 +130,5 @@ export class HarborPanel {
       }
     }
     return wrap;
-  }
-
-  private button(text: string, run: () => void, testid: string): HTMLElement {
-    const btn = el('button', { text, attrs: { type: 'button', 'data-testid': testid } });
-    btn.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      run();
-    });
-    return btn;
   }
 }

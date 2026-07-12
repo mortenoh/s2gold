@@ -7,6 +7,7 @@
  * stable across runs and a parse/stringify round-trip reproduces it exactly.
  */
 
+import { buildingDef, NUM_SOLDIER_RANKS } from './constants';
 import { fnv1a } from './hash';
 import { WORLD_VERSION, type World } from './world';
 
@@ -15,28 +16,54 @@ export function serializeWorld(world: World): string {
   return JSON.stringify(world);
 }
 
-/** Parse a serialized world, checking the format version. */
+/**
+ * Per-version migrations: `MIGRATIONS[v]` upgrades a version-v world in place
+ * to version v+1. Every schema change from now on bumps WORLD_VERSION and adds
+ * exactly one entry here; deserializeWorld chains them, so any historical save
+ * loads through the same audited path.
+ */
+const MIGRATIONS: Readonly<Record<number, (w: World) => void>> = {
+  // v1 -> v2: everything that landed on top of frozen-v1 saves without a bump:
+  // seafaring stores, geologist signs, donkey-road upgrade state, and the
+  // military fields (garrison/occupied/coins/promotion), which the old ad-hoc
+  // back-patch list missed entirely (loading a true v1 save crashed on
+  // `for (const g of b.garrison)`).
+  1: (w) => {
+    w.ships ??= { items: [], free: [] };
+    w.expeditions ??= [];
+    w.signs ??= [];
+    for (const road of w.roads?.items ?? []) {
+      if (!road) continue;
+      road.busyGf ??= 0;
+      road.upgraded ??= false;
+      road.donkeyId ??= -1;
+    }
+    for (const player of w.players ?? []) {
+      if (player) player.donkeys ??= 0;
+    }
+    for (const b of w.buildings?.items ?? []) {
+      if (!b) continue;
+      b.garrison ??= new Array<number>(NUM_SOLDIER_RANKS).fill(0);
+      // HQs are always occupied; other buildings only via their garrison.
+      b.occupied ??= buildingDef(b.type)?.kind === 'hq' || b.garrison.some((n) => n > 0);
+      // Coin delivery defaults on for military buildings (MILITARY.md §3).
+      b.coinsEnabled ??= buildingDef(b.type)?.kind === 'military';
+      b.incoming ??= 0;
+      b.promotionTimer ??= -1;
+    }
+  },
+};
+
+/** Parse a serialized world, migrating older versions up to the current one. */
 export function deserializeWorld(data: string): World {
   const parsed = JSON.parse(data) as World;
-  if (parsed.version !== WORLD_VERSION) {
-    throw new Error(`unsupported world version ${parsed.version} (expected ${WORLD_VERSION})`);
+  const version = parsed.version;
+  if (typeof version !== 'number' || version < 1 || version > WORLD_VERSION) {
+    throw new Error(`unsupported world version ${String(version)} (expected <= ${WORLD_VERSION})`);
   }
-  // Fields added after WORLD_VERSION=1 saves started being written (no version
-  // bump accompanied them), so old saves may lack them. Back-patch empty values.
-  parsed.ships ??= { items: [], free: [] };
-  parsed.expeditions ??= [];
-  parsed.signs ??= [];
-  // Donkey-road upgrade state (added without a version bump): back-patch so saves
-  // written before it still load. Roads default to un-upgraded with no donkey and
-  // a zeroed productivity window; players default to an empty donkey pool.
-  for (const road of parsed.roads?.items ?? []) {
-    if (!road) continue;
-    road.busyGf ??= 0;
-    road.upgraded ??= false;
-    road.donkeyId ??= -1;
-  }
-  for (const player of parsed.players ?? []) {
-    if (player) player.donkeys ??= 0;
+  for (let v = version; v < WORLD_VERSION; v++) {
+    MIGRATIONS[v]?.(parsed);
+    parsed.version = v + 1;
   }
   return parsed;
 }

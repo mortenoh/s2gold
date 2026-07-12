@@ -211,8 +211,10 @@ describe('donkey-road determinism and serialization', () => {
 
   it('loads an old-format save with the new fields deleted', () => {
     const { world } = buildFeedingRoad(41);
-    // Serialize, then strip the donkey-road fields to mimic a pre-feature save.
+    // Serialize, then strip the donkey-road fields to mimic a pre-feature save
+    // (those were written while the format was still version 1).
     const parsed = JSON.parse(serializeWorld(world)) as Record<string, unknown>;
+    parsed.version = 1;
     const roads = (parsed.roads as { items: Array<Record<string, unknown> | null> }).items;
     for (const r of roads) {
       if (!r) continue;

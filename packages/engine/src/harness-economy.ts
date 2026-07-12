@@ -13,7 +13,7 @@ import { Geometry } from './geometry';
 import { findWalkPath } from './pathfinding';
 import { GREENLAND_RULES } from './terrain';
 import { tickWorld } from './index';
-import { getBuilding, storeAlloc, type Building, type World } from './world';
+import { getBuilding, storeAlloc, type Building, type World, makeBuilding } from './world';
 
 /** The node of a player's HQ door flag (SE of the HQ). */
 export function hqFlagNode(world: World, geom: Geometry, player = 0): number {
@@ -44,31 +44,18 @@ export function spawnBuilding(
     world.flagAtNode[flagNode] = flagId;
   }
   const def = buildingDef(type);
-  const bid = storeAlloc(world.buildings, (id) => ({
-    id,
-    type,
-    node,
-    player,
-    flagId,
-    state: 'working' as const,
-    deliveredBoards: 0,
-    deliveredStones: 0,
-    needBoards: 0,
-    needStones: 0,
-    buildProgress: 0,
-    buildTicks: 0,
-    workerId: -1,
-    staffed,
-    inputStock: new Array<number>(def?.inputs.length ?? 0).fill(0),
-    outputQueue: [],
-    workTimer: 0,
-    altToggle: 0,
-    garrison: def?.kind === 'military' ? [0, 0, 0, 0, 0] : [],
-    occupied: false,
-    coinsEnabled: true,
-    incoming: 0,
-    promotionTimer: -1,
-  }));
+  const bid = storeAlloc(world.buildings, (id) =>
+    makeBuilding(
+      { id, type, node, player, flagId },
+      {
+        state: 'working',
+        staffed,
+        inputStock: new Array<number>(def?.inputs.length ?? 0).fill(0),
+        garrison: def?.kind === 'military' ? [0, 0, 0, 0, 0] : [],
+        coinsEnabled: true,
+      },
+    ),
+  );
   world.buildingAtNode[node] = bid;
   return getBuilding(world, bid);
 }

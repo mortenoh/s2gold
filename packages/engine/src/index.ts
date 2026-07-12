@@ -37,7 +37,7 @@ export function version(): string {
 }
 
 // --- Re-exports (public API + supporting types) ---------------------------
-export { createWorld, WORLD_VERSION } from './world';
+export { createWorld, makeBuilding, storeAlloc, WORLD_VERSION } from './world';
 export type {
   World,
   Flag,

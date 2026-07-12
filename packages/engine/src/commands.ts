@@ -45,6 +45,7 @@ import {
   type Building,
   type Flag,
   type World,
+  makeBuilding,
 } from './world';
 import { execAttack } from './systems/military';
 import { execPrepareExpedition, execStartExpedition } from './systems/seafaring';
@@ -531,31 +532,18 @@ function execPlaceBuilding(
     TICKS.buildMinTicks,
     (cost.boards + cost.stones) * TICKS.buildStepPerMaterial,
   );
-  const id = storeAlloc(world.buildings, (bid) => ({
-    id: bid,
-    type: buildingType,
-    node,
-    player,
-    flagId,
-    state: 'site' as const,
-    deliveredBoards: 0,
-    deliveredStones: 0,
-    needBoards: cost.boards,
-    needStones: cost.stones,
-    buildProgress: 0,
-    buildTicks,
-    workerId: -1,
-    staffed: false,
-    inputStock: [],
-    outputQueue: [],
-    workTimer: 0,
-    altToggle: 0,
-    garrison: def?.kind === 'military' ? new Array<number>(NUM_SOLDIER_RANKS).fill(0) : [],
-    occupied: false,
-    coinsEnabled: true,
-    incoming: 0,
-    promotionTimer: -1,
-  }));
+  const id = storeAlloc(world.buildings, (bid) =>
+    makeBuilding(
+      { id: bid, type: buildingType, node, player, flagId },
+      {
+        needBoards: cost.boards,
+        needStones: cost.stones,
+        buildTicks,
+        garrison: def?.kind === 'military' ? new Array<number>(NUM_SOLDIER_RANKS).fill(0) : [],
+        coinsEnabled: true, // coin delivery defaults on (MILITARY.md §3)
+      },
+    ),
+  );
   world.buildingAtNode[node] = id;
   events.emit({ type: 'BuildingPlaced', buildingId: id, buildingType, node, player });
 }

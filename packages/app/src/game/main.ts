@@ -98,15 +98,10 @@ interface S2Debug {
   staticObjects: number;
   trees: number;
   granite: number;
-  decorations: number;
-  skipped: number;
   spriteQuads: number;
   spriteDrawCalls: number;
   // P2 fields.
   tick: number;
-  paused: boolean;
-  speed: number;
-  inventory: { trunk: number; plank: number; stone: number };
   counters: Record<string, number>;
   settlers: number;
   flags: number;
@@ -136,47 +131,27 @@ interface S2Debug {
   buildingsOf(player: number): number;
   /** Toggle fog of war (default on for a new game). */
   setFog(on: boolean): void;
-  /** Owning player of a node (-1 = neutral). */
-  ownerOf(node: number): number;
-  /** Building id at a node, or -1. */
-  buildingIdAt(node: number): number;
   /** Total garrisoned soldiers at a military building node (-1 when not military). */
   militaryTroops(node: number): number;
-  /** How many soldiers the local player could send against a target building. */
-  attackableSoldiers(targetBuildingId: number): number;
   /** Cheat: place a fully-built, unoccupied military building for a player. */
   debugSpawnMilitary(player: number, node: number, type: string): number;
-  /** Order up to `soldiers` attackers at an enemy military building. */
-  attack(targetBuildingId: number, soldiers: number): void;
-  /** Toggle coin delivery to one of the local player's military buildings. */
-  toggleCoins(buildingId: number, enabled: boolean): void;
   /** Node id nearest a map (x, y) lattice coordinate. */
   nodeOf(x: number, y: number): number;
   /** The flag node (SE of a door node) that a building here would use. */
   flagNodeOf(node: number): number;
-  /** The flag id owned by player 0 at a node, or -1. */
-  flagIdAt(node: number): number;
   /** True when player 0 may place a building of `type` on `node`. */
   canBuild(node: number, type: string): boolean;
   /** True when player 0 may place a flag on `node`. */
   canFlag(node: number): boolean;
   /** Client-space (CSS px) position of a node's ground anchor. */
   nodeToScreen(node: number): { x: number; y: number };
-  /** Queue player-0 commands directly (test helper). */
-  placeFlag(node: number): void;
-  placeBuilding(node: number, type: string): void;
-  buildRoad(path: number[]): void;
   /** Node path between two flag nodes over walkable ground, or null. */
   suggestRoad(startNode: number, endNode: number): number[] | null;
-  setSpeed(speed: number): void;
-  setPaused(paused: boolean): void;
   /** Current road-build preview state (null when not in road mode). */
   roadPreview(): { node: number; valid: boolean; hasPath: boolean } | null;
   // Seafaring (P7).
   /** Queue a prepareExpedition command at one of the local player's harbors. */
   prepareExpedition(harborId: number): void;
-  /** Queue a startExpedition command toward a coastal target spot. */
-  startExpedition(harborId: number, targetSpot: number): void;
   /** Cheat: found a fully-working harbor for a player at a coastal node (-1 fail). */
   debugSpawnHarbor(player: number, node: number): number;
   /** Whether a node is a valid coastal harbor site, ignoring territory ownership. */
@@ -191,8 +166,6 @@ interface S2Debug {
   harborIdAt(node: number): number;
   /** True when a ready expedition is prepared at a harbor. */
   expeditionReady(harborId: number): boolean;
-  /** Live ships as {id, node, state} (all players). */
-  shipStates(): { id: number; node: number; state: string }[];
   /** Center the camera on a lattice node (test helper for off-screen picking). */
   centerNode(node: number): void;
 }
@@ -590,8 +563,6 @@ async function boot(): Promise<void> {
       window.__s2debug.staticObjects = objAtlasReady ? built.objects.length : 0;
       window.__s2debug.trees = built.counts.trees;
       window.__s2debug.granite = built.counts.granite;
-      window.__s2debug.decorations = built.counts.decorations;
-      window.__s2debug.skipped = built.counts.skipped;
     }
   }
 
@@ -723,14 +694,9 @@ async function boot(): Promise<void> {
       staticObjects: 0,
       trees: 0,
       granite: 0,
-      decorations: 0,
-      skipped: 0,
       spriteQuads: 0,
       spriteDrawCalls: 0,
       tick: 0,
-      paused: false,
-      speed: 1,
-      inventory: s.inventory,
       counters: { ...s.counters },
       settlers: 0,
       flags: 0,
@@ -742,18 +708,11 @@ async function boot(): Promise<void> {
       hqNode: hqNode(),
       nodeOf: (x, y) => s.geom.index(x, y),
       flagNodeOf: (node) => s.geom.neighbour(node, 'SE'),
-      flagIdAt: (node) => s.flagIdAt(node),
       canBuild: (node, type) =>
         s.canBuild(node, type as Parameters<GameSession['placeBuilding']>[1]),
       canFlag: (node) => s.canFlag(node),
       nodeToScreen,
-      placeFlag: (node) => s.placeFlag(node),
-      placeBuilding: (node, type) =>
-        s.placeBuilding(node, type as Parameters<GameSession['placeBuilding']>[1]),
-      buildRoad: (path) => s.buildRoad(path),
       suggestRoad: (a, b) => s.suggestRoad(a, b),
-      setSpeed: (sp) => setSpeed(sp as Speed),
-      setPaused: (p) => setPaused(p),
       players: s.playerCount,
       aiPlayers: s.aiPlayers.length,
       buildingsOf: (player) => s.buildingsOf(player),
@@ -762,20 +721,14 @@ async function boot(): Promise<void> {
         writeFogPref(on);
         applyFog();
       },
-      ownerOf: (node) => s.ownerOf(node),
-      buildingIdAt: (node) => s.buildingIdAt(node),
       militaryTroops: (node) => s.militaryAt(node)?.troops ?? -1,
-      attackableSoldiers: (targetBuildingId) => s.attackableSoldiers(targetBuildingId),
       debugSpawnMilitary: (player, node, type) =>
         s.debugSpawnMilitary(player, node, type as Parameters<GameSession['placeBuilding']>[1]),
-      attack: (targetBuildingId, soldiers) => s.attack(targetBuildingId, soldiers),
-      toggleCoins: (buildingId, enabled) => s.toggleCoins(buildingId, enabled),
       roadPreview: () => {
         const rp = interaction.roadPreview;
         return rp ? { node: rp.node, valid: rp.valid, hasPath: rp.path !== null } : null;
       },
       prepareExpedition: (harborId) => s.prepareExpedition(harborId),
-      startExpedition: (harborId, targetSpot) => s.startExpedition(harborId, targetSpot),
       debugSpawnHarbor: (player, node) => s.debugSpawnHarbor(player, node),
       debugCanPlaceHarbor: (node) => s.debugCanPlaceHarbor(node),
       debugSpawnShip: (player, harborId) => s.debugSpawnShip(player, harborId),
@@ -783,7 +736,6 @@ async function boot(): Promise<void> {
       debugWaterConnected: (nodeA, nodeB) => s.debugWaterConnected(nodeA, nodeB),
       harborIdAt: (node) => s.harborAt(node)?.id ?? -1,
       expeditionReady: (harborId) => s.expeditionAt(harborId)?.ready ?? false,
-      shipStates: () => s.shipStates(),
       centerNode: (node) => {
         const a = nodeAnchor(s.world, node);
         camera.centerOn(a.x, a.y, canvas.width, canvas.height);
@@ -1292,9 +1244,6 @@ async function boot(): Promise<void> {
       dbg.spriteQuads = quads;
       dbg.spriteDrawCalls = drawCalls;
       dbg.tick = session.world.tick;
-      dbg.paused = session.paused;
-      dbg.speed = session.speed;
-      dbg.inventory = inv;
       dbg.counters = { ...session.counters };
       dbg.settlers = countLive(session.world.settlers);
       dbg.flags = countLive(session.world.flags);

@@ -26,8 +26,9 @@ import {
   rulesForLandscape,
   harborDockNode,
   harborsOf,
+  makeBuilding,
   militaryView,
-  NUM_SOLDIER_RANKS,
+  storeAlloc,
   ownerAt,
   runAi,
   SEA,
@@ -55,16 +56,6 @@ import { soundForEvent, type SoundCue } from './audio-map';
 
 /** Per-node fog state used by the renderer (see TerrainRenderer.setFog). */
 export const FOG = { unexplored: 0, explored: 1, visible: 2 } as const;
-
-/** Allocate a slot in an engine store (mirrors the engine's internal helper). */
-function storeAllocLocal<T>(
-  store: { items: (T | null)[]; free: number[] },
-  make: (id: number) => T,
-): number {
-  const id = store.free.length > 0 ? (store.free.pop() as number) : store.items.length;
-  store.items[id] = make(id);
-  return id;
-}
 
 /** Milliseconds per game frame at 1x speed. */
 const GF_MS = 50;
@@ -847,7 +838,7 @@ export class GameSession {
     const flagNode = geom.neighbour(node, 'SE');
     let flagId = world.flagAtNode[flagNode];
     if (flagId < 0) {
-      flagId = storeAllocLocal<Flag>(world.flags, (id) => ({
+      flagId = storeAlloc<Flag>(world.flags, (id) => ({
         id,
         node: flagNode,
         player,
@@ -855,31 +846,19 @@ export class GameSession {
       }));
       world.flagAtNode[flagNode] = flagId;
     }
-    const bId = storeAllocLocal<Building>(world.buildings, (id) => ({
-      id,
-      type: 'harbor',
-      node,
-      player,
-      flagId,
-      state: 'working',
-      deliveredBoards: def.cost.boards,
-      deliveredStones: def.cost.stones,
-      needBoards: def.cost.boards,
-      needStones: def.cost.stones,
-      buildProgress: 0,
-      buildTicks: 0,
-      workerId: -1,
-      staffed: true,
-      inputStock: [],
-      outputQueue: [],
-      workTimer: 0,
-      altToggle: 0,
-      garrison: new Array<number>(NUM_SOLDIER_RANKS).fill(0),
-      occupied: false,
-      coinsEnabled: false,
-      incoming: 0,
-      promotionTimer: -1,
-    }));
+    const bId = storeAlloc<Building>(world.buildings, (id) =>
+      makeBuilding(
+        { id, type: 'harbor', node, player, flagId },
+        {
+          state: 'working',
+          staffed: true,
+          deliveredBoards: def.cost.boards,
+          deliveredStones: def.cost.stones,
+          needBoards: def.cost.boards,
+          needStones: def.cost.stones,
+        },
+      ),
+    );
     world.buildingAtNode[node] = bId;
     return bId;
   }
@@ -895,7 +874,7 @@ export class GameSession {
     if (!harbor || harbor.type !== 'harbor') return -1;
     const dock = harborDockNode(world, this.geom, harbor.node);
     if (dock < 0) return -1;
-    return storeAllocLocal<Ship>(world.ships, (id) => ({
+    return storeAlloc<Ship>(world.ships, (id) => ({
       id,
       player,
       node: dock,
@@ -958,7 +937,7 @@ export class GameSession {
     if (world.buildingAtNode[flagNode] >= 0) return -1;
     let flagId = world.flagAtNode[flagNode];
     if (flagId < 0) {
-      flagId = storeAllocLocal<Flag>(world.flags, (id) => ({
+      flagId = storeAlloc<Flag>(world.flags, (id) => ({
         id,
         node: flagNode,
         player,
@@ -966,31 +945,20 @@ export class GameSession {
       }));
       world.flagAtNode[flagNode] = flagId;
     }
-    const bId = storeAllocLocal<Building>(world.buildings, (id) => ({
-      id,
-      type,
-      node,
-      player,
-      flagId,
-      state: 'working',
-      deliveredBoards: def.cost.boards,
-      deliveredStones: def.cost.stones,
-      needBoards: def.cost.boards,
-      needStones: def.cost.stones,
-      buildProgress: 0,
-      buildTicks: 0,
-      workerId: -1,
-      staffed: false,
-      inputStock: new Array<number>(def.inputs.length).fill(0),
-      outputQueue: [],
-      workTimer: 0,
-      altToggle: 0,
-      garrison: new Array<number>(NUM_SOLDIER_RANKS).fill(0),
-      occupied: false,
-      coinsEnabled: true,
-      incoming: 0,
-      promotionTimer: -1,
-    }));
+    const bId = storeAlloc<Building>(world.buildings, (id) =>
+      makeBuilding(
+        { id, type, node, player, flagId },
+        {
+          state: 'working',
+          deliveredBoards: def.cost.boards,
+          deliveredStones: def.cost.stones,
+          needBoards: def.cost.boards,
+          needStones: def.cost.stones,
+          inputStock: new Array<number>(def.inputs.length).fill(0),
+          coinsEnabled: true,
+        },
+      ),
+    );
     world.buildingAtNode[node] = bId;
     return bId;
   }

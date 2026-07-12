@@ -19,7 +19,7 @@
  * cost and always founds a harbor (not an arbitrary building).
  */
 
-import { BUILDING, FLAG_WARE_CAPACITY, JOB, NUM_SOLDIER_RANKS, OBJ_TYPE, SEA } from '../constants';
+import { BUILDING, FLAG_WARE_CAPACITY, JOB, OBJ_TYPE, SEA } from '../constants';
 import type { EventSink } from '../events';
 import type { Geometry } from '../geometry';
 import { buildFlagGraph, findFlagRoute, findWaterPath } from '../pathfinding';
@@ -33,6 +33,7 @@ import {
   type Building,
   type Ship,
   type World,
+  makeBuilding,
 } from '../world';
 import { ensureWorkerAvailable } from './recruit';
 
@@ -292,31 +293,12 @@ function foundHarbor(world: World, geom: Geometry, node: number, player: number)
     const f = world.flags.items[flagId];
     if (f) f.player = player;
   }
-  const bId = storeAlloc(world.buildings, (id) => ({
-    id,
-    type: BUILDING.harbor,
-    node,
-    player,
-    flagId,
-    state: 'working' as const,
-    deliveredBoards: 0,
-    deliveredStones: 0,
-    needBoards: 0,
-    needStones: 0,
-    buildProgress: 0,
-    buildTicks: 0,
-    workerId: -1,
-    staffed: true,
-    inputStock: [],
-    outputQueue: [],
-    workTimer: 0,
-    altToggle: 0,
-    garrison: new Array<number>(NUM_SOLDIER_RANKS).fill(0),
-    occupied: false,
-    coinsEnabled: false,
-    incoming: 0,
-    promotionTimer: -1,
-  }));
+  const bId = storeAlloc(world.buildings, (id) =>
+    makeBuilding(
+      { id, type: BUILDING.harbor, node, player, flagId },
+      { state: 'working', staffed: true },
+    ),
+  );
   world.buildingAtNode[node] = bId;
   world.objectType[node] = OBJ_TYPE.none;
   return bId;

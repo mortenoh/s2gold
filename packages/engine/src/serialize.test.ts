@@ -8,7 +8,9 @@ describe('deserializeWorld back-patches post-v1 fields', () => {
   it('loads a version=1 save missing ships/expeditions/signs and ticks without throwing', () => {
     const world = createWorld(makeFlatMap(16, 16), { seed: 1, players: 1 });
     const raw = JSON.parse(serializeWorld(world)) as Record<string, unknown>;
-    // Simulate a save written before these fields existed (no version bump).
+    // Simulate a save written before these fields existed (they were added
+    // while the format was still version 1).
+    raw.version = 1;
     delete raw.ships;
     delete raw.expeditions;
     delete raw.signs;

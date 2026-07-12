@@ -29,7 +29,7 @@ import { seedRng, type RngState } from './rng';
 import { recalcTerritory } from './systems/territory';
 
 /** Format version for serialized worlds. */
-export const WORLD_VERSION = 1;
+export const WORLD_VERSION = 2;
 
 /** A stored ware token. */
 export interface Ware {
@@ -486,19 +486,23 @@ export function createWorld(map: MapJson, options: CreateWorldOptions): World {
   return world;
 }
 
-/** Place a headquarters building plus its flag for a player. */
-function placeHeadquarters(world: World, geom: Geometry, node: number, player: number): void {
-  const flagNode = geom.neighbour(node, 'SE');
-  const flagId = storeAlloc(world.flags, (id) => ({ id, node: flagNode, player, wares: [] }));
-  world.flagAtNode[flagNode] = flagId;
-
-  const bId = storeAlloc(world.buildings, (id) => ({
-    id,
-    type: BUILDING.headquarters,
-    node,
-    player,
-    flagId,
-    state: 'working' as const,
+/**
+ * Build a complete Building record from its identity plus overrides. The one
+ * construction site keeps the JSON key order canonical (serialization hashes
+ * depend on insertion order) and means a new field gets a default exactly
+ * once instead of in every hand-written literal.
+ */
+export function makeBuilding(
+  base: Pick<Building, 'id' | 'type' | 'node' | 'player' | 'flagId'>,
+  overrides: Partial<Building> = {},
+): Building {
+  return {
+    id: base.id,
+    type: base.type,
+    node: base.node,
+    player: base.player,
+    flagId: base.flagId,
+    state: 'site',
     deliveredBoards: 0,
     deliveredStones: 0,
     needBoards: 0,
@@ -506,17 +510,33 @@ function placeHeadquarters(world: World, geom: Geometry, node: number, player: n
     buildProgress: 0,
     buildTicks: 0,
     workerId: -1,
-    staffed: true,
+    staffed: false,
     inputStock: [],
     outputQueue: [],
     workTimer: 0,
     altToggle: 0,
     garrison: new Array<number>(NUM_SOLDIER_RANKS).fill(0),
-    occupied: true, // the HQ is always a manned territory anchor (MILITARY.md §3)
+    occupied: false,
     coinsEnabled: false,
     incoming: 0,
     promotionTimer: -1,
-  }));
+    ...overrides,
+  };
+}
+
+/** Place a headquarters building plus its flag for a player. */
+function placeHeadquarters(world: World, geom: Geometry, node: number, player: number): void {
+  const flagNode = geom.neighbour(node, 'SE');
+  const flagId = storeAlloc(world.flags, (id) => ({ id, node: flagNode, player, wares: [] }));
+  world.flagAtNode[flagNode] = flagId;
+
+  const bId = storeAlloc(world.buildings, (id) =>
+    makeBuilding(
+      { id, type: BUILDING.headquarters, node, player, flagId },
+      // The HQ is always a manned territory anchor (MILITARY.md §3).
+      { state: 'working', staffed: true, occupied: true },
+    ),
+  );
   world.buildingAtNode[node] = bId;
   world.objectType[node] = OBJ_TYPE.hqMarker;
   world.players[player].hqBuildingId = bId;
