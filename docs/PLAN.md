@@ -117,15 +117,10 @@ title/setup/campaign menus with original art, deterministic AI opponents with an
 in-game statistics panel, seafaring (harbors, ships, expeditions) with its browser
 UI, the Roman campaign with briefings/objectives/victory flow, and the intro video.
 
-Polish backlog (deferred items from agent reports, in rough priority order):
-sprite-based in-game UI from IO.LST (windows, icon build menu), donkey roads and
-road upgrade, terrain edge blending + water/lava palette animation, palette-exact
-gouraud lighting, geologists, ground ware-stack sprites, soldier rank overlays and
-researched fight animations, border-stone nation sprites, catapult play for the AI,
-AI seafaring, wasteland/winter terrain rules for the engine, storehouse-local
-inventories, harbor territory recalc on construction, Gold-edition extra chains
-(vineyard/charburner variants), original combat/sea sound-id verification, and the
-world campaign (Gold edition second campaign) mission set.
+Since that update, the following backlog items have also landed: donkey roads and
+road upgrade, geologists, ground ware-stack sprites, soldier rank overlays and
+fight animations, wasteland/winter terrain rules, and harbor territory recalc on
+construction. Open work is tracked in `docs/ROADMAP.md`.
 
 ## Phases & milestone gates
 

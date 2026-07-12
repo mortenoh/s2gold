@@ -26,19 +26,19 @@ long tail we reach in phases.
 307 MB). Everything the game needs is **plain files** — the 292 MB `SETTLERS2.gog` CD
 image is _not_ required (it's the DOSBox-mounted CD; game data ships separately):
 
-| Path                                         | Contents                                                   | Format                                  | Status                                              |
-| -------------------------------------------- | ---------------------------------------------------------- | --------------------------------------- | --------------------------------------------------- |
+| Path                                         | Contents                                                   | Format                                  | Status                                             |
+| -------------------------------------------- | ---------------------------------------------------------- | --------------------------------------- | -------------------------------------------------- |
 | `DATA/*.LST`, `DATA/MBOB/*`                  | All sprites: map objects, buildings (4 nations), UI, icons | LST container, magic `0x4E20`, verified | ✓ parsed count OK                                  |
-| `DATA/BOBS/*.BOB`                            | Carrier/settler body-part animations                       | BOB format                              | header verified                                     |
+| `DATA/BOBS/*.BOB`                            | Carrier/settler body-part animations                       | BOB format                              | header verified                                    |
 | `GFX/TEXTURES/TEX5/6/7.LBM`                  | Terrain tilesets (Greenland/Wasteland/Winter)              | IFF PBM, PackBits                       | ✓ **decoded to PNG (PoC)**                         |
 | `GFX/PALETTE/*.BBM`                          | 256-color palettes                                         | IFF CMAP                                | ✓ decoded                                          |
-| `DATA/TEXTURES/GOU*.DAT`                     | Gouraud shading tables for terrain lighting                | raw tables                              | present                                             |
+| `DATA/TEXTURES/GOU*.DAT`                     | Gouraud shading tables for terrain lighting                | raw tables                              | present                                            |
 | `DATA/SOUNDDAT/SOUND.LST`                    | 199 sound effects                                          | raw 8-bit unsigned PCM ~11 kHz          | ✓ **wrapped to WAV, validated with ffprobe (PoC)** |
 | `DATA/SOUNDDAT/SNG/SNG_*.DAT`                | 25+ music tracks                                           | XMIDI (FORM XDIR/CAT XMID)              | ✓ header verified                                  |
 | `DATA/MAPS*, WORLDS`                         | Campaign + free-play maps                                  | `WORLD_V1.0` (SWD/WLD)                  | ✓ header verified                                  |
-| `DATA/TXT*/*.ENG/GER`, `DATA/MISSIONS/*.RTX` | All game text, mission briefings                           | GER/ENG text container (magic `0xFDE7`) | verified                                            |
-| `DATA/IO/*.DAT/IDX`, `IO.LST`                | UI graphics, `FONT14.FNT` fonts                            | LST-family                              | present                                             |
-| `VIDEO/INTRO.SMK`                            | Intro video, 320×200, 2224 frames                          | Smacker v2                              | identified by `file`                                |
+| `DATA/TXT*/*.ENG/GER`, `DATA/MISSIONS/*.RTX` | All game text, mission briefings                           | GER/ENG text container (magic `0xFDE7`) | verified                                           |
+| `DATA/IO/*.DAT/IDX`, `IO.LST`                | UI graphics, `FONT14.FNT` fonts                            | LST-family                              | present                                            |
+| `VIDEO/INTRO.SMK`                            | Intro video, 320×200, 2224 frames                          | Smacker v2                              | identified by `file`                               |
 
 Every one of these formats is exhaustively documented by the RttR project's
 **libsiedler2** library (it has loaders for LST, BOB, LBM/BBM, WLD/SWD, GER/ENG, FNT,
