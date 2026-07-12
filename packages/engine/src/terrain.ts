@@ -11,14 +11,18 @@
  * descriptions (data/RTTR/gamedata/world/{greenland,wasteland,winterworld}.lua)
  * and the per-landscape id semantics already encoded in the renderer's minimap
  * colour tables (packages/renderer/src/terrain-data.ts). The meadow/steppe/
- * savannah family (0x00, 0x08-0x0a, 0x0e, 0x0f) is buildable ground in every
- * landscape; landscapes differ mainly in which slots are impassable hazards:
+ * savannah family (0x00, 0x08-0x0a, 0x0e, 0x0f) plus mountain-meadow (0x12) is
+ * buildable ground in every landscape; landscapes differ mainly in which slots
+ * are impassable hazards:
  *
  *  - greenland: swamp (0x03) and snow (0x02) join the shared water/lava set.
- *  - winter: the desert slots become ICE (0x04, 0x07) and the mountain-meadow
- *    slot becomes SNOW (0x12) — all unwalkable.
- *  - wasteland: the mountain-meadow slot becomes dark MOOR (0x12) — unwalkable;
- *    the desert slots (0x04, 0x07) stay walkable sand.
+ *  - winter: the desert slots become ICE (0x04, 0x07) — unwalkable.
+ *  - wasteland: the desert slots (0x04, 0x07) stay walkable sand.
+ *
+ * Mountain-meadow (0x12, "alpine pasture" in wasteland, a green snow-meadow in
+ * winter) is green, walkable, buildable ground in all three sets — the original
+ * build-quality layer marks it flag/hut/castle (never mine), so it is grouped
+ * with the meadow family, not the mountains.
  */
 
 /** Low-6-bit mask isolating the terrain id from a texture byte (FACT). */
@@ -41,10 +45,11 @@ export const BUILDABLE_IDS: ReadonlySet<number> = new Set([
   0x0f, // meadow with flowers / winter meadow / dry steppe
   0x0e, // steppe
   0x00, // savannah / taiga / dry steppe
+  0x12, // mountain meadow / alpine pasture — green, walkable, buildable ground
 ]);
 
 /** Mountain family — walkable and mineable, but only mines may be built. */
-export const MOUNTAIN_IDS: ReadonlySet<number> = new Set([0x01, 0x0b, 0x0c, 0x0d, 0x12, 0x22]);
+export const MOUNTAIN_IDS: ReadonlySet<number> = new Set([0x01, 0x0b, 0x0c, 0x0d, 0x22]);
 
 /**
  * Impassable terrain ids (greenland): water, reef, swamp and lava. Snow (0x02)
@@ -74,7 +79,6 @@ export const WINTER_IMPASSABLE: ReadonlySet<number> = new Set([
   ...DEFAULT_IMPASSABLE,
   0x04, // ice 1
   0x07, // ice 2
-  0x12, // snow (winter)
 ]);
 
 /**
@@ -83,10 +87,7 @@ export const WINTER_IMPASSABLE: ReadonlySet<number> = new Set([
  * shared flowing-lava ids (0x10, 0x11, 0x14-0x16); the desert slots (0x04, 0x07)
  * stay walkable sand, so they are deliberately absent here.
  */
-export const WASTELAND_IMPASSABLE: ReadonlySet<number> = new Set([
-  ...DEFAULT_IMPASSABLE,
-  0x12, // moor (wasteland)
-]);
+export const WASTELAND_IMPASSABLE: ReadonlySet<number> = new Set([...DEFAULT_IMPASSABLE]);
 
 /** Configurable terrain semantics used by geometry-aware systems. */
 export interface TerrainRules {

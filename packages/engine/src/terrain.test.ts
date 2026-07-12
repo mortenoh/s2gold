@@ -42,14 +42,18 @@ describe('rulesForLandscape', () => {
 });
 
 describe('winter terrain rules', () => {
-  it('treats ice and snow as unwalkable (the winter-specific hazards)', () => {
+  it('treats ice as unwalkable (the winter-specific hazards)', () => {
     expect(isWalkableTexture(0x04, WINTER_RULES)).toBe(false); // ice 1
     expect(isWalkableTexture(0x07, WINTER_RULES)).toBe(false); // ice 2
-    expect(isWalkableTexture(0x12, WINTER_RULES)).toBe(false); // snow
     // Ice floes + open water are unwalkable too.
     expect(isWalkableTexture(0x02, WINTER_RULES)).toBe(false); // ice floe
     expect(isWalkableTexture(0x03, WINTER_RULES)).toBe(false); // ice floes
     expect(isWalkableTexture(0x05, WINTER_RULES)).toBe(false); // water
+  });
+
+  it('makes the mountain-meadow slot buildable ground (original BQ: flag/hut/castle)', () => {
+    expect(isWalkableTexture(0x12, WINTER_RULES)).toBe(true);
+    expect(isBuildableTexture(0x12, WINTER_RULES)).toBe(true);
   });
 
   it('lets settlers walk (but not build) on winter mountains', () => {
@@ -60,15 +64,15 @@ describe('winter terrain rules', () => {
   });
 
   it('makes tundra/taiga/steppe buildable ground', () => {
-    for (const id of [0x00, 0x08, 0x09, 0x0a, 0x0e, 0x0f]) {
+    for (const id of [0x00, 0x08, 0x09, 0x0a, 0x0e, 0x0f, 0x12]) {
       expect(isBuildableTexture(id, WINTER_RULES)).toBe(true);
       expect(isWalkableTexture(id, WINTER_RULES)).toBe(true);
     }
   });
 
   it('classifies every id in the real winter maps consistently', () => {
-    const impassable = new Set([0x02, 0x03, 0x04, 0x05, 0x07, 0x12]);
-    const buildable = new Set([0x00, 0x08, 0x09, 0x0a, 0x0e, 0x0f]);
+    const impassable = new Set([0x02, 0x03, 0x04, 0x05, 0x07]);
+    const buildable = new Set([0x00, 0x08, 0x09, 0x0a, 0x0e, 0x0f, 0x12]);
     for (const ids of [WINTER_MAP02_IDS, WINTER_MAP06_IDS]) {
       for (const raw of ids) {
         const id = terrainId(raw);
@@ -80,10 +84,12 @@ describe('winter terrain rules', () => {
 });
 
 describe('wasteland terrain rules', () => {
-  it('treats lava and moor as unwalkable, but keeps desert sand walkable', () => {
+  it('treats lava as unwalkable, but keeps desert sand and alpine pasture walkable', () => {
     expect(isWalkableTexture(0x10, WASTELAND_RULES)).toBe(false); // flowing lava
     expect(isWalkableTexture(0x11, WASTELAND_RULES)).toBe(false); // lava
-    expect(isWalkableTexture(0x12, WASTELAND_RULES)).toBe(false); // moor
+    // Alpine pasture (0x12) is green buildable ground here (original BQ: flag/hut/castle).
+    expect(isWalkableTexture(0x12, WASTELAND_RULES)).toBe(true);
+    expect(isBuildableTexture(0x12, WASTELAND_RULES)).toBe(true);
     // Desert slots are walkable sand in wasteland (unlike winter, where they are ice).
     expect(isWalkableTexture(0x04, WASTELAND_RULES)).toBe(true);
     expect(isWalkableTexture(0x07, WASTELAND_RULES)).toBe(true);
@@ -92,7 +98,7 @@ describe('wasteland terrain rules', () => {
 
   it('classifies every id in the real wasteland map (Japan) consistently', () => {
     const impassable = new Set([0x05]); // only water is present as a hazard
-    const buildable = new Set([0x00, 0x08, 0x09, 0x0a, 0x0f]);
+    const buildable = new Set([0x00, 0x08, 0x09, 0x0a, 0x0f, 0x12]);
     for (const raw of WASTELAND_JAPAN_IDS) {
       const id = terrainId(raw);
       expect(isWalkableTexture(raw, WASTELAND_RULES)).toBe(!impassable.has(id));
@@ -115,9 +121,11 @@ describe('greenland regression + cross-landscape divergence', () => {
     expect(isWalkableTexture(0x04, GREENLAND_RULES)).toBe(true);
     expect(isWalkableTexture(0x04, WASTELAND_RULES)).toBe(true);
     expect(isWalkableTexture(0x04, WINTER_RULES)).toBe(false);
-    // 0x12 (mountain meadow/moor/snow): walkable only in greenland.
-    expect(isWalkableTexture(0x12, GREENLAND_RULES)).toBe(true);
-    expect(isWalkableTexture(0x12, WASTELAND_RULES)).toBe(false);
-    expect(isWalkableTexture(0x12, WINTER_RULES)).toBe(false);
+    // 0x12 (mountain meadow / alpine pasture): green buildable ground in every
+    // landscape — the original build-quality layer never marks it a hazard.
+    for (const rules of [GREENLAND_RULES, WASTELAND_RULES, WINTER_RULES]) {
+      expect(isWalkableTexture(0x12, rules)).toBe(true);
+      expect(isBuildableTexture(0x12, rules)).toBe(true);
+    }
   });
 });
