@@ -501,11 +501,23 @@ export class SpriteRenderer {
     const j0 = Math.floor((camera.y - TR_H) / this.worldH) - 1;
     const j1 = Math.floor((camera.y + viewH + MAX_RAISE) / this.worldH) + 1;
 
+    // A whole torus offset is skipped when its translated world rect (padded
+    // by the largest sprite extent + elevation raise) misses the viewport:
+    // the per-quad cull would reject every one of its sprites anyway, so this
+    // avoids sweeping the full statics+dynamics lists up to 9x per frame.
+    const OFFSET_MARGIN = 600; // > max sprite dimension + MAX_RAISE
+    const offsetVisible = (ox: number, oy: number): boolean =>
+      ox + this.worldW + OFFSET_MARGIN > 0 &&
+      ox - OFFSET_MARGIN < viewW &&
+      oy + this.worldH + OFFSET_MARGIN > 0 &&
+      oy - OFFSET_MARGIN < viewH;
+
     const items: QuadItem[] = [];
     for (let j = j0; j <= j1; j++) {
       const oy = j * this.worldH - camera.y;
       for (let i = i0; i <= i1; i++) {
         const ox = i * this.worldW - camera.x;
+        if (!offsetVisible(ox, oy)) continue;
         for (const ps of this.statics) {
           // Fog: cull objects on unexplored land; dim ones in explored-but-unseen
           // land so trees/stones fade with the darkened terrain snapshot. The
@@ -558,6 +570,7 @@ export class SpriteRenderer {
         const oy = j * this.worldH - camera.y;
         for (let i = i0; i <= i1; i++) {
           const ox = i * this.worldW - camera.x;
+          if (!offsetVisible(ox, oy)) continue;
           for (const d of overlay) this.pushDynamic(oitems, d, ox, oy, viewW, viewH);
         }
       }
