@@ -63,7 +63,8 @@ import { createDropdown } from '../ui/dropdown';
 import { syncHudPanelButton, wireHudPanel } from './hud-panel';
 import { AudioEngine, positional } from './audio';
 import { CampaignController } from './campaign-ui';
-import { chapterById } from '../menu/campaign-data';
+import { chapterById, type Chapter } from '../menu/campaign-data';
+import { getSession } from '../lib/sessions';
 
 /** World-px pan speed per second when holding an arrow key. */
 const KEY_PAN_SPEED = 600;
@@ -223,6 +224,9 @@ async function boot(): Promise<void> {
     );
     return;
   }
+  // Non-null alias usable inside nested functions (like `gameRoot` for `root`,
+  // control-flow narrowing of `index` does not carry into nested bodies).
+  const mapIndex: MapIndexEntry[] = index;
 
   clear(root);
   const canvas = el('canvas', { class: 'game-canvas', attrs: { 'data-testid': 'game-canvas' } });
@@ -562,6 +566,10 @@ async function boot(): Promise<void> {
   // Live campaign tracking (set when the page booted with ?campaign=).
   let activeCampaign: CampaignController | null = null;
   let activeChapterMap = '';
+  // Session mode (/game/<map>/<id>): the clean URL is authoritative and its
+  // world is server-persisted. Set before booting the session so switchMap
+  // leaves the pathname untouched (no legacy ?map=/?ai= rewrite).
+  let sessionMode = false;
   const minimap = new MinimapView(minimapCanvas, (wx, wy) => {
     camera.centerOn(wx, wy, canvas.width, canvas.height);
   });
@@ -666,20 +674,26 @@ async function boot(): Promise<void> {
     mapSelect.setValue(entry.name);
     zoomButton.textContent = zoomLabel();
     document.title = `s2gold — ${map.title || entry.name}`;
-    const url = new URL(window.location.href);
-    url.searchParams.set('map', entry.name);
-    // Keep the URL honest about the active AI config (cleared on a plain switch).
-    if (ai.length > 0) url.searchParams.set('ai', ai.join(','));
-    else url.searchParams.delete('ai');
     // Leaving the chapter's map ends campaign tracking: the win condition
     // must not be satisfiable (and progress recorded) on a different map.
+    let leftChapter = false;
     if (activeCampaign && entry.name !== activeChapterMap) {
       activeCampaign.dispose();
       activeCampaign.button.remove();
       activeCampaign = null;
-      url.searchParams.delete('campaign');
+      leftChapter = true;
     }
-    window.history.replaceState(null, '', url);
+    // Session mode owns the clean /game/<map>/<id> URL, so never rewrite it to
+    // legacy query params; legacy /play mode keeps its ?map=/?ai=/?campaign=.
+    if (!sessionMode) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('map', entry.name);
+      // Keep the URL honest about the active AI config (cleared on a plain switch).
+      if (ai.length > 0) url.searchParams.set('ai', ai.join(','));
+      else url.searchParams.delete('ai');
+      if (leftChapter) url.searchParams.delete('campaign');
+      window.history.replaceState(null, '', url);
+    }
     document.body.dataset.mapReady = entry.name;
   }
 
@@ -977,19 +991,24 @@ async function boot(): Promise<void> {
     mapTitle: () => currentMapTitle,
     toast: saveToast,
     onVisibility: (open) => syncHudPanelButton(menuButton, open),
-    onLoaded: () => {
-      // The loaded world may share the cached tick number: force a rebuild.
-      overlayTick = -1;
-      // Restored counters are history, not fresh events: sync the toast edge
-      // detectors so loading a save does not fire phantom sea toasts, and
-      // force the stats charts to redraw the restored series.
-      if (session) {
-        prevExpReady = session.counters.expeditionsReady;
-        prevExpLanded = session.counters.expeditionsLanded;
-      }
-      statsPanel.invalidate();
-    },
+    onLoaded: resyncAfterLoad,
   });
+
+  /**
+   * Re-sync presentation state after a world snapshot is loaded into the live
+   * session (from the Save/Load panel or a restored server session). The loaded
+   * world may share the cached tick number, so force an overlay rebuild;
+   * restored counters are history, not fresh events, so sync the toast edge
+   * detectors to avoid phantom sea toasts; and redraw the stats charts.
+   */
+  function resyncAfterLoad(): void {
+    overlayTick = -1;
+    if (session) {
+      prevExpReady = session.counters.expeditionsReady;
+      prevExpLanded = session.counters.expeditionsLanded;
+    }
+    statsPanel.invalidate();
+  }
   // WebGL context loss (GPU reset, driver update, background eviction): the
   // GL resources are gone and nothing rebuilds them, so without handling this
   // the canvas silently freezes while the sim keeps running. Quicksave, tell
@@ -1280,6 +1299,121 @@ async function boot(): Promise<void> {
     }
   }
 
+  /** Wire the Objectives panel + win-condition tracking for a chapter. */
+  function startCampaign(chapter: Chapter): void {
+    document.title = `s2gold — ${chapter.title}`;
+    const campaign = new CampaignController({ root: gameRoot, session: () => session, chapter });
+    activeCampaign = campaign;
+    activeChapterMap = chapter.mapName;
+    // Insert before the (optional, default-hidden) tick/FPS readouts so the
+    // campaign button stays with the main controls rather than trailing them.
+    hudTop.insertBefore(campaign.button, tickLabel);
+    campaign.start();
+  }
+
+  /**
+   * Persist the live world to the server session every 10s, and once more on
+   * hide/close (keepalive) so a refresh or tab close captures the latest state.
+   * Fire-and-forget: errors (offline, 413 too-large, ...) are ignored. Only ever
+   * armed in session mode, so legacy /play games persist nothing here.
+   */
+  function startSessionPersistence(id: string): void {
+    const url = `/api/sessions/${id}`;
+    const snapshot = (): string | null =>
+      session ? JSON.stringify({ tick: session.world.tick, data: session.serialize() }) : null;
+    window.setInterval(() => {
+      const body = snapshot();
+      if (!body) return;
+      void fetch(url, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body,
+      }).catch(() => {
+        /* best-effort autosave; ignore transient failures */
+      });
+    }, 10_000);
+    // A refresh/close won't await a normal fetch, so keepalive lets the browser
+    // flush the final snapshot after the page is already going away.
+    const flush = (): void => {
+      const body = snapshot();
+      if (!body) return;
+      try {
+        void fetch(url, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body,
+          keepalive: true,
+        });
+      } catch {
+        /* keepalive may reject an oversized body; nothing to do */
+      }
+    };
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flush();
+    });
+  }
+
+  /**
+   * Session mode (/game/<map>/<id>): fetch the server session and boot its map,
+   * computer opponents and campaign, restoring the live world snapshot when one
+   * has been saved. Arms auto-persistence for the rest of the page's life.
+   */
+  async function bootSession(id: string): Promise<void> {
+    sessionMode = true;
+    const remote = await getSession(id);
+    if (!remote) {
+      showMessage(
+        gameRoot,
+        'game-map-load-failed',
+        'Failed to load the saved game (session not found or the server is offline).<br />' +
+          'Return to the <a href="/">title screen</a> and start a new game.',
+      );
+      return;
+    }
+    const ai = Array.isArray(remote.ai)
+      ? remote.ai.filter((n) => Number.isInteger(n) && n > 0)
+      : [];
+    setSpeed(1);
+    try {
+      // pickMap resolves the entry from remote.map (the /game pathname does not
+      // match its /play route, so the second arg is used as the wanted name).
+      await switchMap(pickMap(mapIndex, remote.map), ai);
+    } catch (err) {
+      console.error('initial map load failed', err);
+      showMessage(
+        gameRoot,
+        'game-map-load-failed',
+        'Failed to load the map (missing or corrupt converted assets).<br />' +
+          'Check the asset pipeline output, then reload.',
+      );
+      return;
+    }
+    // Restore the saved world snapshot (if any) via the same in-place swap the
+    // Save/Load panel uses, then re-sync presentation state. A bad/incompatible
+    // snapshot leaves the fresh map running rather than aborting the boot.
+    if (remote.data && session) {
+      try {
+        session.loadWorld(remote.data);
+        resyncAfterLoad();
+      } catch (err) {
+        console.error('failed to restore session world; continuing on the fresh map', err);
+      }
+    }
+    const chapter = remote.campaign != null ? chapterById(remote.campaign) : undefined;
+    if (chapter) startCampaign(chapter);
+    startSessionPersistence(id);
+  }
+
+  // Session mode is selected purely by the pathname; the legacy query-param
+  // boot below is left entirely unchanged and handles every other case.
+  const sessionMatch = /^\/game\/([^/]+)\/([0-9a-f]{6,64})$/.exec(window.location.pathname);
+  if (sessionMatch) {
+    await bootSession(sessionMatch[2]);
+    requestAnimationFrame(frame);
+    return;
+  }
+
   const params = new URLSearchParams(window.location.search);
   const query = params.get('map');
   // ?ai=1,2 -> computer players in those slots (parsed once for the initial map).
@@ -1311,16 +1445,7 @@ async function boot(): Promise<void> {
   // check the chapter's win condition against the live session.
   const campaignParam = params.get('campaign');
   const chapter = campaignParam ? chapterById(Number.parseInt(campaignParam, 10)) : undefined;
-  if (chapter) {
-    document.title = `s2gold — ${chapter.title}`;
-    const campaign = new CampaignController({ root, session: () => session, chapter });
-    activeCampaign = campaign;
-    activeChapterMap = chapter.mapName;
-    // Insert before the (optional, default-hidden) tick/FPS readouts so the
-    // campaign button stays with the main controls rather than trailing them.
-    hudTop.insertBefore(campaign.button, tickLabel);
-    campaign.start();
-  }
+  if (chapter) startCampaign(chapter);
 
   requestAnimationFrame(frame);
 }

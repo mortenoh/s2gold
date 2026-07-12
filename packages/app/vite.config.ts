@@ -3,8 +3,10 @@ import { defineConfig, type Plugin } from 'vite';
 
 /**
  * Clean URLs in dev, matching the FastAPI server's production routes:
- * /play and /play/<map> serve game.html, /inspector serves inspector.html,
- * /setup serves the menu entry (index.html) which routes on the pathname.
+ * /play and /play/<map> serve game.html, /game/<map>/<session-id> (and the
+ * shorter /game, /game/<map>) also serve game.html, /inspector serves
+ * inspector.html, /setup serves the menu entry (index.html) which routes on the
+ * pathname.
  */
 function cleanUrls(): Plugin {
   return {
@@ -15,6 +17,8 @@ function cleanUrls(): Plugin {
         if (url === '/inspector' || url.startsWith('/inspector?')) {
           req.url = '/inspector.html';
         } else if (url === '/play' || url.startsWith('/play/') || url.startsWith('/play?')) {
+          req.url = '/game.html';
+        } else if (url === '/game' || url.startsWith('/game/') || url.startsWith('/game?')) {
           req.url = '/game.html';
         } else if (url === '/setup' || url.startsWith('/setup/') || url.startsWith('/setup?')) {
           req.url = '/index.html';

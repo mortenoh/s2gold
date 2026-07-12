@@ -48,6 +48,39 @@ class SaveGame(SaveMeta):
     data: dict[str, object]
 
 
+class SessionCreate(BaseModel):
+    """A request to start a new server-side game session."""
+
+    map: str
+    ai: list[int] = []
+    campaign: int | None = None
+
+
+class SessionMeta(BaseModel):
+    """Metadata about a stored game session (no world data)."""
+
+    id: str = Field(pattern=SAVE_ID_PATTERN)
+    map: str
+    ai: list[int]
+    campaign: int | None
+    tick: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class SessionSnapshot(BaseModel):
+    """A serialized world snapshot as PUT by the client."""
+
+    tick: int = 0
+    data: dict[str, object]
+
+
+class SessionRecord(SessionMeta):
+    """A full stored session (metadata plus the optional serialized world)."""
+
+    data: dict[str, object] | None = None
+
+
 def utcnow() -> datetime:
     """Timezone-aware now, single definition for consistent timestamps."""
     return datetime.now(UTC)

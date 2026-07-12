@@ -14,6 +14,7 @@ from s2gold.server.config import Settings
 def app(tmp_path: Path) -> FastAPI:
     settings = Settings(
         saves_dir=tmp_path / "saves",
+        sessions_dir=tmp_path / "sessions",
         assets_dir=tmp_path / "missing-assets",
         frontend_dist=tmp_path / "missing-dist",
     )
@@ -86,3 +87,83 @@ async def test_oversized_save_rejected(client: AsyncClient, app: FastAPI):
 async def test_blank_name_rejected(client: AsyncClient):
     response = await client.put("/api/saves/ok-id", json={"name": "   ", "map": "m", "data": {}})
     assert response.status_code == 422
+
+
+async def test_sessions_crud_roundtrip(client: AsyncClient):
+    assert (await client.get("/api/sessions")).json() == []
+
+    created = await client.post(
+        "/api/sessions",
+        json={"map": "maps_miss200", "ai": [2, 3], "campaign": 5},
+    )
+    assert created.status_code == 200
+    body = created.json()
+    session_id = body["id"]
+    assert session_id
+    assert body["map"] == "maps_miss200"
+    assert body["ai"] == [2, 3]
+    assert body["campaign"] == 5
+    assert body["tick"] == 0
+    assert body["data"] is None
+    assert body["created_at"] == body["updated_at"]
+
+    fetched = (await client.get(f"/api/sessions/{session_id}")).json()
+    assert fetched["id"] == session_id
+    assert fetched["data"] is None
+
+    snap = await client.put(
+        f"/api/sessions/{session_id}",
+        json={"tick": 42, "data": {"world": [1, 2, 3]}},
+    )
+    assert snap.status_code == 200
+    assert snap.json()["tick"] == 42
+    assert snap.json()["created_at"] == body["created_at"]
+    assert snap.json()["updated_at"] != body["updated_at"]
+
+    after = (await client.get(f"/api/sessions/{session_id}")).json()
+    assert after["tick"] == 42
+    assert after["data"] == {"world": [1, 2, 3]}
+    # Snapshot preserves the original session metadata.
+    assert after["map"] == "maps_miss200"
+    assert after["ai"] == [2, 3]
+    assert after["campaign"] == 5
+
+    listed = (await client.get("/api/sessions")).json()
+    assert [m["id"] for m in listed] == [session_id]
+    assert "data" not in listed[0]
+
+    assert (await client.delete(f"/api/sessions/{session_id}")).status_code == 204
+    assert (await client.get(f"/api/sessions/{session_id}")).status_code == 404
+    assert (await client.delete(f"/api/sessions/{session_id}")).status_code == 404
+
+
+async def test_session_defaults(client: AsyncClient):
+    created = await client.post("/api/sessions", json={"map": "m"})
+    assert created.status_code == 200
+    body = created.json()
+    assert body["ai"] == []
+    assert body["campaign"] is None
+
+
+async def test_session_not_found(client: AsyncClient):
+    assert (await client.get("/api/sessions/deadbeef")).status_code == 404
+    snap = await client.put("/api/sessions/deadbeef", json={"tick": 1, "data": {}})
+    assert snap.status_code == 404
+
+
+async def test_oversized_snapshot_rejected(client: AsyncClient, app: FastAPI):
+    created = await client.post("/api/sessions", json={"map": "m"})
+    session_id = created.json()["id"]
+    app.state.settings.max_save_bytes = 1024
+    big = {"tick": 1, "data": {"blob": "x" * 4096}}
+    response = await client.put(f"/api/sessions/{session_id}", json=big)
+    assert response.status_code == 413
+    # Within the limit still works.
+    small = await client.put(f"/api/sessions/{session_id}", json={"tick": 2, "data": {}})
+    assert small.status_code == 200
+
+
+async def test_session_id_validation(client: AsyncClient):
+    for bad in ("%2e%2e", "%2e%2e%2fetc%2fpasswd", "UPPER", "a b"):
+        response = await client.get(f"/api/sessions/{bad}")
+        assert response.status_code in (404, 422), bad

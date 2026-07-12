@@ -23,6 +23,7 @@ import {
   type Chapter,
 } from './campaign-data';
 import { loadMissionText, wrapMissionText, paginate } from './mission-text';
+import { createSession } from '../lib/sessions';
 
 const GOLD = '#f0c84a';
 const CREAM = '#f4ecd0';
@@ -205,5 +206,9 @@ async function startChapter(btn: HTMLButtonElement, chapter: Chapter): Promise<v
   const params = new URLSearchParams();
   params.set('campaign', String(chapter.id));
   if (ai.length > 0) params.set('ai', ai.join(','));
-  window.location.assign(`/play/${chapter.mapName}?${params.toString()}`);
+  // Legacy fallback, used verbatim when the session API is unreachable so the
+  // chapter still launches (the e2e suite asserts these /play URLs).
+  const fallback = `/play/${chapter.mapName}?${params.toString()}`;
+  const id = await createSession({ map: chapter.mapName, ai, campaign: chapter.id });
+  window.location.assign(id ? `/game/${chapter.mapName}/${id}` : fallback);
 }

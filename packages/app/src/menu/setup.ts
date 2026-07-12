@@ -10,6 +10,7 @@
 
 import { clear, el } from '../lib/dom';
 import { assetUrl, fetchJson } from '../lib/manifest';
+import { createSession } from '../lib/sessions';
 import { BitmapFont } from '../ui/font';
 import { fontHeading } from '../ui/widgets';
 import { applyBackdrop, SETUP_PIC_KEYS } from './pics';
@@ -277,8 +278,16 @@ export async function renderSetup(root: HTMLElement): Promise<void> {
 
   startBtn.addEventListener('click', () => {
     if (!selected) return;
-    const ai = collectAi();
-    const query = ai ? `?ai=${ai}` : '';
-    window.location.assign(`/play/${selected.name}${query}`);
+    const map = selected.name;
+    // collectAi() yields a comma string ("1,3"); the session API wants numbers.
+    const aiStr = collectAi();
+    const ai = aiStr ? aiStr.split(',').map(Number) : [];
+    // Legacy fallback URL, used verbatim when the session API is unreachable
+    // (e.g. the plain Vite dev server) so a new game still launches.
+    const fallback = `/play/${map}${aiStr ? `?ai=${aiStr}` : ''}`;
+    startBtn.disabled = true;
+    void createSession({ map, ai, campaign: null }).then((id) => {
+      window.location.assign(id ? `/game/${map}/${id}` : fallback);
+    });
   });
 }

@@ -13,8 +13,9 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from s2gold.server.config import Settings
-from s2gold.server.routers import health, saves
+from s2gold.server.routers import health, saves, sessions
 from s2gold.server.saves import SaveStore
+from s2gold.server.sessions import SessionStore
 
 
 @asynccontextmanager
@@ -31,9 +32,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
     app.state.settings = settings
     app.state.save_store = SaveStore(settings.saves_dir)
+    app.state.session_store = SessionStore(settings.sessions_dir)
 
     app.include_router(health.router)
     app.include_router(saves.router)
+    app.include_router(sessions.router)
 
     # Converted game assets live outside dist so a frontend rebuild never has to
     # copy 75 MB; mount them explicitly, then the built app as the catch-all.
@@ -47,6 +50,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         @app.get("/play", include_in_schema=False)
         @app.get("/play/{map_name}", include_in_schema=False)
         async def play_page(map_name: str = "") -> FileResponse:
+            return FileResponse(dist / "game.html")
+
+        # Refreshable server-session URLs: /game/<map>/<session-id>. Every
+        # segment is resolved client-side; a refresh just re-serves the shell.
+        @app.get("/game", include_in_schema=False)
+        @app.get("/game/{map_name}", include_in_schema=False)
+        @app.get("/game/{map_name}/{session_id}", include_in_schema=False)
+        async def game_page(map_name: str = "", session_id: str = "") -> FileResponse:
             return FileResponse(dist / "game.html")
 
         @app.get("/inspector", include_in_schema=False)

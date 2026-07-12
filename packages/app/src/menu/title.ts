@@ -16,6 +16,7 @@ import { applyBackdrop, TITLE_PIC_KEYS } from './pics';
 import { menuStrings } from './strings';
 import { MenuMusic } from './music';
 import { openIntro, introWatched } from './intro';
+import { newestSession } from '../lib/sessions';
 
 /** The dev-only Asset inspector shows with ?dev=1 or localStorage s2gold.dev=1. */
 function devToolsEnabled(): boolean {
@@ -78,7 +79,15 @@ export async function renderTitle(root: HTMLElement): Promise<void> {
     // Campaign, Resume last game, Load game, Unlimited play, Options, Intro,
     // Credits. The original's "Quit program" has no browser equivalent and is
     // deliberately omitted; the dev Asset inspector only shows with ?dev=1.
-    const resume = await newestSave();
+    // Prefer a live server session (refresh restores it) over a legacy save.
+    // Both probes are resilient: an absent API yields null, not a throw.
+    const resumeSession = await newestSession();
+    const resumeSave = resumeSession ? null : await newestSave();
+    const resumeHref = resumeSession
+      ? `/game/${resumeSession.map}/${resumeSession.id}`
+      : resumeSave
+        ? `/play/${resumeSave.map}?resume=1`
+        : null;
     const list = el('nav', { class: 'menu-list', attrs: { 'data-testid': 'menu-list' } });
     list.append(
       menuEntry({
@@ -101,10 +110,9 @@ export async function renderTitle(root: HTMLElement): Promise<void> {
         font,
         label: 'Resume last game',
         color: CREAM,
-        ...(resume
-          ? { href: `/play/${resume.map}?resume=1` }
+        ...(resumeHref
+          ? { href: resumeHref, tooltip: 'Continue from your newest game' }
           : { disabled: true, tooltip: 'No saved game yet' }),
-        ...(resume ? { tooltip: 'Continue from your newest save' } : {}),
         testid: 'menu-resume',
       }),
       menuEntry({
