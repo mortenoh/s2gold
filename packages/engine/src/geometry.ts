@@ -71,7 +71,18 @@ export class Geometry {
 
   /** All six neighbour node indices, in {@link DIRECTIONS} order. */
   neighbours(node: number): number[] {
-    return DIRECTIONS.map((d) => this.neighbour(node, d));
+    return this.neighboursInto(node, new Array<number>(6));
+  }
+
+  /**
+   * All six neighbour node indices written into `out` (length >= 6), in
+   * {@link DIRECTIONS} order. Allocation-free variant for hot loops (A*
+   * expansion); the returned array is `out` itself, so callers must consume
+   * it before the next call with the same scratch.
+   */
+  neighboursInto(node: number, out: number[]): number[] {
+    for (let i = 0; i < 6; i++) out[i] = this.neighbour(node, DIRECTIONS[i]);
+    return out;
   }
 
   /**
@@ -97,25 +108,27 @@ export class Geometry {
     ];
   }
 
-  /** Hex-cube coordinate of a node (odd-r layout: odd rows shifted right). */
-  private cube(x: number, y: number): [number, number, number] {
-    const q = x - (y - (y & 1)) / 2;
-    const r = y;
-    return [q, -q - r, r];
-  }
-
   /** Shortest lattice-step distance between two nodes across the torus. */
   distance(a: number, b: number): number {
     const ax = this.x(a);
     const ay = this.y(a);
     const bx = this.x(b);
     const by = this.y(b);
+    // cube(a) is invariant across the nine torus wrap combinations: hoist it
+    // and keep everything scalar - this is the innermost primitive of A*,
+    // territory recalc, and harvester searches (was 18 array allocs/call).
+    const aq = ax - (ay - (ay & 1)) / 2;
+    const ar = ay;
+    const asum = -aq - ar;
     let best = Infinity;
-    for (const dx of [-this.width, 0, this.width]) {
-      for (const dy of [-this.height, 0, this.height]) {
-        const ca = this.cube(ax, ay);
-        const cb = this.cube(bx + dx, by + dy);
-        const d = (Math.abs(ca[0] - cb[0]) + Math.abs(ca[1] - cb[1]) + Math.abs(ca[2] - cb[2])) / 2;
+    for (let i = -1; i <= 1; i++) {
+      const x2 = bx + i * this.width;
+      for (let j = -1; j <= 1; j++) {
+        const y2 = by + j * this.height;
+        const bq = x2 - (y2 - (y2 & 1)) / 2;
+        const br = y2;
+        const bsum = -bq - br;
+        const d = (Math.abs(aq - bq) + Math.abs(asum - bsum) + Math.abs(ar - br)) / 2;
         if (d < best) best = d;
       }
     }

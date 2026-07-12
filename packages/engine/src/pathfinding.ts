@@ -129,13 +129,14 @@ export function findWalkPath(
   open.push(start, geom.distance(start, goal));
 
   const closed = new Set<number>();
+  const scratch = new Array<number>(6);
   while (open.size > 0) {
     const cur = open.pop();
     if (cur === goal) return rebuild(cameFrom, goal).slice(1);
     if (closed.has(cur)) continue;
     closed.add(cur);
     const curG = gScore.get(cur) as number;
-    for (const nb of geom.neighbours(cur)) {
+    for (const nb of geom.neighboursInto(cur, scratch)) {
       if (closed.has(nb) || !walkable(nb)) continue;
       const tentative = curG + 1;
       const known = gScore.get(nb);
@@ -174,13 +175,14 @@ export function findWaterPath(
   open.push(start, geom.distance(start, goal));
 
   const closed = new Set<number>();
+  const scratch = new Array<number>(6);
   while (open.size > 0) {
     const cur = open.pop();
     if (cur === goal) return rebuild(cameFrom, goal).slice(1);
     if (closed.has(cur)) continue;
     closed.add(cur);
     const curG = gScore.get(cur) as number;
-    for (const nb of geom.neighbours(cur)) {
+    for (const nb of geom.neighboursInto(cur, scratch)) {
       if (closed.has(nb) || !isWaterNode(world, nb)) continue;
       const tentative = curG + 1;
       const known = gScore.get(nb);
