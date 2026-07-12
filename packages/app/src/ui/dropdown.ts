@@ -43,7 +43,11 @@ export function createDropdown(
   list.className = 'dropdown-list';
   list.setAttribute('role', 'listbox');
   list.hidden = true;
-  root.append(button, list);
+  // The list is portalled to <body> while open, not nested under `root`. The HUD
+  // bar uses `transform` for centering, which makes it the containing block for
+  // any `position: fixed` descendant — nesting the popup there would offset it by
+  // the bar's transform. Living on <body> keeps `fixed` relative to the viewport.
+  root.append(button);
 
   const labelFor = (v: string): string => opts.find((o) => o.value === v)?.label ?? v;
 
@@ -74,6 +78,11 @@ export function createDropdown(
     list.hidden = !open;
     button.setAttribute('aria-expanded', String(open));
     if (open) {
+      // Mirror any modifier classes on the trigger (e.g. `speed-select`) onto the
+      // portalled list, so variant CSS still targets it once it lives on <body>.
+      list.className = 'dropdown-list';
+      for (const cls of root.classList) if (cls !== 'dropdown') list.classList.add(cls);
+      document.body.append(list);
       const rect = button.getBoundingClientRect();
       list.style.left = `${rect.left}px`;
       // Open upward when the button sits in the lower half of the viewport
@@ -91,6 +100,8 @@ export function createDropdown(
         list.style.top = `${rect.bottom + 4}px`;
       }
       list.querySelector('.highlighted')?.scrollIntoView({ block: 'nearest' });
+    } else {
+      list.remove();
     }
   }
 
@@ -127,7 +138,10 @@ export function createDropdown(
     }
   });
   document.addEventListener('pointerdown', (ev) => {
-    if (open && !root.contains(ev.target as Node)) setOpen(false);
+    // The list lives on <body> while open, so it is not inside `root`; treat a
+    // click on either the trigger or the popup as inside.
+    const target = ev.target as Node;
+    if (open && !root.contains(target) && !list.contains(target)) setOpen(false);
   });
 
   const dropdown: Dropdown = {
