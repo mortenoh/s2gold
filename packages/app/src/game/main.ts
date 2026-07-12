@@ -33,6 +33,7 @@ import { loadBobAtlas } from './bob-atlas';
 import { MinimapView } from './minimap-view';
 import { installFrame } from './frame';
 import { installHandCursor } from './cursor';
+import { installWindowChrome } from './window-chrome';
 import { GameSession, SPEEDS, type Speed } from './session';
 import {
   buildDynamics,
@@ -206,6 +207,11 @@ async function boot(): Promise<void> {
   // Original pointing-hand cursor over the map (cosmetic; absent without the ui
   // assets, where the CSS falls back to grab). Fire-and-forget: never blocks boot.
   void installHandCursor();
+
+  // Original ornamented window chrome for the in-game panels/menus (cosmetic;
+  // sets --win-* custom properties only when the ui assets are present, where
+  // the panel CSS falls back to the flat-dark styling). Never blocks boot.
+  void installWindowChrome();
 
   const index = await loadMapIndex();
   if (!index) {
