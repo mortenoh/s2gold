@@ -7,6 +7,7 @@
  */
 
 import './styles.css';
+import { installHandCursor } from './game/cursor';
 import { renderTitle } from './menu/title';
 import { renderSetup } from './menu/setup';
 import { renderCampaign } from './menu/campaign';
@@ -17,6 +18,10 @@ import { renderCredits } from './menu/credits';
 async function boot(): Promise<void> {
   const root = document.querySelector<HTMLElement>('#app');
   if (!root) return;
+
+  // Original pointing-hand cursor over the menu backdrops (cosmetic; absent
+  // without the ui assets, where the CSS falls back to default). Fire-and-forget.
+  void installHandCursor();
 
   const path = window.location.pathname;
   try {

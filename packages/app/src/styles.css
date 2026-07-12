@@ -419,6 +419,10 @@ input[type='text'] {
   align-items: center;
   justify-content: center;
   padding: 32px 20px;
+  /* The original's pointing-hand cursor when the ui assets are present; the
+     browser default otherwise (see installHandCursor). Buttons/links keep
+     their own `cursor: pointer`. */
+  cursor: var(--hand-cursor, default);
   /* Fallback dark theme; a converted SETUP backdrop is layered over this. */
   background-color: #0b0f0a;
   background-image: radial-gradient(circle at 50% 30%, #16240f 0%, #0b0f0a 70%);

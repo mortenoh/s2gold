@@ -32,6 +32,7 @@ import { loadAtlas } from './sprite-atlas';
 import { loadBobAtlas } from './bob-atlas';
 import { MinimapView } from './minimap-view';
 import { installFrame } from './frame';
+import { installHandCursor } from './cursor';
 import { GameSession, SPEEDS, type Speed } from './session';
 import {
   buildDynamics,
@@ -201,6 +202,10 @@ async function boot(): Promise<void> {
   // Non-null alias usable inside nested functions (control-flow narrowing of
   // `root` does not carry into nested function bodies).
   const gameRoot: HTMLElement = root;
+
+  // Original pointing-hand cursor over the map (cosmetic; absent without the ui
+  // assets, where the CSS falls back to grab). Fire-and-forget: never blocks boot.
+  void installHandCursor();
 
   const index = await loadMapIndex();
   if (!index) {

@@ -25,7 +25,9 @@ body {
   width: 100%;
   height: 100%;
   display: block;
-  cursor: grab;
+  /* The original's pointing-hand cursor when the ui assets are present; the
+     browser grab cursor otherwise (see installHandCursor). */
+  cursor: var(--hand-cursor, grab);
 }
 
 .game-canvas.dragging {
