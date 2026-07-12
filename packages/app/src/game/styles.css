@@ -675,6 +675,35 @@ body {
   padding: 4px 2px;
 }
 
+/* --- Save trays (11-slot, original Load/Save dialog) ---------------------- */
+
+.save-panel button.save-tray {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 4px 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.save-panel button.save-tray-empty {
+  color: #7a8a6a;
+  font-style: italic;
+}
+
+.save-item {
+  overflow: hidden;
+}
+
+.save-item button.save-tray {
+  border: none;
+  background: transparent;
+  flex: 1;
+  min-width: 0;
+}
+
 /* --- Statistics panel ----------------------------------------------------- */
 
 /* Anchored under their bar buttons (top/left set by the hud-panel helper). */

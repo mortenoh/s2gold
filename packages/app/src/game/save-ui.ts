@@ -73,16 +73,24 @@ async function api<T>(method: string, path: string, body?: unknown): Promise<T> 
   }
 }
 
-/** Slugify a save name into a valid save id (`^[a-z0-9][a-z0-9_-]{0,63}$`). */
-function makeSaveId(name: string): string {
-  const slug = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40);
-  const stamp = Date.now().toString(36);
-  const base = slug.length > 0 ? `${slug}-${stamp}` : `save-${stamp}`;
-  return base.replace(/^[^a-z0-9]/, 's');
+/**
+ * Fixed per-map save trays, mirroring the original's 11-slot Load/Save dialog
+ * (docs/reference-study/captures/loadgame.png). The slot id embeds the map so
+ * a save id stays valid (`^[a-z0-9][a-z0-9_-]{0,63}$`) and per-map filtering is
+ * a prefix match.
+ */
+const SLOT_COUNT = 11;
+
+/** Save id for tray `i` of `map` (map names are already id-valid slugs). */
+function slotId(map: string, i: number): string {
+  return `${map}_slot${i}`;
+}
+
+/** Tray index encoded in a save id, or -1 for a non-tray (legacy) id. */
+function slotOf(map: string, id: string): number {
+  const m = new RegExp(`^${map}_slot(\\d+)$`).exec(id);
+  const i = m ? Number(m[1]) : -1;
+  return i >= 0 && i < SLOT_COUNT ? i : -1;
 }
 
 /** The compact Save/Load overlay panel plus its API client. */
@@ -195,27 +203,40 @@ export class SaveMenu {
     }
     this.setAvailable();
     const map = this.deps.mapName();
-    const mine = metas.filter((m) => m.map === map); // newest-first from the server
-    this.renderList(mine);
+    const bySlot = new Array<SaveMeta | null>(SLOT_COUNT).fill(null);
+    for (const m of metas) {
+      if (m.map !== map) continue;
+      const i = slotOf(map, m.id);
+      if (i >= 0) bySlot[i] = m;
+    }
+    this.renderTrays(bySlot);
   }
 
-  private async save(name = this.nameInput.value.trim()): Promise<void> {
+  /**
+   * Save into a tray. `slot` picks the tray (an occupied tray is overwritten);
+   * when omitted, the first empty tray is used, falling back to slot 0 when all
+   * are full. `name` defaults to the map-titled label.
+   */
+  private async save(slot?: number, name = this.nameInput.value.trim()): Promise<void> {
     const session = this.deps.session();
     if (!session || this.busy) return;
-    if (!name) {
-      this.deps.toast('Enter a save name');
-      return;
+    const map = this.deps.mapName();
+    const label = name || `${this.deps.mapTitle()} save`;
+    let target = slot;
+    if (target === undefined) {
+      target = this.slots.findIndex((m) => m === null);
+      if (target < 0) target = 0; // all full: reuse the first tray
     }
     this.busy = true;
     try {
       const payload: SavePayload = {
-        name,
-        map: this.deps.mapName(),
+        name: label,
+        map,
         tick: session.world.tick,
         data: session.serialize(),
       };
-      await api<SaveGame>('PUT', `/${makeSaveId(name)}`, payload);
-      this.deps.toast(`Saved "${name}"`);
+      await api<SaveGame>('PUT', `/${slotId(map, target)}`, payload);
+      this.deps.toast(`Saved to tray ${target + 1}`);
       if (this.visible) await this.refresh();
     } catch {
       this.deps.toast('Save failed (API offline)');
@@ -257,9 +278,9 @@ export class SaveMenu {
 
   // --- Quick save / load (F5 / F9) ------------------------------------------
 
-  /** F5: quicksave the current world under a map-titled name. */
+  /** F5: quicksave into the first empty tray (map-titled name). */
   quicksave(): void {
-    void this.save(`${this.deps.mapTitle()} quicksave`);
+    void this.save(undefined, `${this.deps.mapTitle()} quicksave`);
   }
 
   /** F9: load the most recent save for the current map. */
@@ -274,7 +295,7 @@ export class SaveMenu {
       return;
     }
     const map = this.deps.mapName();
-    const latest = metas.find((m) => m.map === map); // list is newest-first
+    const latest = metas.find((m) => m.map === map && slotOf(map, m.id) >= 0);
     if (!latest) {
       this.deps.toast('No save for this map');
       return;
@@ -284,34 +305,47 @@ export class SaveMenu {
 
   // --- Rendering ------------------------------------------------------------
 
-  private renderList(metas: SaveMeta[]): void {
-    if (metas.length === 0) {
-      this.setListMessage('No saves for this map yet.');
-      return;
-    }
+  /** The current per-map trays (index -> save meta or null). */
+  private slots: (SaveMeta | null)[] = new Array<SaveMeta | null>(SLOT_COUNT).fill(null);
+
+  private renderTrays(slots: (SaveMeta | null)[]): void {
+    this.slots = slots;
+    const map = this.deps.mapName();
     this.listBox.replaceChildren(
-      ...metas.map((m) => {
-        const loadBtn = el('button', {
-          text: 'Load',
-          attrs: { type: 'button', 'data-testid': 'save-load' },
+      ...slots.map((m, i) => {
+        if (!m) {
+          // Empty tray: clicking it saves the current game here.
+          const tray = el('button', {
+            class: 'save-tray save-tray-empty',
+            text: `${i + 1}. <Empty tray>`,
+            attrs: { type: 'button', 'data-testid': 'save-tray', 'data-slot': String(i) },
+          });
+          tray.addEventListener('click', () => void this.save(i));
+          return tray;
+        }
+        const load = el('button', {
+          class: 'save-tray',
+          attrs: { type: 'button', 'data-testid': 'save-load', 'data-slot': String(i) },
         });
-        loadBtn.addEventListener('click', () => void this.load(m.id));
+        load.append(
+          el('span', { class: 'save-item-name', text: `${i + 1}. ${m.name}` }),
+          el('span', { class: 'save-item-tick', text: `tick ${m.tick}` }),
+        );
+        load.addEventListener('click', () => void this.load(slotId(map, i)));
         const delBtn = el('button', {
           class: 'save-del',
           text: 'Delete',
           attrs: { type: 'button', 'data-testid': 'save-delete' },
         });
-        delBtn.addEventListener('click', () => void this.remove(m.id, m.name));
+        delBtn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          void this.remove(slotId(map, i), m.name);
+        });
         return el(
           'div',
-          { class: 'save-item', attrs: { 'data-testid': 'save-item' } },
-          el(
-            'span',
-            { class: 'save-item-meta' },
-            el('span', { class: 'save-item-name', text: m.name }),
-            el('span', { class: 'save-item-tick', text: `tick ${m.tick}` }),
-          ),
-          el('span', { class: 'save-item-actions' }, loadBtn, delBtn),
+          { class: 'save-item', attrs: { 'data-testid': 'save-item', 'data-slot': String(i) } },
+          load,
+          delBtn,
         );
       }),
     );

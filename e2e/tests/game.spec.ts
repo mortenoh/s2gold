@@ -623,6 +623,36 @@ test('P4: save appears in the load list and can be deleted', async ({ page }) =>
   });
 });
 
+test('save trays: eleven fixed slots, save into one, load and delete it', async ({ page }) => {
+  await page.goto('/game.html?map=maps_miss200');
+  await expect(page.locator('body[data-map-ready]')).toBeAttached({ timeout: 15_000 });
+  test.skip(!(await savesApiUp(page)), 'saves API not reachable (FastAPI server offline)');
+
+  await page.getByTestId('menu-toggle').click();
+  await expect(page.getByTestId('save-panel')).toBeVisible();
+
+  // Clear any prior trays for this map so the count is deterministic.
+  for (const del of await page.getByTestId('save-delete').all()) {
+    await del.click();
+    await page.waitForTimeout(150);
+  }
+
+  // Eleven trays total (empty + filled), matching the original dialog.
+  await expect(page.getByTestId('save-tray').or(page.getByTestId('save-item'))).toHaveCount(11);
+
+  // Saving into the first empty tray fills it, leaving ten empty.
+  const name = `tray save ${Date.now()}`;
+  await page.getByTestId('save-name').fill(name);
+  await page.getByTestId('save-submit').click();
+  const filled = page.getByTestId('save-item').filter({ hasText: name });
+  await expect(filled).toBeVisible({ timeout: 5000 });
+  await expect(page.getByTestId('save-tray')).toHaveCount(10);
+
+  // Delete it: back to eleven empty trays.
+  await filled.getByTestId('save-delete').click();
+  await expect(page.getByTestId('save-tray')).toHaveCount(11, { timeout: 5000 });
+});
+
 // --- P4 military gate: scripted two-player battle ---------------------------
 
 /** The military-relevant slice of window.__s2debug the battle test drives. */
