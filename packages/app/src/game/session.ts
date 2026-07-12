@@ -9,6 +9,7 @@
 
 import {
   applyCommand,
+  attackableSoldiers as engineAttackableSoldiers,
   borderNodes,
   buildingAt,
   buildingDef,
@@ -26,7 +27,6 @@ import {
   harborDockNode,
   harborsOf,
   militaryView,
-  MILITARY_ATTACK,
   NUM_SOLDIER_RANKS,
   ownerAt,
   runAi,
@@ -758,33 +758,17 @@ export class GameSession {
 
   /**
    * How many soldiers the local player could send against `targetBuildingId`
-   * right now (mirrors the engine's attack gathering: leave 1 as garrison, lose
-   * attackers past the base distance, require a reachable on-foot path). 0 = the
-   * target is invalid or out of reach, so the UI hides the Attack action.
+   * right now. Delegates to the engine view that shares execAttack's exact
+   * gathering rules, so the panel and the command can never disagree.
    */
   attackableSoldiers(targetBuildingId: number): number {
-    const world = this.world;
-    const geom = this.geom;
-    const target = world.buildings.items[targetBuildingId];
-    if (!target || target.player === this.localPlayer) return 0;
-    const tdef = buildingDef(target.type);
-    if (!tdef || tdef.kind !== 'military' || !target.occupied) return 0;
-    let total = 0;
-    for (const b of world.buildings.items) {
-      if (!b || b.player !== this.localPlayer || !b.occupied) continue;
-      const bdef = buildingDef(b.type);
-      if (!bdef || bdef.kind !== 'military') continue;
-      const troops = militaryView(world, b.id)?.troops ?? 0;
-      if (troops <= 1) continue;
-      const dist = geom.distance(b.node, target.node);
-      let sendable = troops - 1;
-      if (dist > MILITARY_ATTACK.baseDistance) sendable -= dist - MILITARY_ATTACK.baseDistance;
-      if (sendable <= 0) continue;
-      const path = findWalkPath(world, geom, this.rules, b.node, target.node);
-      if (!path || path.length > MILITARY_ATTACK.maxRunDistance) continue;
-      total += sendable;
-    }
-    return total;
+    return engineAttackableSoldiers(
+      this.world,
+      this.geom,
+      this.rules,
+      this.localPlayer,
+      targetBuildingId,
+    );
   }
 
   // --- Seafaring command surface + queries (P7) -----------------------------

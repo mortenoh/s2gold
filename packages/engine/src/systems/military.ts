@@ -644,6 +644,38 @@ function runCatapults(world: World, geom: Geometry, events: EventSink): void {
 // --- Attack command execution (MILITARY.md §4) ----------------------------
 
 /**
+ * How many soldiers `player` could send against `targetBuildingId` right now,
+ * by exactly the rules execAttack gathers with: only occupied military
+ * buildings, leave one defender, lose attackers past the base distance, and
+ * require an on-foot path within the run limit (MILITARY.md §4). The UI's
+ * attack panel derives its soldier count from this, so command and panel can
+ * never disagree.
+ */
+export function attackableSoldiers(
+  world: World,
+  geom: Geometry,
+  rules: TerrainRules,
+  player: number,
+  targetBuildingId: number,
+): number {
+  const target = world.buildings.items[targetBuildingId];
+  if (!target || target.player === player || !isAttackTarget(target) || !target.occupied) return 0;
+  let total = 0;
+  for (const b of storeLive(world.buildings)) {
+    if (b.player !== player || !isMilitary(b) || !b.occupied) continue;
+    if (garrisonCount(b) <= 1) continue;
+    const dist = geom.distance(b.node, target.node);
+    let sendable = garrisonCount(b) - 1;
+    if (dist > MILITARY_ATTACK.baseDistance) sendable -= dist - MILITARY_ATTACK.baseDistance;
+    if (sendable <= 0) continue;
+    const path = findWalkPath(world, geom, rules, b.node, target.node);
+    if (!path || path.length > MILITARY_ATTACK.maxRunDistance) continue;
+    total += sendable;
+  }
+  return total;
+}
+
+/**
  * Execute an `attack` command: gather up to `soldierCount` attackers from the
  * player's in-range occupied military buildings (nearest first, strongest
  * soldiers first) and march them to the target building's node (MILITARY.md §4).

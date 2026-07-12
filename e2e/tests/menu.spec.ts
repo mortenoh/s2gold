@@ -1,20 +1,5 @@
-import { expect, test, type ConsoleMessage } from '@playwright/test';
-import { assetsPresent } from './helpers';
-
-/**
- * Benign console noise: missing optional assets (404s for /assets/*) must not
- * fail the menu tests while converters land. Genuine JS errors always fail.
- */
-function isBenign(msg: ConsoleMessage): boolean {
-  const text = msg.text().toLowerCase();
-  return (
-    text.includes('/assets/') ||
-    text.includes('manifest.json') ||
-    text.includes('failed to load resource') ||
-    text.includes('status of 404') ||
-    text.includes('404')
-  );
-}
+import { expect, test } from '@playwright/test';
+import { assetsPresent, isBenign } from './helpers';
 
 test('title screen renders the menu without console errors', async ({ page }) => {
   const errors: string[] = [];

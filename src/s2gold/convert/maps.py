@@ -9,10 +9,9 @@ title, size, players, terrain set).
 from __future__ import annotations
 
 import base64
-import json
 from pathlib import Path
 
-from s2gold.core import Manifest
+from s2gold.core import Manifest, write_json
 from s2gold.formats.wld import WorldMap, parse_wld
 
 # Directories to scan and the output prefix for maps found in each.
@@ -55,7 +54,7 @@ def run(extracted: Path, assets: Path) -> None:
         for src in sorted(src_dir.glob(pattern)):
             m = parse_wld(src.read_bytes())
             name = f"{prefix}_{src.stem.lower()}"
-            (out_dir / f"{name}.json").write_text(json.dumps(_map_to_dict(m), separators=(",", ":")))
+            write_json(out_dir / f"{name}.json", _map_to_dict(m))
             index.append(
                 {
                     "file": f"maps/{name}.json",
@@ -69,7 +68,7 @@ def run(extracted: Path, assets: Path) -> None:
                 }
             )
 
-    (out_dir / "index.json").write_text(json.dumps({"maps": index}, separators=(",", ":")))
+    write_json(out_dir / "index.json", {"maps": index})
 
     manifest = Manifest()
     manifest.add("maps", {"index": "maps/index.json", "count": len(index)})

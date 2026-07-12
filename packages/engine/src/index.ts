@@ -18,6 +18,7 @@ import { runPopulation } from './systems/recruit';
 import { runProduction } from './systems/production';
 import { runDispatch } from './systems/dispatch';
 import { runMilitary, garrisonCount } from './systems/military';
+export { attackableSoldiers } from './systems/military';
 import { runSeafaring } from './systems/seafaring';
 import {
   HQ_RADIUS,
@@ -26,16 +27,7 @@ import {
   VISUALRANGE_MILITARY,
   ownerPlayer,
 } from './constants';
-import {
-  storeLive,
-  type Building,
-  type Flag,
-  type Road,
-  type Settler,
-  type Ship,
-  type ShipState,
-  type World,
-} from './world';
+import { storeLive, type Building, type Flag, type Ship, type World } from './world';
 
 export const ENGINE_VERSION = '0.1.0';
 
@@ -103,13 +95,7 @@ export {
   waterNeighbours,
   waterNeighbourCount,
 } from './water';
-export {
-  findWalkPath,
-  findWaterPath,
-  findFlagRoute,
-  buildFlagGraph,
-  roadBetween,
-} from './pathfinding';
+export { findWalkPath, findWaterPath, findFlagRoute, buildFlagGraph } from './pathfinding';
 export type { GameEvent } from './events';
 export * from './constants';
 
@@ -153,31 +139,6 @@ export function flagAt(world: World, node: number): Flag | null {
 export function buildingAt(world: World, node: number): Building | null {
   const id = world.buildingAtNode[node];
   return id >= 0 ? (world.buildings.items[id] ?? null) : null;
-}
-
-/** All roads whose node path passes through a node. */
-export function roadsThrough(world: World, node: number): Road[] {
-  const out: Road[] = [];
-  for (const r of storeLive(world.roads)) {
-    if (r.path.includes(node)) out.push(r);
-  }
-  return out;
-}
-
-/** Settlers whose current node lies within a (wrapped) rectangle of nodes. */
-export function settlersInRect(
-  world: World,
-  rect: { x: number; y: number; w: number; h: number },
-): Settler[] {
-  const out: Settler[] = [];
-  for (const s of storeLive(world.settlers)) {
-    const sx = s.node % world.width;
-    const sy = Math.floor(s.node / world.width);
-    const dx = (((sx - rect.x) % world.width) + world.width) % world.width;
-    const dy = (((sy - rect.y) % world.height) + world.height) % world.height;
-    if (dx < rect.w && dy < rect.h) out.push(s);
-  }
-  return out;
 }
 
 /** Live flags of a player (id order). */
@@ -257,16 +218,6 @@ export function playerInventory(world: World, player: number): PlayerInventoryVi
     donkeys: p.donkeys,
     toolPriority: p.toolPriority.slice(),
   };
-}
-
-/** The player's current metalworks tool-production priority order. */
-export function getToolPriority(world: World, player: number): string[] {
-  return world.players[player]?.toolPriority.slice() ?? [];
-}
-
-/** The player's per-ware transport priority map (lower number = fetched first). */
-export function getTransportPriority(world: World, player: number): Record<string, number> {
-  return { ...(world.players[player]?.transportPriority ?? {}) };
 }
 
 // --- Military / territory view helpers (read-only) ------------------------
@@ -370,36 +321,6 @@ export function harborsOf(world: World, player: number): Building[] {
     if (b.player === player && b.type === 'harbor' && b.state === 'working') out.push(b);
   }
   return out;
-}
-
-/** Read-only snapshot of a ship's position, home, state, and cargo. */
-export interface ShipView {
-  shipId: number;
-  player: number;
-  node: number;
-  state: ShipState;
-  homeHarborId: number;
-  destHarborId: number;
-  cargoCount: number;
-  cargoCapacity: number;
-  onExpedition: boolean;
-}
-
-/** Snapshot of a single ship (null when the id is dead). */
-export function shipView(world: World, shipId: number): ShipView | null {
-  const s = world.ships.items[shipId];
-  if (!s) return null;
-  return {
-    shipId: s.id,
-    player: s.player,
-    node: s.node,
-    state: s.state,
-    homeHarborId: s.homeHarborId,
-    destHarborId: s.destHarborId,
-    cargoCount: s.cargo.length,
-    cargoCapacity: SEA.cargoCapacity,
-    onExpedition: s.expeditionTargetSpot >= 0,
-  };
 }
 
 /** Read-only snapshot of an expedition being assembled at a harbor. */

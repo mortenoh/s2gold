@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { assetsPresent } from './helpers';
+import { assetsPresent, CAMPAIGN_PROGRESS_KEY } from './helpers';
 
 /**
  * P7 campaign gate: the campaign menu gates chapters (only I selectable at
@@ -9,8 +9,6 @@ import { assetsPresent } from './helpers';
  */
 
 const SCREENSHOT_DIR = 'test-results/shots/p7camp';
-
-const PROGRESS_KEY = 's2gold.campaign.progress';
 
 // Each Playwright test runs in an isolated browser context, so localStorage
 // (campaign progress, intro-watched) always starts empty — no explicit reset.
@@ -105,7 +103,7 @@ test('force-completing chapter I records progress and unlocks chapter II', async
   const completed = await page.evaluate((key) => {
     const raw = window.localStorage.getItem(key);
     return raw ? (JSON.parse(raw) as { completed: number[] }).completed : [];
-  }, PROGRESS_KEY);
+  }, CAMPAIGN_PROGRESS_KEY);
   expect(completed).toContain(1);
 
   // Back on the campaign menu, chapter II is now unlocked and chapter I completed.

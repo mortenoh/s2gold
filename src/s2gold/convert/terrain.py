@@ -16,12 +16,11 @@ their own embedded ``CMAP`` and render through that.
 from __future__ import annotations
 
 import base64
-import json
 from pathlib import Path
 
 from PIL import Image
 
-from s2gold.core import Manifest
+from s2gold.core import Manifest, write_json
 from s2gold.formats.gouraud import load_gouraud
 from s2gold.formats.lbm import decode_lbm
 from s2gold.formats.palette import Palette, palette_cycles
@@ -86,15 +85,13 @@ def run(extracted: Path, assets: Path) -> None:
         raw = bytearray()
         for r, g, b in palette.colors:
             raw += bytes((r, g, b))
-        (out_dir / f"{name}_pal.json").write_text(
-            json.dumps(
-                {
-                    "encoding": "base64",
-                    "colors": base64.b64encode(bytes(raw)).decode("ascii"),
-                    "cycles": [{"low": c.low, "high": c.high, "msPerStep": round(c.ms_per_step, 3)} for c in cycles],
-                },
-                separators=(",", ":"),
-            )
+        write_json(
+            out_dir / f"{name}_pal.json",
+            {
+                "encoding": "base64",
+                "colors": base64.b64encode(bytes(raw)).decode("ascii"),
+                "cycles": [{"low": c.low, "high": c.high, "msPerStep": round(c.ms_per_step, 3)} for c in cycles],
+            },
         )
         textures[name] = {
             "png": f"terrain/{name}.png",
@@ -111,7 +108,7 @@ def run(extracted: Path, assets: Path) -> None:
         if not src_path.exists():
             continue
         table = load_gouraud(src_path)
-        (out_dir / f"{name}.json").write_text(json.dumps(table.to_json_dict(), separators=(",", ":")))
+        write_json(out_dir / f"{name}.json", table.to_json_dict())
         gouraud[name] = f"terrain/{name}.json"
 
     manifest = Manifest()

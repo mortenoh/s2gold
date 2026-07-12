@@ -15,7 +15,7 @@ import { ownerPlayer } from './constants';
 import type { Geometry } from './geometry';
 import { isWalkableTexture, type TerrainRules } from './terrain';
 import { isWaterNode } from './water';
-import { getFlag, getRoad, storeLive, type World } from './world';
+import { getFlag, storeLive, type World } from './world';
 
 /** A binary min-heap of (id) ordered by (priority, id) for deterministic pops. */
 class MinHeap {
@@ -268,23 +268,4 @@ export function findFlagRoute(
     }
   }
   return null;
-}
-
-/** Find the road id connecting two adjacent flags, or -1. */
-export function roadBetween(world: World, flagA: number, flagB: number): number {
-  for (const road of storeLive(world.roads)) {
-    if (
-      (road.flagA === flagA && road.flagB === flagB) ||
-      (road.flagA === flagB && road.flagB === flagA)
-    ) {
-      return road.id;
-    }
-  }
-  return -1;
-}
-
-/** Confirm a road id still connects the two flags (used defensively). */
-export function roadConnects(world: World, roadId: number, flagA: number, flagB: number): boolean {
-  const r = getRoad(world, roadId);
-  return (r.flagA === flagA && r.flagB === flagB) || (r.flagA === flagB && r.flagB === flagA);
 }

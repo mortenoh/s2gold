@@ -1,20 +1,5 @@
-import { expect, test, type ConsoleMessage } from '@playwright/test';
-
-/**
- * Benign console noise: while converters are still landing, assets may be
- * absent and the browser logs 404s for /assets/*. Those are expected and must
- * not fail the smoke test. Genuine JS errors (pageerror) always fail.
- */
-function isBenign(msg: ConsoleMessage): boolean {
-  const text = msg.text().toLowerCase();
-  return (
-    text.includes('/assets/') ||
-    text.includes('manifest.json') ||
-    text.includes('failed to load resource') ||
-    text.includes('the server responded with a status of 404') ||
-    text.includes('404')
-  );
-}
+import { expect, test } from '@playwright/test';
+import { isBenign } from './helpers';
 
 test('index page loads without console errors', async ({ page }) => {
   const errors: string[] = [];
