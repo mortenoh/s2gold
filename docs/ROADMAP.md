@@ -22,11 +22,6 @@ territory recalc and visibility, allocation-free `Geometry.distance` +
 scratch-array A* expansion, per-tick app overlay caches, parallel boot
 atlas loads, and torus-offset viewport rejection in the sprite pass.
 
-Remaining:
-
-- Pool QuadItems in `packages/renderer/src/sprites.ts` (a fresh object per
-  drawn quad per frame survives; the offset rejection removed the bulk).
-
 ## B. Fidelity vs the original (reference-study)
 
 Landed 2026-07-12 (captures in `reference-study/captures/`, notes in
@@ -36,16 +31,18 @@ dev Asset inspector behind ?dev=1, and captures of the original's Options,
 Load dialog (11 trays), World Campaign globe, Credits, HUD, and build
 window. "Quit program" is deliberately omitted (no browser equivalent).
 
+Landed 2026-07-12 (part 2): original 11-slot save trays (captures/
+loadgame.png), QuadItem pooling, and in-game captures (HQ window, Esc).
+The HQ opens the Activity window (flag/build actions), not an inventory
+list; Esc does not open an in-game menu (the s2gold Game panel replaces
+it) - both recorded in NOTES.md.
+
 Remaining:
 
 - Custom hand cursor: blocked on a RESOURCE.DAT converter (the cursor
   sprites are not in the converted asset set).
-- Save UI decision: original 11-slot tray dialog (see captures/loadgame.png)
-  vs the current named REST saves - decide, then implement or document.
-- World Campaign globe screen (captures/worldcampaign.png) as a fidelity
-  upgrade over the chapter list.
-- Remaining captures: HQ inventory window (click the building body),
-  statistics, ware window, the real in-game menu, Esc menu.
+- World Campaign globe screen (captures/worldcampaign.png): blocked on
+  per-chapter marker coordinates, which are not in the converted data.
 
 ## C. Features (PLAN.md polish backlog, still open; audited 2026-07-12)
 
