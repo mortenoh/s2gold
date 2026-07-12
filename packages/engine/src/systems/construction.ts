@@ -11,20 +11,14 @@
 import { BUILDING, buildingDef, JOB, TICKS } from '../constants';
 import type { EventSink } from '../events';
 import type { Geometry } from '../geometry';
-import { findWalkPath } from '../pathfinding';
-import type { TerrainRules } from '../terrain';
+import { findRoadWalkPath } from '../pathfinding';
 import { getBuilding, getFlag, storeFree, storeLive, type World } from '../world';
 import { beginWalk, spawnSettler, stepWalk, walkDone } from './movement';
 import { recalcTerritory } from './territory';
 import { ensureWorkerAvailable } from './recruit';
 
 /** Run construction for one tick. */
-export function runConstruction(
-  world: World,
-  geom: Geometry,
-  rules: TerrainRules,
-  events: EventSink,
-): void {
+export function runConstruction(world: World, geom: Geometry, events: EventSink): void {
   for (const b of storeLive(world.buildings)) {
     if (b.state !== 'site' || b.type === BUILDING.headquarters) continue;
     const player = world.players[b.player];
@@ -36,13 +30,16 @@ export function runConstruction(
       if (!ensureWorkerAvailable(world, events, player, JOB.builder)) continue;
       const hq = player.hqBuildingId >= 0 ? getBuilding(world, player.hqBuildingId) : null;
       const startNode = hq ? hq.node : b.node;
+      // The builder walks the road network from the HQ to the site's flag (then
+      // the door); a site with no road connection yet cannot be staffed, so wait
+      // and retry — the recruited builder stays in the pool until a road exists.
+      const path = findRoadWalkPath(world, geom, b.player, startNode, b.node);
+      if (!path) continue;
       const builder = spawnSettler(world, JOB.builder, b.player, startNode);
       builder.homeBuildingId = b.id;
       builder.state = 'toBuilding';
       builder.targetNode = b.node;
-      const path = findWalkPath(world, geom, rules, startNode, b.node);
-      if (path) beginWalk(builder, path, TICKS.walkPerEdge);
-      else builder.node = b.node; // fallback: no route — place at the door
+      beginWalk(builder, path, TICKS.walkPerEdge);
       b.workerId = builder.id;
       player.workers[JOB.builder]--;
       events.emit({

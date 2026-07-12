@@ -32,7 +32,7 @@ import {
 } from '../constants';
 import type { EventSink } from '../events';
 import type { Geometry } from '../geometry';
-import { findWalkPath } from '../pathfinding';
+import { findRoadWalkPath, findWalkPath } from '../pathfinding';
 import { isBuildableTexture, isWalkableTexture, type TerrainRules } from '../terrain';
 import {
   getBuilding,
@@ -237,7 +237,6 @@ function ensureStockSized(b: Building, def: BuildingDef): void {
 function ensureStaffed(
   world: World,
   geom: Geometry,
-  rules: TerrainRules,
   events: EventSink,
   b: Building,
   def: BuildingDef,
@@ -252,13 +251,16 @@ function ensureStaffed(
     if (!ensureWorkerAvailable(world, events, player, job)) return false;
     const hq = player.hqBuildingId >= 0 ? getBuilding(world, player.hqBuildingId) : null;
     const startNode = hq ? hq.node : b.node;
+    // The worker walks the road network from the HQ to the building's flag (then
+    // the door). An unconnected building cannot be staffed, so wait for a road;
+    // the recruited worker stays in the pool until one exists.
+    const path = findRoadWalkPath(world, geom, b.player, startNode, b.node);
+    if (!path) return false;
     const worker = spawnSettler(world, job, b.player, startNode);
     worker.homeBuildingId = b.id;
     worker.state = 'toBuilding';
     worker.targetNode = b.node;
-    const path = findWalkPath(world, geom, rules, startNode, b.node);
-    if (path) beginWalk(worker, path, TICKS.walkPerEdge);
-    else worker.node = b.node;
+    beginWalk(worker, path, TICKS.walkPerEdge);
     b.workerId = worker.id;
     player.workers[job]--;
     events.emit({ type: 'SettlerSpawned', settlerId: worker.id, job, player: b.player });
@@ -693,7 +695,7 @@ export function runProduction(
     const def = buildingDef(b.type);
     if (!def || def.kind === 'hq' || def.kind === 'warehouse') continue;
     ensureStockSized(b, def);
-    if (!ensureStaffed(world, geom, rules, events, b, def)) continue;
+    if (!ensureStaffed(world, geom, events, b, def)) continue;
     const player = world.players[b.player];
     if (!player) continue;
     const worker = b.workerId >= 0 ? world.settlers.items[b.workerId] : null;

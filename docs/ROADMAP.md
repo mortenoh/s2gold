@@ -44,16 +44,14 @@ Remaining:
 - World Campaign globe screen (captures/worldcampaign.png): blocked on
   per-chapter marker coordinates, which are not in the converted data.
 
-## Gameplay fidelity (observed 2026-07-12)
+## Gameplay fidelity
 
-- Workers and construction travel should follow the road network, not
-  cut straight across terrain. Today a building's builder/worker walks
-  the free lattice A* (`findWalkPath`) to the site; the original routes
-  them over roads (a site with no road connection cannot be staffed or
-  supplied). Harvesters legitimately leave the road to reach their work
-  spot (a woodcutter walking to a tree is correct), so the fix is
-  specifically: builder-to-site and settler-to-building travel should be
-  road-constrained. Engine change; verify against the original first.
+Landed 2026-07-12: builder-to-site and settler-to-building travel is now
+road-constrained (`findRoadWalkPath` over the flag/road graph). A building
+with no road connection to the HQ is not staffed until one exists, matching
+the original; harvester trips out to a tree/field still free-walk. The
+mountain-meadow (0x12) build-quality fix also landed (it is buildable
+ground in every landscape, validated against the maps' own build layer).
 
 ## C. Features (PLAN.md polish backlog, still open; audited 2026-07-12)
 
