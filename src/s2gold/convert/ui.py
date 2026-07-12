@@ -20,11 +20,13 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from PIL import Image
+
 from s2gold.atlas import AtlasPacker, Placement, SpriteInput
 from s2gold.convert.graphics import STANDARD_PALETTE, _write_pmasks
 from s2gold.core import Manifest, write_json
 from s2gold.formats import datidx, lst
-from s2gold.formats.bitmaps import DecodedSprite, decode_bitmap
+from s2gold.formats.bitmaps import BitmapItem, DecodedSprite, decode_bitmap
 from s2gold.formats.palette import Palette
 
 
@@ -35,6 +37,43 @@ class _Archive:
     name: str
     idx: Path
     dat: Path
+
+
+# Standalone UI chrome emitted as individual PNGs (plus the atlases above), so
+# the web UI can position them with CSS. From RESOURCE.DAT, decoded through its
+# embedded roemerpal palette.
+_FRAME_PIECES = ("dskbobol", "dskbobor", "dskbobul", "dskbobur", "dskov10l", "dskov10r", "dskbobic")
+_CURSOR_PIECES = ("handa", "handb", "handc", "handw", "handk", "handl")
+
+
+def _emit_resource_ui(extracted: Path, assets: Path) -> None:
+    """Decode the RESOURCE.DAT frame + cursor bitmaps to individual ui/ PNGs."""
+    arc = datidx.read_archive(extracted / "DATA" / "RESOURCE.IDX", extracted / "DATA" / "RESOURCE.DAT")
+    palette = next(
+        (
+            it.palette
+            for e, it in zip(arc.entries, arc.items, strict=True)
+            if isinstance(it, lst.PaletteItem) and e.name == "roemerpal"
+        ),
+        None,
+    )
+    if palette is None:
+        return
+    by_name = {e.name: it for e, it in zip(arc.entries, arc.items, strict=True)}
+    out_dir = assets / "ui"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pieces: dict[str, object] = {}
+    for name in _FRAME_PIECES + _CURSOR_PIECES:
+        item = by_name.get(name)
+        if not isinstance(item, BitmapItem):
+            continue
+        sprite = decode_bitmap(item, palette)
+        Image.frombytes("RGBA", (sprite.width, sprite.height), bytes(sprite.rgba)).save(out_dir / f"{name}.png")
+        pieces[name] = {"png": f"ui/{name}.png", "width": sprite.width, "height": sprite.height}
+    write_json(
+        out_dir / "index.json",
+        {"pieces": pieces, "frame": list(_FRAME_PIECES), "cursor": list(_CURSOR_PIECES)},
+    )
 
 
 def _archives(extracted: Path) -> list[_Archive]:
@@ -65,6 +104,8 @@ def run(extracted: Path, assets: Path) -> None:
             f"[ui] {archive.name}: {info['sprite_count']} sprites, "
             f"{info['atlas_count']} atlas(es), skipped {info['skipped']}"
         )
+    if (extracted / "DATA" / "RESOURCE.DAT").exists():
+        _emit_resource_ui(extracted, assets)
     manifest = Manifest()
     manifest.add("graphics", index)
     manifest.save(assets)
