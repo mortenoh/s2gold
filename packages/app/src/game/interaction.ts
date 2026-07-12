@@ -219,7 +219,13 @@ export class Interaction {
   }
 
   private onClick(ev: MouseEvent): void {
-    this.closeMenu();
+    // A click while a context menu is open just dismisses it — the user is
+    // closing the menu, not issuing a fresh command at the new spot. The next
+    // click (with no menu open) opens a new one.
+    if (this.menu) {
+      this.closeMenu();
+      return;
+    }
     if (this.deps.suppressClick?.()) return;
     const node = this.screenToNode(ev.clientX, ev.clientY);
     if (node < 0) return;
