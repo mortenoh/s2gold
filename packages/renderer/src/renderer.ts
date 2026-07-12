@@ -50,6 +50,9 @@ precision mediump float;
 uniform sampler2D uAtlasIdx; // R8 palette indices
 uniform sampler2D uGouraud;  // 256x256 LUT: (index, shade row) -> shaded index
 uniform sampler2D uPalette;  // 256x1 RGBA palette (animated)
+// 1 when drawing border bands: their edge strips use palette index 0 as
+// transparency (winter base terrain uses 0 as a real color, so no global key).
+uniform float uKeyZero;
 
 in vec2 vUv;
 in float vShade;
@@ -58,6 +61,7 @@ out vec4 outColor;
 
 void main() {
   float idx = texture(uAtlasIdx, vUv).r * 255.0;
+  if (uKeyZero > 0.5 && idx < 0.5) discard;
   float shaded = texture(uGouraud, vec2((idx + 0.5) / 256.0, vShade)).r * 255.0;
   vec3 rgb = texture(uPalette, vec2((shaded + 0.5) / 256.0, 0.5)).rgb;
   outColor = vec4(rgb * vFog, 1.0);
@@ -122,6 +126,7 @@ export class TerrainRenderer {
   private readonly program: WebGLProgram;
   private readonly uTranslate: WebGLUniformLocation;
   private readonly uScale: WebGLUniformLocation;
+  private readonly uKeyZero: WebGLUniformLocation;
   private readonly vao: WebGLVertexArrayObject;
   private readonly vbo: WebGLBuffer;
   private readonly texIndex: WebGLTexture;
@@ -136,6 +141,7 @@ export class TerrainRenderer {
   private cyclePhases: number[] = [];
 
   private vertexCount = 0;
+  private baseVertexCount = 0;
   private worldW = 0;
   private worldH = 0;
   /** Pristine interleaved vertices (fog-free), kept so fog can remodulate them. */
@@ -172,9 +178,11 @@ export class TerrainRenderer {
 
     const uTranslate = gl.getUniformLocation(program, 'uTranslate');
     const uScale = gl.getUniformLocation(program, 'uScale');
-    if (!uTranslate || !uScale) throw new Error('missing shader uniforms');
+    const uKeyZero = gl.getUniformLocation(program, 'uKeyZero');
+    if (!uTranslate || !uScale || !uKeyZero) throw new Error('missing shader uniforms');
     this.uTranslate = uTranslate;
     this.uScale = uScale;
+    this.uKeyZero = uKeyZero;
 
     const vao = gl.createVertexArray();
     const vbo = gl.createBuffer();
@@ -221,6 +229,7 @@ export class TerrainRenderer {
     const gl = this.gl;
     const mesh = buildTerrainMesh(map);
     this.vertexCount = mesh.vertexCount;
+    this.baseVertexCount = mesh.baseVertexCount;
     this.worldW = mapPixelWidth(map.width);
     this.worldH = mapPixelHeight(map.height);
     this.baseVertices = mesh.vertices;
@@ -429,7 +438,16 @@ export class TerrainRenderer {
         const ox = i * this.worldW;
         if (ox + this.worldW + TR_W < camera.x || ox > camera.x + viewW) continue;
         gl.uniform2f(this.uTranslate, ox - camera.x, oy - camera.y);
-        gl.drawArrays(gl.TRIANGLES, 0, this.vertexCount);
+        gl.uniform1f(this.uKeyZero, 0);
+        gl.drawArrays(gl.TRIANGLES, 0, this.baseVertexCount);
+        if (this.vertexCount > this.baseVertexCount) {
+          gl.uniform1f(this.uKeyZero, 1);
+          gl.drawArrays(
+            gl.TRIANGLES,
+            this.baseVertexCount,
+            this.vertexCount - this.baseVertexCount,
+          );
+        }
       }
     }
 

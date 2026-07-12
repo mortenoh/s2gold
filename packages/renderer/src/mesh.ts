@@ -27,6 +27,8 @@ import {
 } from './geometry';
 import {
   ATLAS_SIZE,
+  edgeInfoForTexture,
+  edgeStripRect,
   rectForTexture,
   texTypeForTexture,
   type AtlasRect,
@@ -42,6 +44,12 @@ export interface TerrainMesh {
   readonly vertices: Float32Array;
   /** Number of vertices (always a multiple of 3). */
   readonly vertexCount: number;
+  /**
+   * Vertices [0, baseVertexCount) are the base terrain triangles; the rest are
+   * border bands, drawn with palette index 0 keyed out (the edge strips use it
+   * as transparency, while winter base terrain uses it as a real color).
+   */
+  readonly baseVertexCount: number;
   /**
    * Wrapped source node index each vertex samples its attributes from
    * (`vertexCount` entries). Lets the renderer remodulate per-vertex brightness
@@ -159,5 +167,122 @@ export function buildTerrainMesh(map: TerrainMapData): TerrainMesh {
     }
   }
 
-  return { vertices, vertexCount, nodeOfVertex };
+  // --- Terrain borders (edge blending) ---------------------------------------
+  //
+  // Where two lattice triangles of different edge priority meet, the higher-
+  // priority terrain paints its 64x16 edge strip across the shared edge (facts:
+  // RttR TerrainRenderer borders + the world lua edge tables). Per node the
+  // three boundaries below cover every internal lattice edge exactly once:
+  //
+  //   RSU(p)|LSD(p)      shared edge [p, SE(p)]
+  //   LSD(p)|RSU(E(p))   shared edge [E(p), SE(p)]
+  //   RSU(p)|LSD(SW(p))  shared edge [SW(p), SE(p)]
+  //
+  // A border band is two triangles: the shared edge's endpoints plus each
+  // adjacent triangle's centroid, with the strip's top edge mapped along the
+  // shared edge and its bottom midpoint at the centroid. Emitted after the
+  // base triangles so they paint over them at equal depth.
+  const landscape = map.landscape ?? 0;
+  const border: number[] = [];
+  const borderNodes: number[] = [];
+
+  const posOf = (pt: LatticePoint): { x: number; y: number; node: number } => {
+    const wrapped = wrapNode(pt, width, height);
+    const node = wrapped.y * width + wrapped.x;
+    const pos = nodeWorldPos(pt, map.heightLayer[node] ?? 0);
+    return { x: pos.x, y: pos.y, node };
+  };
+
+  const emitBorderVertex = (px: number, py: number, node: number, u: number, v: number): void => {
+    border.push(px, py, u / ATLAS_SIZE, v / ATLAS_SIZE, ((map.shading[node] ?? 64) + 0.5) / 256, 1);
+    borderNodes.push(node);
+  };
+
+  const emitBorderBand = (
+    a: LatticePoint,
+    b: LatticePoint,
+    triangles: ReadonlyArray<readonly [LatticePoint, LatticePoint, LatticePoint]>,
+    slot: number,
+  ): void => {
+    const r = insetRect(edgeStripRect(slot));
+    const A = posOf(a);
+    const B = posOf(b);
+    for (const tri of triangles) {
+      const p0 = posOf(tri[0]);
+      const p1 = posOf(tri[1]);
+      const p2 = posOf(tri[2]);
+      const cx = (p0.x + p1.x + p2.x) / 3;
+      const cy = (p0.y + p1.y + p2.y) / 3;
+      emitBorderVertex(A.x, A.y, A.node, r.left, r.top);
+      emitBorderVertex(B.x, B.y, B.node, r.right, r.top);
+      emitBorderVertex(cx, cy, p0.node, r.mx, r.bottom);
+    }
+  };
+
+  const boundary = (
+    ta: number,
+    tb: number,
+    a: LatticePoint,
+    b: LatticePoint,
+    triA: readonly [LatticePoint, LatticePoint, LatticePoint],
+    triB: readonly [LatticePoint, LatticePoint, LatticePoint],
+  ): void => {
+    const ea = edgeInfoForTexture(ta, landscape);
+    const eb = edgeInfoForTexture(tb, landscape);
+    if (ea.priority === eb.priority) return;
+    const winner = ea.priority > eb.priority ? ea : eb;
+    if (winner.slot === null) return;
+    emitBorderBand(a, b, [triA, triB], winner.slot);
+  };
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      const p: LatticePoint = { x, y };
+      const se = neighbourSE(x, y);
+      const sw = neighbourSW(x, y);
+      const e = neighbourE(x, y);
+      const t1 = map.texture1[idx] ?? 0;
+      const t2 = map.texture2[idx] ?? 0;
+      const rsu: readonly [LatticePoint, LatticePoint, LatticePoint] = [p, sw, se];
+      const lsd: readonly [LatticePoint, LatticePoint, LatticePoint] = [p, se, e];
+
+      // RSU(p) | LSD(p)
+      boundary(t1, t2, p, se, rsu, lsd);
+      // LSD(p) | RSU(E(p))
+      const eIdx = wrapNode(e, width, height);
+      const tE1 = map.texture1[eIdx.y * width + eIdx.x] ?? 0;
+      const rsuE: readonly [LatticePoint, LatticePoint, LatticePoint] = [
+        e,
+        neighbourSW(e.x, e.y),
+        neighbourSE(e.x, e.y),
+      ];
+      boundary(t2, tE1, e, se, lsd, rsuE);
+      // RSU(p) | LSD(SW(p))
+      const swIdx = wrapNode(sw, width, height);
+      const tSW2 = map.texture2[swIdx.y * width + swIdx.x] ?? 0;
+      const lsdSW: readonly [LatticePoint, LatticePoint, LatticePoint] = [
+        sw,
+        neighbourSE(sw.x, sw.y),
+        neighbourE(sw.x, sw.y),
+      ];
+      boundary(t1, tSW2, sw, se, rsu, lsdSW);
+    }
+  }
+
+  if (border.length === 0) {
+    return { vertices, vertexCount, baseVertexCount: vertexCount, nodeOfVertex };
+  }
+  const all = new Float32Array(vertices.length + border.length);
+  all.set(vertices);
+  all.set(border, vertices.length);
+  const allNodes = new Uint32Array(nodeOfVertex.length + borderNodes.length);
+  allNodes.set(nodeOfVertex);
+  allNodes.set(borderNodes, nodeOfVertex.length);
+  return {
+    vertices: all,
+    vertexCount: vertexCount + borderNodes.length,
+    baseVertexCount: vertexCount,
+    nodeOfVertex: allNodes,
+  };
 }

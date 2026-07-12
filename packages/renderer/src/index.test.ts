@@ -117,8 +117,31 @@ describe('mesh builder', () => {
   it('emits 6 vertices per node with the interleaved layout', () => {
     const map = makeMap(4, 4);
     const mesh = buildTerrainMesh(map);
-    expect(mesh.vertexCount).toBe(4 * 4 * 6);
+    // 6 base vertices per node, plus border bands: this map alternates meadow
+    // (edge priority 30) and water (5) on every node, so all three boundaries
+    // of every node emit a 6-vertex band (2 triangles).
+    expect(mesh.vertexCount).toBe(4 * 4 * 6 + 4 * 4 * 3 * 6);
     expect(mesh.vertices.length).toBe(mesh.vertexCount * FLOATS_PER_VERTEX);
+
+    // Border vertices sample the meadow edge strip (winner: priority 30 > 5):
+    // atlas x=192..256, y=224..240 (slot 3).
+    const baseCount = 4 * 4 * 6;
+    for (let v = baseCount; v < mesh.vertexCount; v++) {
+      const o = v * FLOATS_PER_VERTEX;
+      const u = (mesh.vertices[o + 2] ?? 0) * 256;
+      const tv = (mesh.vertices[o + 3] ?? 0) * 256;
+      expect(u).toBeGreaterThanOrEqual(192);
+      expect(u).toBeLessThanOrEqual(256);
+      expect(tv).toBeGreaterThanOrEqual(224);
+      expect(tv).toBeLessThanOrEqual(240);
+    }
+  });
+
+  it('emits no borders on a uniform map', () => {
+    const map = makeMap(4, 4);
+    (map.texture2 as Uint8Array).fill(8); // same terrain everywhere
+    const mesh = buildTerrainMesh(map);
+    expect(mesh.vertexCount).toBe(4 * 4 * 6);
   });
 
   it('keeps UVs normalized, shade at the neutral LUT row, and fog at 1', () => {

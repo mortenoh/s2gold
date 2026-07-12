@@ -100,6 +100,113 @@ export const FALLBACK_RECT: AtlasRect = [0, 96, 32, 31];
 /** Landscape set: 0 = greenland, 1 = wasteland, 2 = winter. */
 export type LandscapeSet = 0 | 1 | 2;
 
+// --- Terrain edges (border blending) ----------------------------------------
+//
+// Where two lattice triangles of different edge priority meet, the higher-
+// priority terrain paints its 64x16 edge strip across the boundary. Strip
+// positions and the per-terrain (edge slot, priority) tables are facts from
+// the RttR world descriptions (greenland/wasteland/winterworld.lua); slots
+// index the five strip rows at x=192, y=176+16*slot, identical in TEX5/6/7.
+
+/** Atlas rectangle of an edge strip slot (0..4). */
+export function edgeStripRect(slot: number): AtlasRect {
+  return [192, 176 + slot * 16, 64, 16];
+}
+
+/** [edge slot | null, edge priority] per terrain id, greenland. */
+const GREENLAND_EDGES: Readonly<Record<number, readonly [number | null, number]>> = {
+  0x00: [2, 15], // savannah -> desert edge
+  0x01: [1, 55], // mountain 1
+  0x02: [0, 75], // snow
+  0x03: [3, 10], // swamp -> meadow edge
+  0x04: [2, 65], // desert
+  0x05: [4, 5], // water
+  0x06: [4, 80], // shallow/buildable water
+  0x07: [2, 65],
+  0x08: [3, 30], // meadow 1
+  0x09: [3, 25],
+  0x0a: [3, 20],
+  0x0b: [1, 50], // mountain 2
+  0x0c: [1, 45],
+  0x0d: [1, 40],
+  0x0e: [2, 60], // steppe
+  0x0f: [3, 35], // flowers
+  0x10: [null, 0], // lava
+  0x12: [1, 70], // mountain meadow
+  0x13: [4, 80], // reef water
+  0x14: [null, 0],
+  0x15: [null, 0],
+  0x16: [null, 0],
+  0x22: [1, 50], // flat mountain
+};
+
+/** [edge slot | null, edge priority] per terrain id, wasteland. Slots: 0 stone, 1 moor, 2 wasteland, 3 mountain. */
+const WASTELAND_EDGES: Readonly<Record<number, readonly [number | null, number]>> = {
+  0x00: [3, 40],
+  0x01: [3, 30],
+  0x02: [null, 20],
+  0x03: [0, 80], // lava-many-stones -> stone edge
+  0x04: [2, 50],
+  0x05: [1, 70], // moor
+  0x06: [1, 70],
+  0x07: [2, 50],
+  0x08: [3, 40], // pasture
+  0x09: [3, 40],
+  0x0a: [3, 40],
+  0x0b: [3, 30],
+  0x0c: [3, 30],
+  0x0d: [3, 30],
+  0x0e: [2, 60],
+  0x0f: [3, 40],
+  0x10: [null, 10],
+  0x11: [null, 10],
+  0x12: [0, 90], // alpine pasture -> stone edge
+  0x13: [1, 70],
+  0x14: [null, 10],
+  0x15: [null, 10],
+  0x16: [null, 10],
+  0x22: [3, 30],
+};
+
+/** [edge slot | null, edge priority] per terrain id, winter. Slots: 0 snow, 1 mountain, 2 ice, 3 tundra, 4 water. */
+const WINTER_EDGES: Readonly<Record<number, readonly [number | null, number]>> = {
+  0x00: [3, 18], // taiga
+  0x01: [1, 48],
+  0x02: [4, 73], // ice floe
+  0x03: [4, 83], // ice floes
+  0x04: [2, 43], // ice
+  0x05: [4, 78], // water
+  0x06: [4, 78],
+  0x07: [2, 43],
+  0x08: [3, 23], // tundra
+  0x09: [3, 28],
+  0x0a: [3, 33],
+  0x0b: [1, 63],
+  0x0c: [1, 58],
+  0x0d: [1, 53],
+  0x0e: [3, 8],
+  0x0f: [3, 13],
+  0x10: [null, 0],
+  0x12: [0, 68], // snow
+  0x13: [4, 78],
+  0x14: [null, 0],
+  0x15: [null, 0],
+  0x16: [null, 0],
+  0x22: [1, 38],
+};
+
+const EDGES_BY_LANDSCAPE = [GREENLAND_EDGES, WASTELAND_EDGES, WINTER_EDGES] as const;
+
+/** Edge strip slot + priority for a texture byte in a landscape. */
+export function edgeInfoForTexture(
+  textureByte: number,
+  landscape: LandscapeSet,
+): { slot: number | null; priority: number } {
+  const entry = EDGES_BY_LANDSCAPE[landscape][textureByte & TERRAIN_ID_MASK];
+  if (!entry) return { slot: null, priority: 0 };
+  return { slot: entry[0], priority: entry[1] };
+}
+
 /**
  * Terrain id -> packed 0xRRGGBB minimap color, per landscape set. Derived from
  * RttR `TerrainData::GetColor`. Ids sharing a base terrain reuse its color.
