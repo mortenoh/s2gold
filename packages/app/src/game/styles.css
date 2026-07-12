@@ -134,7 +134,9 @@ body {
   flex-shrink: 0;
 }
 
-.speed-select .dropdown-list {
+/* The list is portalled to <body> while open and carries the trigger's modifier
+   class, so this targets the list element itself, not a descendant. */
+.dropdown-list.speed-select {
   min-width: 58px;
 }
 

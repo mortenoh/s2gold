@@ -83,7 +83,9 @@ async function disableFog(page: Page): Promise<void> {
 /** Pick a game speed via the HUD speed dropdown (custom dropdown, not a select). */
 async function setGameSpeed(page: Page, speed: number): Promise<void> {
   await page.getByTestId('speed-select').click();
-  await page.locator(`.speed-select .dropdown-list [data-value="${speed}"]`).click();
+  // The open list is portalled to <body> and carries the `speed-select` modifier
+  // class on the list element itself (compound selector, not a descendant).
+  await page.locator(`.dropdown-list.speed-select [data-value="${speed}"]`).click();
   await expect(page.getByTestId('speed-select')).toHaveText(`${speed}x`);
 }
 
