@@ -15,7 +15,7 @@ music, maps and texts into web-native assets under `packages/app/public/assets/`
 
 - Feasibility study: `docs/FEASIBILITY.md`
 - Implementation plan: `docs/PLAN.md`
-- Open work (features, bugs, polish): `docs/ROADMAP.md`
+- Open work (features, bugs, polish): `ROADMAP.md`
 - Asset pipeline: Python 3.13 (`uv`, typer) under `src/s2gold/`
 - Game: TypeScript + WebGL2 under `packages/`
 
