@@ -959,3 +959,82 @@ a.campaign-chapter:focus-visible {
 .intro-skip:hover {
   filter: brightness(1.2);
 }
+
+/* --- Options screen ------------------------------------------------------- */
+
+.options-panel {
+  align-items: center;
+  text-align: center;
+}
+
+.options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 28px 0;
+  min-width: 300px;
+}
+
+.options-row {
+  width: 100%;
+}
+
+.menu-entry-danger {
+  background: linear-gradient(#7a1d12, #5a120a);
+  border-color: #2e0a05;
+}
+
+.menu-entry-danger:hover {
+  background: linear-gradient(#8f2417, #6b170d);
+}
+
+.options-back {
+  margin-top: 18px;
+  min-width: 300px;
+  text-align: center;
+}
+
+/* --- Credits screen ------------------------------------------------------- */
+
+.menu-credits-screen {
+  background: radial-gradient(ellipse at 50% 30%, #4a0f0a 0%, #2a0705 55%, #180302 100%);
+}
+
+.credits-panel {
+  align-items: center;
+  text-align: center;
+}
+
+.credits-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 180px;
+  justify-content: center;
+  margin: 20px 0;
+}
+
+.credits-name {
+  color: #f0c84a;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+}
+
+.credits-role {
+  color: #f4ecd0;
+  font-size: 15px;
+}
+
+.credits-counter {
+  margin-top: 14px;
+  color: #9a8a6a;
+  font-size: 12px;
+}
+
+.credits-nav {
+  display: flex;
+  gap: 12px;
+}

@@ -1331,6 +1331,9 @@ async function boot(): Promise<void> {
     return;
   }
 
+  // Resume last game (title menu): load the newest save for this map.
+  if (params.get('resume') === '1') void saveMenu.quickload();
+
   // Campaign mode (/play/<map>?campaign=<id>): show the Objectives panel and
   // check the chapter's win condition against the live session.
   const campaignParam = params.get('campaign');

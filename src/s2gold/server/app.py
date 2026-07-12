@@ -55,6 +55,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         # The menu is a single Vite entry that routes on pathname.
         @app.get("/setup", include_in_schema=False)
+        @app.get("/options", include_in_schema=False)
+        @app.get("/credits", include_in_schema=False)
         async def setup_page() -> FileResponse:
             return FileResponse(dist / "index.html")
 

@@ -17,6 +17,32 @@ import { menuStrings } from './strings';
 import { MenuMusic } from './music';
 import { openIntro, introWatched } from './intro';
 
+/** The dev-only Asset inspector shows with ?dev=1 or localStorage s2gold.dev=1. */
+function devToolsEnabled(): boolean {
+  if (new URLSearchParams(window.location.search).get('dev') === '1') return true;
+  try {
+    return window.localStorage.getItem('s2gold.dev') === '1';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The newest save (any map), for "Resume last game". Returns null when the
+ * saves API is unreachable (e.g. the plain Vite dev server) or empty.
+ */
+async function newestSave(): Promise<{ map: string } | null> {
+  try {
+    const res = await fetch('/api/saves', { signal: AbortSignal.timeout(2000) });
+    if (!res.ok) return null;
+    const saves = (await res.json()) as { map?: string }[];
+    const first = saves[0];
+    return first?.map ? { map: first.map } : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Gold tint approximating the original menu lettering. */
 const GOLD = '#f0c84a';
 const CREAM = '#f4ecd0';
@@ -47,6 +73,12 @@ export async function renderTitle(root: HTMLElement): Promise<void> {
       fontHeading(font, strings.title, { scale: 3, color: GOLD, testid: 'title-heading' }),
     );
 
+    // Entry order mirrors the original title menu (see
+    // docs/reference-study/captures/credits.png): Roman Campaign, World
+    // Campaign, Resume last game, Load game, Unlimited play, Options, Intro,
+    // Credits. The original's "Quit program" has no browser equivalent and is
+    // deliberately omitted; the dev Asset inspector only shows with ?dev=1.
+    const resume = await newestSave();
     const list = el('nav', { class: 'menu-list', attrs: { 'data-testid': 'menu-list' } });
     list.append(
       menuEntry({
@@ -67,11 +99,37 @@ export async function renderTitle(root: HTMLElement): Promise<void> {
       }),
       menuEntry({
         font,
+        label: 'Resume last game',
+        color: CREAM,
+        ...(resume
+          ? { href: `/play/${resume.map}?resume=1` }
+          : { disabled: true, tooltip: 'No saved game yet' }),
+        ...(resume ? { tooltip: 'Continue from your newest save' } : {}),
+        testid: 'menu-resume',
+      }),
+      menuEntry({
+        font,
+        label: strings.loadGame,
+        color: CREAM,
+        disabled: true,
+        tooltip: 'Load a saved game from the in-game menu',
+        testid: 'menu-loadgame',
+      }),
+      menuEntry({
+        font,
         label: strings.unlimited,
         color: CREAM,
         href: '/setup',
         tooltip: 'Free play: pick a map and start',
         testid: 'menu-freeplay',
+      }),
+      menuEntry({
+        font,
+        label: 'Options',
+        color: CREAM,
+        href: '/options',
+        tooltip: 'Music and sound settings',
+        testid: 'menu-options',
       }),
       menuEntry({
         font,
@@ -83,21 +141,25 @@ export async function renderTitle(root: HTMLElement): Promise<void> {
       }),
       menuEntry({
         font,
-        label: 'Asset inspector',
+        label: 'Credits',
         color: CREAM,
-        href: '/inspector',
-        tooltip: 'Browse the converted game assets',
-        testid: 'menu-inspector',
-      }),
-      menuEntry({
-        font,
-        label: strings.loadGame,
-        color: CREAM,
-        disabled: true,
-        tooltip: 'Load a saved game from the in-game menu',
-        testid: 'menu-loadgame',
+        href: '/credits',
+        tooltip: 'The people who made the original',
+        testid: 'menu-credits',
       }),
     );
+    if (devToolsEnabled()) {
+      list.append(
+        menuEntry({
+          font,
+          label: 'Asset inspector',
+          color: CREAM,
+          href: '/inspector',
+          tooltip: 'Browse the converted game assets',
+          testid: 'menu-inspector',
+        }),
+      );
+    }
     panel.append(list);
   } else {
     // No font atlas: still render a usable menu with plain DOM text.
@@ -129,18 +191,29 @@ export async function renderTitle(root: HTMLElement): Promise<void> {
             text: 'World Campaign',
             attrs: { 'data-testid': 'menu-worldcampaign' },
           }),
+          el('span', {
+            class: 'menu-entry disabled',
+            text: 'Resume last game',
+            attrs: { 'data-testid': 'menu-resume', 'aria-disabled': 'true' },
+          }),
           el('a', {
             class: 'menu-entry',
             href: '/setup',
             text: strings.unlimited,
             attrs: { 'data-testid': 'menu-freeplay' },
           }),
+          el('a', {
+            class: 'menu-entry',
+            href: '/options',
+            text: 'Options',
+            attrs: { 'data-testid': 'menu-options' },
+          }),
           introEntry,
           el('a', {
             class: 'menu-entry',
-            href: '/inspector',
-            text: 'Asset inspector',
-            attrs: { 'data-testid': 'menu-inspector' },
+            href: '/credits',
+            text: 'Credits',
+            attrs: { 'data-testid': 'menu-credits' },
           }),
           el('span', {
             class: 'menu-entry disabled',

@@ -19,6 +19,10 @@ function cleanUrls(): Plugin {
         } else if (url === '/setup' || url.startsWith('/setup/') || url.startsWith('/setup?')) {
           req.url = '/index.html';
         } else if (
+          url === '/options' ||
+          url.startsWith('/options?') ||
+          url === '/credits' ||
+          url.startsWith('/credits?') ||
           url === '/campaign' ||
           url.startsWith('/campaign/') ||
           url.startsWith('/campaign?')

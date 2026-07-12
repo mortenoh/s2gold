@@ -11,6 +11,8 @@ import { renderTitle } from './menu/title';
 import { renderSetup } from './menu/setup';
 import { renderCampaign } from './menu/campaign';
 import { renderBriefing } from './menu/briefing';
+import { renderOptions } from './menu/options';
+import { renderCredits } from './menu/credits';
 
 async function boot(): Promise<void> {
   const root = document.querySelector<HTMLElement>('#app');
@@ -20,6 +22,10 @@ async function boot(): Promise<void> {
   try {
     if (path === '/setup' || path.startsWith('/setup/') || path.startsWith('/setup?')) {
       await renderSetup(root);
+    } else if (path === '/options' || path.startsWith('/options?')) {
+      await renderOptions(root);
+    } else if (path === '/credits' || path.startsWith('/credits?')) {
+      await renderCredits(root);
     } else if (path === '/campaign' || path.startsWith('/campaign?')) {
       await renderCampaign(root);
     } else if (path === '/campaign/world' || path.startsWith('/campaign/world?')) {

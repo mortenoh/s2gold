@@ -28,14 +28,18 @@ test('title screen renders the menu without console errors', async ({ page }) =>
   await expect(page.getByTestId('title-panel')).toBeVisible();
   await expect(page.getByTestId('menu-list')).toBeVisible();
 
-  // The expected entries, in their enabled/disabled states. Campaign is now
-  // enabled (P7); Load game remains disabled.
-  await expect(page.getByTestId('menu-freeplay')).toBeVisible();
-  await expect(page.getByTestId('menu-inspector')).toBeVisible();
+  // The expected entries in the original's order and enabled/disabled states.
   await expect(page.getByTestId('menu-campaign')).toBeVisible();
   await expect(page.getByTestId('menu-campaign')).not.toHaveAttribute('aria-disabled', 'true');
-  await expect(page.getByTestId('menu-intro')).toBeVisible();
+  await expect(page.getByTestId('menu-worldcampaign')).toBeVisible();
+  await expect(page.getByTestId('menu-resume')).toBeVisible();
   await expect(page.getByTestId('menu-loadgame')).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.getByTestId('menu-freeplay')).toBeVisible();
+  await expect(page.getByTestId('menu-options')).toBeVisible();
+  await expect(page.getByTestId('menu-intro')).toBeVisible();
+  await expect(page.getByTestId('menu-credits')).toBeVisible();
+  // The dev Asset inspector is hidden unless the dev flag is set.
+  await expect(page.getByTestId('menu-inspector')).toHaveCount(0);
 
   expect(errors, `unexpected console errors: ${errors.join('\n')}`).toEqual([]);
 });
@@ -87,4 +91,49 @@ test('a specific map can be selected and previewed', async ({ page }) => {
   await expect(second).toHaveClass(/active/);
   await expect(page.getByTestId('minimap')).toBeVisible();
   await expect(page.getByTestId('start-game')).toHaveAttribute('data-map', name ?? '');
+});
+
+test('options screen renders its settings and Back returns to the title', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(String(err)));
+
+  await page.goto('/options');
+  await expect(page.getByTestId('options-panel')).toBeVisible();
+  await expect(page.getByTestId('options-music')).toBeVisible();
+  await expect(page.getByTestId('options-sfx-volume')).toBeVisible();
+
+  // Cycling a volume persists to the shared audio key.
+  const before = await page.getByTestId('options-sfx-volume').textContent();
+  await page.getByTestId('options-sfx-volume').click();
+  const after = await page.getByTestId('options-sfx-volume').textContent();
+  expect(after).not.toBe(before);
+
+  await page.getByTestId('options-back').click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId('title-panel')).toBeVisible();
+
+  expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);
+});
+
+test('credits screen pages through the original credit banks', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(String(err)));
+
+  await page.goto('/credits');
+  await expect(page.getByTestId('credits-panel')).toBeVisible();
+  await expect(page.getByTestId('credits-back')).toBeVisible();
+
+  // With converted assets the banks yield named pages; Next advances.
+  const hasAssets = await (async () => {
+    const res = await page.request.get('/assets/texts/eng/txt2_credit01.json');
+    return res.ok();
+  })();
+  if (hasAssets) {
+    await expect(page.getByTestId('credits-name')).toBeVisible();
+    const first = await page.getByTestId('credits-name').textContent();
+    await page.getByTestId('credits-next').click();
+    await expect(page.getByTestId('credits-name')).not.toHaveText(first ?? '');
+  }
+
+  expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);
 });
