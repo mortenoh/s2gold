@@ -935,7 +935,11 @@ async function boot(): Promise<void> {
     openWarehouse: (node) => {
       const title = session?.warehouseTitleAt(node) ?? null;
       if (!title) return false;
-      goodsPanel.open(title);
+      // Open the inventory over the clicked building, not anchored to the HUD
+      // Goods button. nodeToScreen is canvas-relative; offset by the canvas rect.
+      const s = nodeToScreen(node);
+      const rect = canvas.getBoundingClientRect();
+      goodsPanel.open(title, { x: rect.left + s.x, y: rect.top + s.y });
       return true;
     },
   });

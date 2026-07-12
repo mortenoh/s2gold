@@ -131,7 +131,13 @@ export class GoodsPanel {
     this.deps.onVisibility?.(false);
   }
 
-  open(title = 'Goods'): void {
+  /**
+   * Open the panel. `at` (viewport coords, e.g. a clicked building) centres the
+   * window horizontally over that point and places it just above — used when a
+   * warehouse is clicked so its inventory pops up over the building. Omitted for
+   * the HUD Goods button, which anchors the panel to itself via wireHudPanel.
+   */
+  open(title = 'Goods', at?: { x: number; y: number }): void {
     if (!this.deps.session()) return;
     this.close();
     this.title = title;
@@ -158,7 +164,31 @@ export class GoodsPanel {
     makeDraggable(this.panel, head, closeButton);
     this.build();
     this.update();
+    // Position after building so the panel's full height is measurable.
+    if (at) this.positionOver(at);
     this.deps.onVisibility?.(true);
+  }
+
+  /**
+   * Centre the panel horizontally over `at` and sit it just above that point
+   * (the clicked building), flipping below when there is no room, and clamp to
+   * the viewport. Only the warehouse-click path sets this; the HUD button path
+   * lets wireHudPanel anchor the panel to itself instead.
+   */
+  private positionOver(at: { x: number; y: number }): void {
+    if (!this.panel) return;
+    const pw = this.panel.offsetWidth;
+    const ph = this.panel.offsetHeight;
+    const margin = 8;
+    let left = at.x - pw / 2;
+    let top = at.y - ph - 12;
+    if (top < margin) top = at.y + 12; // no room above: drop below the building
+    left = Math.max(margin, Math.min(left, window.innerWidth - pw - margin));
+    top = Math.max(margin, Math.min(top, window.innerHeight - ph - margin));
+    this.panel.style.transform = 'none';
+    this.panel.style.bottom = 'auto';
+    this.panel.style.left = `${left}px`;
+    this.panel.style.top = `${top}px`;
   }
 
   /** Build the grouped grid once, caching each ware's count cell for updates. */
