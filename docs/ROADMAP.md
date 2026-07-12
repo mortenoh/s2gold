@@ -48,19 +48,20 @@ Remaining:
 - Palette-exact gouraud lighting from GOU*.DAT
   (`packages/renderer/src/mesh.ts` ships an approximation).
 - Per-nation border-stone sprites (single fixed sprite today).
-- AI: catapult play; AI: seafaring (no ship/harbor references in
-  `packages/engine/src/ai/`).
+- AI: seafaring (no ship/harbor references in `packages/engine/src/ai/`).
 - Storehouse-local inventories (`Player.wares` is one global pool).
 - Gold-edition extra chains: vineyard/winery, charburner (`BUILDING_DEFS`
   lacks them).
-- World Campaign (Gold second campaign) mission set - `campaign-data.ts` is
-  Roman-only (MISS200-209).
 - Original combat/sea sound-id verification.
+- Per-nation border stones and the Gold extra chains (vineyard/charburner)
+  are blocked: all players are Roman today and the extra-chain sprites do
+  not exist in the original assets - revisit with multi-nation support.
 
 Landed since the PLAN.md backlog was written: donkey roads + road upgrade,
 geologists, ground ware-stack sprites, soldier rank overlays + fight
 animations, wasteland/winter terrain rules, harbor territory recalc on
-construction.
+construction, AI catapult play (2026-07-12), and the World Campaign
+mission set (2026-07-12).
 
 ## D. Code health (review)
 
