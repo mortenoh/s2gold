@@ -31,7 +31,6 @@ import { buildStaticObjects, objectAtlasForLandscape } from './map-objects';
 import { loadAtlas } from './sprite-atlas';
 import { loadBobAtlas } from './bob-atlas';
 import { MinimapView } from './minimap-view';
-import { installFrame } from './frame';
 import { installHandCursor } from './cursor';
 import { GameSession, SPEEDS, type Speed } from './session';
 import {
@@ -514,9 +513,6 @@ async function boot(): Promise<void> {
     signLegend,
     el('div', { class: 'minimap-box' }, minimapCanvas),
   );
-  // Decorative statue frame over the map, under the HUD (cosmetic; absent
-  // without the ui assets).
-  void installFrame(gameRoot);
 
   let renderer: TerrainRenderer;
   let sprites: SpriteRenderer;
