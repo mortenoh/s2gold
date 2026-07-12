@@ -68,36 +68,15 @@ construction, AI catapult play (2026-07-12), the World Campaign mission
 set (2026-07-12), palette-exact gouraud lighting + water/lava palette
 animation (2026-07-12), and terrain edge blending (2026-07-12).
 
-## D. Code health (review)
+## D. Code health (landed 2026-07-12)
 
-- Versioned save migrations: `packages/engine/src/serialize.ts` back-patches
-  new fields ad hoc under a frozen `WORLD_VERSION = 1`, and the military
-  fields (garrison/occupied/coinsEnabled) were never back-patched. Bump the
-  version per schema change with a migration table.
-- Attack-rules view helper: `GameSession.attackableSoldiers`
-  (`packages/app/src/game/session.ts`) re-implements `execAttack`'s
-  gathering rules and has already diverged (engine accepts HQ targets, the
-  copy does not). Export a view helper from the engine next to `execAttack`.
-- Panel shell dedupe: `military-ui.ts` and `harbor-ui.ts` copy the same
-  open/close/refresh/button scaffolding byte for byte.
-- Map-preview colors: `packages/app/src/menu/minimap.ts` has its own
-  terrain-color table that disagrees with the map format (0x05 water drawn
-  as meadow) and ignores landscape. Use the renderer's exported
-  `minimapColor`/landscape tables (`packages/renderer/src/terrain-data.ts`).
-- `makeBuilding` factory: ~6 sites hand-write the full Building literal
-  (`world.ts`, `commands.ts`, `systems/seafaring.ts`, `harness-economy.ts`,
-  app `session.ts`, which also clones the unexported `storeAlloc`).
-- Delete dead exports: `roadsThrough`, `settlersInRect`, `getToolPriority`,
-  `getTransportPriority`, `shipView`, `BUILDING_OUTPUT`, `BUILDING_WORKER`,
-  `SAWMILL_PLANKS_PER_TRUNK`, `SAWMILL_INPUT_CAP`, `roadCarrier`,
-  `isHeadquarters`, unused re-exports (`roadBetween`, `roadConnects`,
-  `waterNeighbours`).
-- e2e dedupe: shared `isBenign` console filter (the menu and smoke copies
-  have already drifted) and a shared campaign `PROGRESS_KEY` constant.
-- Python: `convert/maps.py` and `convert/terrain.py` inline
-  `json.dumps` writes - use `core.write_json` like the other converters.
-- Trim the unread half of the `window.__s2debug` surface (roughly half its
-  ~50 members are read by no test).
+The whole review sweep shipped: renderer minimap tables for the setup
+preview (its private palette drew water as meadow), versioned save
+migrations (WORLD_VERSION 2 with a per-version table; true v1 saves now
+load), the engine attackableSoldiers view shared by command and panel, the
+BuildingPanel base class for the military/harbor panels, the makeBuilding
+factory + exported storeAlloc, dead-export deletion, shared e2e helpers,
+core.write_json in the maps/terrain converters, and the __s2debug trim.
 
 ## E. Infra
 
