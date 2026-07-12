@@ -44,22 +44,6 @@ class _Archive:
 # embedded roemerpal palette.
 _FRAME_PIECES = ("dskbobol", "dskbobor", "dskbobul", "dskbobur", "dskov10l", "dskov10r", "dskbobic")
 _CURSOR_PIECES = ("handa", "handb", "handc", "handw", "handk", "handl")
-_WINDOW_PIECES = (
-    "leftfram",
-    "rghtfram",
-    "bottfram",
-    "leftbord",
-    "rghtbord",
-    "patter01",
-    "titlepas",
-    "titleact",
-    "titleslc",
-    "closicup",
-    "closicdn",
-    "zoomicup",
-    "iconicup",
-    "dmmyicup",
-)
 
 
 def _emit_resource_ui(extracted: Path, assets: Path) -> None:
@@ -79,7 +63,7 @@ def _emit_resource_ui(extracted: Path, assets: Path) -> None:
     out_dir = assets / "ui"
     out_dir.mkdir(parents=True, exist_ok=True)
     pieces: dict[str, object] = {}
-    for name in _FRAME_PIECES + _CURSOR_PIECES + _WINDOW_PIECES:
+    for name in _FRAME_PIECES + _CURSOR_PIECES:
         item = by_name.get(name)
         if not isinstance(item, BitmapItem):
             continue
@@ -88,12 +72,7 @@ def _emit_resource_ui(extracted: Path, assets: Path) -> None:
         pieces[name] = {"png": f"ui/{name}.png", "width": sprite.width, "height": sprite.height}
     write_json(
         out_dir / "index.json",
-        {
-            "pieces": pieces,
-            "frame": list(_FRAME_PIECES),
-            "cursor": list(_CURSOR_PIECES),
-            "window": list(_WINDOW_PIECES),
-        },
+        {"pieces": pieces, "frame": list(_FRAME_PIECES), "cursor": list(_CURSOR_PIECES)},
     )
 
 
