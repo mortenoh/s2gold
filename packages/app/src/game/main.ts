@@ -23,7 +23,7 @@ import { clear, el } from '../lib/dom';
 import { loadMap, loadMapIndex, loadTerrainImage, pickMap, type MapIndexEntry } from './map-loader';
 import { buildStaticObjects, objectAtlasForLandscape } from './map-objects';
 import { loadAtlas } from './sprite-atlas';
-import { loadBobAtlas, type BobAtlas } from './bob-atlas';
+import { loadBobAtlas } from './bob-atlas';
 import { MinimapView } from './minimap-view';
 import { GameSession, SPEEDS, type Speed } from './session';
 import {
@@ -535,19 +535,20 @@ async function boot(): Promise<void> {
     return;
   }
 
-  // Building/flag (rom_z) and settler (carrier BOB) atlases are map-independent
-  // for the Roman nation; register them once.
-  const romanAtlas = await loadAtlas(BUILDING_ARCHIVE);
+  // Map-independent atlases (Roman buildings/flags, ships, work animations,
+  // carrier + jobs BOBs): five independent fetch+decode chains, loaded in
+  // parallel; registration order stays deterministic after the join.
+  const [romanAtlas, shipAtlas, workAtlas, carrier, jobs] = await Promise.all([
+    loadAtlas(BUILDING_ARCHIVE),
+    loadAtlas(SHIP_ARCHIVE),
+    loadAtlas(WORK_ARCHIVE),
+    loadBobAtlas('carrier', BOB_ARCHIVE),
+    loadBobAtlas('jobs', JOBS_ARCHIVE),
+  ]);
   if (romanAtlas) sprites.registerAtlas(romanAtlas.meta, romanAtlas.pages, romanAtlas.pmaskPages);
-  // Ship sprites (boot_z) are nation-independent; register once alongside rom_z.
-  const shipAtlas = await loadAtlas(SHIP_ARCHIVE);
   if (shipAtlas) sprites.registerAtlas(shipAtlas.meta, shipAtlas.pages, shipAtlas.pmaskPages);
-  // Settler work-animation sprites (CBOB rom_bobs): nation-independent, register once.
-  const workAtlas = await loadAtlas(WORK_ARCHIVE);
   if (workAtlas) sprites.registerAtlas(workAtlas.meta, workAtlas.pages, workAtlas.pmaskPages);
-  const carrier: BobAtlas | null = await loadBobAtlas('carrier', BOB_ARCHIVE);
   if (carrier) sprites.registerAtlas(carrier.meta, carrier.pages, carrier.pmaskPages);
-  const jobs: BobAtlas | null = await loadBobAtlas('jobs', JOBS_ARCHIVE);
   if (jobs) sprites.registerAtlas(jobs.meta, jobs.pages, jobs.pmaskPages);
 
   let camera = new Camera(1, 1);
@@ -641,6 +642,7 @@ async function boot(): Promise<void> {
     const playerCount = ai.length > 0 ? Math.max(...ai) + 1 : undefined;
     session = new GameSession(map.engineMap, GAME_SEED, playerCount, ai);
     session.fogEnabled = readFogPref();
+    overlayTick = -1; // new world: drop per-tick overlay caches
     // A fresh session runs at 1x unpaused: sync the HUD controls to it.
     setSpeed(1);
     setPaused(false);
@@ -994,6 +996,8 @@ async function boot(): Promise<void> {
     toast: saveToast,
     onVisibility: (open) => syncHudPanelButton(menuButton, open),
     onLoaded: () => {
+      // The loaded world may share the cached tick number: force a rebuild.
+      overlayTick = -1;
       // Restored counters are history, not fresh events: sync the toast edge
       // detectors so loading a save does not fire phantom sea toasts, and
       // force the stats charts to redraw the restored series.
@@ -1062,6 +1066,25 @@ async function boot(): Promise<void> {
 
   // --- Render loop ----------------------------------------------------------
 
+  // Derived world overlays (road segments, disconnected/depleted markers)
+  // change only when the simulation ticks; cache them per tick so paused and
+  // high-fps frames stop rebuilding segment arrays and re-running the
+  // road-graph flood fill every frame.
+  let overlayTick = -1;
+  let cachedRoadSegs: ReturnType<typeof roadSegments> = [];
+  let cachedUpgradedSegs: ReturnType<typeof upgradedRoadSegments> = [];
+  let cachedDisc: ReturnType<typeof disconnectedBuildingMarkers> = [];
+  let cachedDry: ReturnType<typeof depletedMineMarkers> = [];
+  function refreshOverlays(): void {
+    if (!session) return;
+    if (session.world.tick === overlayTick) return;
+    overlayTick = session.world.tick;
+    cachedRoadSegs = roadSegments(session.world, session.geom);
+    cachedUpgradedSegs = upgradedRoadSegments(session.world, session.geom);
+    cachedDisc = disconnectedBuildingMarkers(session.world, session.localPlayer);
+    cachedDry = depletedMineMarkers(session.world, session.geom, session.localPlayer);
+  }
+
   let frames = 0;
   let fpsWindowStart = performance.now();
   let lastFrame = performance.now();
@@ -1127,11 +1150,13 @@ async function boot(): Promise<void> {
     renderer.resize();
     renderer.render(camera);
     if (session) {
-      roads.render(camera, roadSegments(session.world, session.geom));
+      refreshOverlays();
+      roads.render(camera, cachedRoadSegs);
       // Upgraded (donkey) roads: repaint their edges in the darker paved colour,
       // a touch wider, on top of the base dirt pass.
-      const upgraded = upgradedRoadSegments(session.world, session.geom);
-      if (upgraded.length > 0) roads.render(camera, upgraded, DONKEY_ROAD_COLOR, true, 4.5);
+      if (cachedUpgradedSegs.length > 0) {
+        roads.render(camera, cachedUpgradedSegs, DONKEY_ROAD_COLOR, true, 4.5);
+      }
     }
 
     const waveFrame = Math.floor(now / ANIM_FRAME_MS);
@@ -1189,11 +1214,9 @@ async function boot(): Promise<void> {
       }
       // Warn about own buildings with no road path to a warehouse (they can't
       // receive materials, so a site there never builds). Bright orange "!".
-      const disc = disconnectedBuildingMarkers(session.world, session.localPlayer);
-      if (disc.length > 0) roads.render(camera, disc, [1.0, 0.55, 0.0, 0.95], false);
+      if (cachedDisc.length > 0) roads.render(camera, cachedDisc, [1.0, 0.55, 0.0, 0.95], false);
       // Exhausted mines: a red bar so the player knows to rebuild on fresh ore.
-      const dry = depletedMineMarkers(session.world, session.geom, session.localPlayer);
-      if (dry.length > 0) roads.render(camera, dry, [1.0, 0.2, 0.2, 0.95], false);
+      if (cachedDry.length > 0) roads.render(camera, cachedDry, [1.0, 0.2, 0.2, 0.95], false);
       // Geologist survey signs are drawn as real sign-tablet sprites in the dynamic
       // pass above (depth-sorted with the terrain); here we only toggle the legend.
       signLegend.style.display = session.world.signs.length > 0 ? 'block' : 'none';
