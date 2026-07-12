@@ -154,6 +154,33 @@ function runGrowth(world: World): void {
   }
 }
 
+/**
+ * Visit every node whose torus distance from `center` can be <= radius, by
+ * enumerating the (2r+1)^2 window around it (each lattice step changes x and
+ * y by at most 1, so the window is a superset). Falls back to a full scan
+ * when the window would wrap onto itself (radius vs map size), which would
+ * visit nodes twice. Callers still apply the exact distance check.
+ */
+function forEachNodeNear(
+  geom: Geometry,
+  center: number,
+  radius: number,
+  visit: (node: number) => void,
+): void {
+  const span = 2 * radius + 1;
+  if (span >= geom.width || span >= geom.height) {
+    for (let node = 0; node < geom.size; node++) visit(node);
+    return;
+  }
+  const cx = geom.x(center);
+  const cy = geom.y(center);
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      visit(geom.index(cx + dx, cy + dy));
+    }
+  }
+}
+
 /** Nearest node (by distance then id) matching `pred` and reachable on foot. */
 function nearestReachable(
   world: World,
@@ -164,11 +191,11 @@ function nearestReachable(
   pred: (node: number) => boolean,
 ): { node: number; path: number[] } | null {
   const candidates: number[] = [];
-  for (let node = 0; node < geom.size; node++) {
-    if (!pred(node)) continue;
-    if (geom.distance(fromNode, node) > radius) continue;
+  forEachNodeNear(geom, fromNode, radius, (node) => {
+    if (!pred(node)) return;
+    if (geom.distance(fromNode, node) > radius) return;
     candidates.push(node);
-  }
+  });
   candidates.sort((a, b) => geom.distance(fromNode, a) - geom.distance(fromNode, b) || a - b);
   for (const node of candidates) {
     const path = findWalkPath(world, geom, rules, fromNode, node);
@@ -190,16 +217,16 @@ function nearestResource(
 ): number {
   let best = -1;
   let bestDist = Infinity;
-  for (let node = 0; node < geom.size; node++) {
+  forEachNodeNear(geom, center, radius, (node) => {
     const byte = world.resource[node];
-    if (resourceType(byte) !== resNibble || resourceAmount(byte) <= 0) continue;
+    if (resourceType(byte) !== resNibble || resourceAmount(byte) <= 0) return;
     const d = geom.distance(center, node);
-    if (d > radius) continue;
+    if (d > radius) return;
     if (d < bestDist || (d === bestDist && (best < 0 || node < best))) {
       bestDist = d;
       best = node;
     }
-  }
+  });
   return best;
 }
 
