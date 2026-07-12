@@ -33,8 +33,10 @@ export interface Chapter {
   readonly mapName: string;
   /** Display title (matches the map's title). */
   readonly title: string;
-  /** Converted mission-text bank for this chapter (diary + goals). */
-  readonly textFile: string;
+  /** Converted mission-text bank for this chapter (diary + goals). The world
+   * campaign has no English diary banks, so its chapters omit this and the
+   * briefing shows the objective alone. */
+  readonly textFile?: string;
   /** Short English objective shown in the briefing + in-game Objectives panel. */
   readonly objective: string;
   /** The approximate, engine-checkable win condition. */
@@ -140,7 +142,177 @@ export const CHAPTERS: readonly Chapter[] = [
 ];
 
 /** Look up a chapter by its 1-based id. */
+/**
+ * The eighteen World Campaign missions (Gold edition second campaign), played
+ * over maps3_omap00-17 (their event scripts are texts/mission/mis_10NN, which
+ * this reimplementation does not execute - the win conditions here are the
+ * same checkable approximations the Roman table uses; every mission is a
+ * conquest map, so all of them are defeatAll). Ids live at 101+ so both
+ * campaigns share one chapter-id space and one progress store.
+ */
+export const WORLD_CHAPTERS: readonly Chapter[] = [
+  {
+    id: 101,
+    roman: '1',
+    mapName: 'maps3_omap00',
+    title: 'Island of Hills',
+    objective: 'Defeat every rival settlement on Island of Hills.',
+    win: { kind: 'defeatAll' },
+  },
+  {
+    id: 102,
+    roman: '2',
+    mapName: 'maps3_omap01',
+    title: 'Battle in the Middle',
+    objective: 'Defeat every rival settlement on Battle in the Middle.',
+    win: { kind: 'defeatAll' },
+  },
+  {
+    id: 103,
+    roman: '3',
+    mapName: 'maps3_omap02',
+    title: 'Plateau of Dragons',
+    objective: 'Defeat every rival settlement on Plateau of Dragons.',
+    win: { kind: 'defeatAll' },
+  },
+  {
+    id: 104,
+    roman: '4',
+    mapName: 'maps3_omap03',
+    title: 'The Green Island',
+    objective: 'Defeat every rival settlement on The Green Island.',
+    win: { kind: 'defeatAll' },
+  },
+  {
+    id: 105,
+    roman: '5',
+    mapName: 'maps3_omap04',
+    title: 'Four Islands',
+    objective: 'Defeat every rival settlement on Four Islands.',
+    win: { kind: 'defeatAll' },
+  },
+  {
+    id: 106,
+    roman: '6',
+    mapName: 'maps3_omap05',
+    title: 'Gold Fever!',
+    objective: 'Defeat every rival settlement on Gold Fever!.',
+    win: { kind: 'defeatAll' },
+  },
+  {
+    id: 107,
+    roman: '7',
+    mapName: 'maps3_omap06',
+    title: 'Good old times',
+    objective: 'Defeat every rival settlement on Good old times.',
+    win: { kind: 'defeatAll' },
+  },
+  {
+    id: 108,
+    roman: '8',
+    mapName: 'maps3_omap07',
+    title: 'In the Mountains',
+    objective: 'Defeat every rival settlement on In the Mountains.',
+    win: { kind: 'defeatAll' },
+  },
+  {
+    id: 109,
+    roman: '9',
+    mapName: 'maps3_omap08',
+    title: 'The Triangle',
+    objective: 'Defeat every rival settlement on The Triangle.',
+    win: { kind: 'defeatAll' },
+  },
+  {
+    id: 110,
+    roman: '10',
+    mapName: 'maps3_omap09',
+    title: 'Tortoise',
+    objective: 'Defeat every rival settlement on Tortoise.',
+    win: { kind: 'defeatAll' },
+  },
+  {
+    id: 111,
+    roman: '11',
+    mapName: 'maps3_omap10',
+    title: 'The Ditch',
+    objective: 'Defeat every rival settlement on The Ditch.',
+    win: { kind: 'defeatAll' },
+  },
+  {
+    id: 112,
+    roman: '12',
+    mapName: 'maps3_omap11',
+    title: 'The Amulet',
+    objective: 'Defeat every rival settlement on The Amulet.',
+    win: { kind: 'defeatAll' },
+  },
+  {
+    id: 113,
+    roman: '13',
+    mapName: 'maps3_omap12',
+    title: 'Sea of Lava',
+    objective: 'Defeat every rival settlement on Sea of Lava.',
+    win: { kind: 'defeatAll' },
+  },
+  {
+    id: 114,
+    roman: '14',
+    mapName: 'maps3_omap13',
+    title: 'The Plateau',
+    objective: 'Defeat every rival settlement on The Plateau.',
+    win: { kind: 'defeatAll' },
+  },
+  {
+    id: 115,
+    roman: '15',
+    mapName: 'maps3_omap14',
+    title: 'Through the Desert',
+    objective: 'Defeat every rival settlement on Through the Desert.',
+    win: { kind: 'defeatAll' },
+  },
+  {
+    id: 116,
+    roman: '16',
+    mapName: 'maps3_omap15',
+    title: 'The Oak Forest',
+    objective: 'Defeat every rival settlement on The Oak Forest.',
+    win: { kind: 'defeatAll' },
+  },
+  {
+    id: 117,
+    roman: '17',
+    mapName: 'maps3_omap16',
+    title: 'Countryside by a Riv',
+    objective: 'Defeat every rival settlement on Countryside by a Riv.',
+    win: { kind: 'defeatAll' },
+  },
+  {
+    id: 118,
+    roman: '18',
+    mapName: 'maps3_omap17',
+    title: 'The Dark Path',
+    objective: 'Defeat every rival settlement on The Dark Path.',
+    win: { kind: 'defeatAll' },
+  },
+];
+
+/** Which campaign a chapter id belongs to. */
+export type CampaignId = 'roman' | 'world';
+
+/** The chapter table of a campaign. */
+export function campaignChapters(campaign: CampaignId): readonly Chapter[] {
+  return campaign === 'world' ? WORLD_CHAPTERS : CHAPTERS;
+}
+
+/** The campaign-list route a chapter belongs to (briefing/victory back links). */
+export function campaignPathFor(chapterId: number): string {
+  return chapterId >= 101 ? '/campaign/world' : '/campaign';
+}
+
 export function chapterById(id: number): Chapter | undefined {
+  const world = WORLD_CHAPTERS.find((c) => c.id === id);
+  if (world) return world;
   return CHAPTERS.find((c) => c.id === id);
 }
 
@@ -198,6 +370,7 @@ export function isChapterCompleted(id: number): boolean {
  */
 export function isChapterUnlocked(id: number): boolean {
   if (id <= 1) return true;
+  if (id === WORLD_CHAPTERS[0]?.id) return true; // each campaign opens at its first chapter
   return isChapterCompleted(id - 1);
 }
 

@@ -144,3 +144,42 @@ test('intro overlay opens from the title screen and can be skipped', async ({ pa
 
   expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);
 });
+
+test('world campaign lists eighteen missions with only the first selectable', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(String(err)));
+
+  await page.goto('/campaign/world');
+  await expect(page.getByTestId('campaign-panel')).toBeVisible();
+  await expect(page.getByTestId('campaign-heading')).toHaveAttribute(
+    'aria-label',
+    /World Campaign/i,
+  );
+
+  const chapters = page.getByTestId('chapter-item');
+  await expect(chapters).toHaveCount(18);
+  await expect(page.locator('[data-chapter="101"]')).toHaveAttribute('data-state', 'available');
+  await expect(page.locator('[data-chapter="102"]')).toHaveAttribute('data-state', 'locked');
+
+  expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);
+});
+
+test('world briefing shows the objective and starts on the mission map', async ({ page }) => {
+  test.skip(!(await assetsPresent(page)), 'converted assets not installed');
+
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(String(err)));
+
+  await page.goto('/campaign/world');
+  await page.locator('a[data-chapter="101"]').click();
+  await expect(page.getByTestId('briefing-panel')).toBeVisible();
+  // No diary bank exists for world missions: the objective block still renders.
+  await expect(page.getByTestId('briefing-objective')).toContainText('Defeat every rival');
+  await expect(page.getByTestId('briefing-start')).toHaveAttribute('data-map', 'maps3_omap00');
+
+  await page.getByTestId('briefing-start').click();
+  await expect(page).toHaveURL(/\/play\/maps3_omap00\?/);
+  await expect(page.getByTestId('game-canvas')).toBeVisible({ timeout: 20_000 });
+
+  expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);
+});

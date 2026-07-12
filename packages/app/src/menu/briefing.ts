@@ -15,6 +15,7 @@ import { applyBackdrop } from './pics';
 import { menuStrings } from './strings';
 import { MenuMusic } from './music';
 import {
+  campaignPathFor,
   chapterById,
   campaignAiSlots,
   isChapterCompleted,
@@ -73,7 +74,7 @@ export async function renderBriefing(root: HTMLElement, chapterId: number): Prom
   header.append(
     el('a', {
       class: 'menu-back',
-      href: '/campaign',
+      href: campaignPathFor(chapter.id),
       text: '← Campaign',
       attrs: { 'data-testid': 'briefing-back' },
     }),
@@ -100,7 +101,7 @@ export async function renderBriefing(root: HTMLElement, chapterId: number): Prom
   });
   panel.append(diaryHost);
 
-  const bank = await loadMissionText(chapter.textFile);
+  const bank = chapter.textFile ? await loadMissionText(chapter.textFile) : null;
   const diaryRaw = bank?.[0] ?? chapter.objective;
   renderDiary(diaryHost, font, diaryRaw);
 

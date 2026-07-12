@@ -14,6 +14,7 @@ import { el, clear } from '../lib/dom';
 import type { GameSession } from './session';
 import {
   makeWinTracker,
+  campaignPathFor,
   markChapterCompleted,
   winConditionText,
   type Chapter,
@@ -164,7 +165,7 @@ export class CampaignController {
 
     const continueBtn = el('a', {
       class: 'menu-start-btn',
-      href: '/campaign',
+      href: campaignPathFor(this.deps.chapter.id),
       text: 'Continue',
       attrs: { 'data-testid': 'victory-continue' },
     });

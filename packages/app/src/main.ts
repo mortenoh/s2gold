@@ -22,6 +22,8 @@ async function boot(): Promise<void> {
       await renderSetup(root);
     } else if (path === '/campaign' || path.startsWith('/campaign?')) {
       await renderCampaign(root);
+    } else if (path === '/campaign/world' || path.startsWith('/campaign/world?')) {
+      await renderCampaign(root, 'world');
     } else if (path.startsWith('/campaign/')) {
       // /campaign/<id> -> the chapter briefing. Non-numeric ids render an error
       // panel inside renderBriefing.

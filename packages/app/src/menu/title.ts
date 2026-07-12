@@ -59,6 +59,14 @@ export async function renderTitle(root: HTMLElement): Promise<void> {
       }),
       menuEntry({
         font,
+        label: 'World Campaign',
+        color: CREAM,
+        href: '/campaign/world',
+        tooltip: 'Conquer the eighteen world missions',
+        testid: 'menu-worldcampaign',
+      }),
+      menuEntry({
+        font,
         label: strings.unlimited,
         color: CREAM,
         href: '/setup',
@@ -114,6 +122,12 @@ export async function renderTitle(root: HTMLElement): Promise<void> {
             href: '/campaign',
             text: strings.campaign,
             attrs: { 'data-testid': 'menu-campaign' },
+          }),
+          el('a', {
+            class: 'menu-entry',
+            href: '/campaign/world',
+            text: 'World Campaign',
+            attrs: { 'data-testid': 'menu-worldcampaign' },
           }),
           el('a', {
             class: 'menu-entry',

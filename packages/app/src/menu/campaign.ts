@@ -12,14 +12,22 @@ import { fontHeading } from '../ui/widgets';
 import { applyBackdrop } from './pics';
 import { menuStrings } from './strings';
 import { MenuMusic } from './music';
-import { CHAPTERS, isChapterCompleted, isChapterUnlocked } from './campaign-data';
+import {
+  campaignChapters,
+  isChapterCompleted,
+  isChapterUnlocked,
+  type CampaignId,
+} from './campaign-data';
 
 const GOLD = '#f0c84a';
 
 /** Backdrop preference: the campaign world map, then setup fallbacks. */
 const CAMPAIGN_PIC_KEYS = ['world', 'setup990', 'setup896', 'setup801'] as const;
 
-export async function renderCampaign(root: HTMLElement): Promise<void> {
+export async function renderCampaign(
+  root: HTMLElement,
+  campaign: CampaignId = 'roman',
+): Promise<void> {
   clear(root);
   root.className = 'menu-screen menu-campaign';
 
@@ -48,9 +56,12 @@ export async function renderCampaign(root: HTMLElement): Promise<void> {
       text: '← Back',
       attrs: { 'data-testid': 'campaign-back' },
     }),
-    font
-      ? fontHeading(font, strings.campaign, { scale: 2, color: GOLD, testid: 'campaign-heading' })
-      : el('h1', { text: strings.campaign, attrs: { 'data-testid': 'campaign-heading' } }),
+    (() => {
+      const heading = campaign === 'world' ? 'World Campaign' : strings.campaign;
+      return font
+        ? fontHeading(font, heading, { scale: 2, color: GOLD, testid: 'campaign-heading' })
+        : el('h1', { text: heading, attrs: { 'data-testid': 'campaign-heading' } });
+    })(),
   );
   panel.append(header);
 
@@ -59,7 +70,7 @@ export async function renderCampaign(root: HTMLElement): Promise<void> {
     attrs: { 'data-testid': 'chapter-list', role: 'list' },
   });
 
-  for (const chapter of CHAPTERS) {
+  for (const chapter of campaignChapters(campaign)) {
     const completed = isChapterCompleted(chapter.id);
     const unlocked = isChapterUnlocked(chapter.id);
     const state = completed ? 'completed' : unlocked ? 'available' : 'locked';
