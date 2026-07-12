@@ -383,6 +383,37 @@ export class SpriteRenderer {
    * Push a quad for one sprite anchored at (`ax`, `ay`) world px relative to
    * the camera, if it intersects the viewport.
    */
+  // Reusable QuadItem pool: a mid-game frame pushes thousands of quads and a
+  // fresh object per quad per frame is pure GC churn. Items are consumed by
+  // drawItems within the same render() call, so reuse across frames is safe.
+  private quadPool: QuadItem[] = [];
+  private quadPoolUsed = 0;
+
+  private takeQuad(): QuadItem {
+    let q = this.quadPool[this.quadPoolUsed];
+    if (!q) {
+      q = {
+        archive: '',
+        page: 0,
+        depth: 0,
+        anchorY: 0,
+        x0: 0,
+        y0: 0,
+        x1: 0,
+        y1: 0,
+        u0: 0,
+        v0: 0,
+        u1: 0,
+        v1: 0,
+        tint: NO_TINT,
+        masked: false,
+      };
+      this.quadPool[this.quadPoolUsed] = q;
+    }
+    this.quadPoolUsed++;
+    return q;
+  }
+
   private pushQuad(
     out: QuadItem[],
     archive: string,
@@ -424,22 +455,22 @@ export class SpriteRenderer {
     // carries `shade` (a brightness multiplier for fog, NO_TINT by default) so a
     // player tint never bleeds onto un-masked sprites like buildings.
     const masked = s.pmask === true && tint !== NO_TINT && reg.pmaskTextures[s.atlas] != null;
-    out.push({
-      tint: masked ? tint : shade,
-      archive,
-      page: s.atlas,
-      depth,
-      anchorY: ay,
-      x0,
-      y0,
-      x1,
-      y1,
-      u0: s.x / tw,
-      v0,
-      u1: (s.x + s.w) / tw,
-      v1,
-      masked,
-    });
+    const q = this.takeQuad();
+    q.tint = masked ? tint : shade;
+    q.archive = archive;
+    q.page = s.atlas;
+    q.depth = depth;
+    q.anchorY = ay;
+    q.x0 = x0;
+    q.y0 = y0;
+    q.x1 = x1;
+    q.y1 = y1;
+    q.u0 = s.x / tw;
+    q.v0 = v0;
+    q.u1 = (s.x + s.w) / tw;
+    q.v1 = v1;
+    q.masked = masked;
+    out.push(q);
   }
 
   /** Emit every torus-wrapped quad for one dynamic sprite into `out`. */
@@ -512,6 +543,7 @@ export class SpriteRenderer {
       oy + this.worldH + OFFSET_MARGIN > 0 &&
       oy - OFFSET_MARGIN < viewH;
 
+    this.quadPoolUsed = 0;
     const items: QuadItem[] = [];
     for (let j = j0; j <= j1; j++) {
       const oy = j * this.worldH - camera.y;
