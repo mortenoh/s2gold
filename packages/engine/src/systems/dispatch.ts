@@ -35,13 +35,33 @@ function isWarehouse(b: Building): boolean {
   return !!def && (def.kind === 'hq' || def.kind === 'warehouse');
 }
 
-/** Count wares (waiting or carried) already heading to a building of a type. */
-function enRoute(world: World, buildingId: number, wareType: WareType): number {
-  let n = 0;
-  for (const w of storeLive(world.wares)) {
-    if (w.targetBuildingId === buildingId && w.type === wareType) n++;
+/**
+ * Per-tick census of live wares by raw targetBuildingId and type, replacing a
+ * full ware-store scan per findNeeder call (O(buildings x wares) per tick).
+ * Built once at the top of runDispatch and mirrored at every mutation inside
+ * the pass (assignTarget, tryDeliver, warehouse emission), so reads are
+ * identical to a live scan.
+ */
+type EnRouteCensus = Map<number, Map<WareType, number>>;
+
+function buildEnRouteCensus(world: World): EnRouteCensus {
+  const census: EnRouteCensus = new Map();
+  for (const w of storeLive(world.wares)) censusAdd(census, w.targetBuildingId, w.type, 1);
+  return census;
+}
+
+function censusAdd(census: EnRouteCensus, buildingId: number, type: WareType, delta: number): void {
+  if (buildingId < 0) return;
+  let byType = census.get(buildingId);
+  if (!byType) {
+    byType = new Map();
+    census.set(buildingId, byType);
   }
-  return n;
+  byType.set(type, (byType.get(type) ?? 0) + delta);
+}
+
+function censusGet(census: EnRouteCensus, buildingId: number, type: WareType): number {
+  return census.get(buildingId)?.get(type) ?? 0;
 }
 
 /** Remaining demand of a building for a ware type (0 when satisfied). */
@@ -74,6 +94,7 @@ function demand(b: Building, wareType: WareType): number {
 function findNeeder(
   world: World,
   geom: Geometry,
+  census: EnRouteCensus,
   player: number,
   wareType: WareType,
   fromNode: number,
@@ -85,7 +106,7 @@ function findNeeder(
   for (const b of storeLive(world.buildings)) {
     if (b.player !== player) continue;
     if (skip?.has(b.id)) continue;
-    const need = demand(b, wareType) - enRoute(world, b.id, wareType);
+    const need = demand(b, wareType) - censusGet(census, b.id, wareType);
     if (need <= 0) continue;
     const d = geom.distance(fromNode, getFlag(world, b.flagId).node);
     if (
@@ -116,24 +137,33 @@ function nearestWarehouse(world: World, geom: Geometry, player: number, fromNode
 }
 
 /** Assign a target building for a ware based on its type; a warehouse is the fallback. */
-function assignTarget(world: World, geom: Geometry, wareId: number): void {
+function assignTarget(world: World, geom: Geometry, census: EnRouteCensus, wareId: number): void {
   const w = world.wares.items[wareId];
   if (!w || w.loc !== 'flag') return;
   const flag = getFlag(world, w.locId);
   const player = flag.player;
-  let target = findNeeder(world, geom, player, w.type, flag.node);
+  let target = findNeeder(world, geom, census, player, w.type, flag.node);
   if (target < 0) target = nearestWarehouse(world, geom, player, flag.node);
   if (target < 0) target = world.players[player]?.hqBuildingId ?? -1;
+  censusAdd(census, w.targetBuildingId, w.type, -1);
   w.targetBuildingId = target;
+  censusAdd(census, target, w.type, 1);
 }
 
 /** Deliver a ware sitting on its target building's flag; returns true if consumed. */
-function tryDeliver(world: World, events: EventSink, flag: Flag, wareId: number): boolean {
+function tryDeliver(
+  world: World,
+  events: EventSink,
+  census: EnRouteCensus,
+  flag: Flag,
+  wareId: number,
+): boolean {
   const w = world.wares.items[wareId];
   if (!w) return false;
   if (w.targetBuildingId < 0) return false;
   const b = world.buildings.items[w.targetBuildingId];
   if (!b) {
+    censusAdd(census, w.targetBuildingId, w.type, -1);
     w.targetBuildingId = -1;
     return false;
   }
@@ -167,11 +197,13 @@ function tryDeliver(world: World, events: EventSink, flag: Flag, wareId: number)
 
   if (!accepted) {
     // Wrong place now (already satisfied): re-route next tick.
+    censusAdd(census, w.targetBuildingId, w.type, -1);
     w.targetBuildingId = -1;
     return false;
   }
   const idx = flag.wares.indexOf(wareId);
   if (idx >= 0) flag.wares.splice(idx, 1);
+  censusAdd(census, w.targetBuildingId, w.type, -1);
   storeFree(world.wares, wareId);
   events.emit({ type: 'WareDelivered', wareType: w.type, buildingId: b.id, player: b.player });
   return true;
@@ -184,7 +216,12 @@ function priorityOrder(world: World, player: number): WareType[] {
 }
 
 /** Emit warehouse-stored wares toward buildings that still need them. */
-function runWarehouseSupply(world: World, geom: Geometry, seaCtx: SeaContext): void {
+function runWarehouseSupply(
+  world: World,
+  geom: Geometry,
+  census: EnRouteCensus,
+  seaCtx: SeaContext,
+): void {
   for (const player of world.players) {
     const order = priorityOrder(world, player.index);
     for (const wh of storeLive(world.buildings)) {
@@ -195,7 +232,7 @@ function runWarehouseSupply(world: World, geom: Geometry, seaCtx: SeaContext): v
         // unconnected site can't starve the reachable ones behind it.
         const skip = new Set<number>();
         while (player.wares[wareType] > 0 && whFlag.wares.length < FLAG_WARE_CAPACITY) {
-          const target = findNeeder(world, geom, player.index, wareType, whFlag.node, skip);
+          const target = findNeeder(world, geom, census, player.index, wareType, whFlag.node, skip);
           if (target < 0) break;
           // A ware only leaves the warehouse when it can actually travel: either
           // the target uses this very flag, or a road/sea route exists. Without
@@ -219,6 +256,7 @@ function runWarehouseSupply(world: World, geom: Geometry, seaCtx: SeaContext): v
             nextFlag: -1,
           }));
           whFlag.wares.push(wid);
+          censusAdd(census, target, wareType, 1);
           player.wares[wareType]--;
         }
       }
@@ -230,7 +268,8 @@ function runWarehouseSupply(world: World, geom: Geometry, seaCtx: SeaContext): v
 export function runDispatch(world: World, geom: Geometry, events: EventSink): void {
   // Shared land-vs-sea routing context (harbors + road graphs + water links).
   const seaCtx = buildSeaContext(world, geom);
-  runWarehouseSupply(world, geom, seaCtx);
+  const census = buildEnRouteCensus(world);
+  runWarehouseSupply(world, geom, census, seaCtx);
 
   for (const flag of storeLive(world.flags)) {
     // Iterate over a copy: delivery mutates flag.wares.
@@ -238,7 +277,7 @@ export function runDispatch(world: World, geom: Geometry, events: EventSink): vo
       const w = world.wares.items[wareId];
       if (!w || w.loc !== 'flag') continue;
       if (w.targetBuildingId < 0 || !world.buildings.items[w.targetBuildingId]) {
-        assignTarget(world, geom, wareId);
+        assignTarget(world, geom, census, wareId);
       }
       if (w.targetBuildingId < 0) {
         w.nextFlag = -1;
@@ -246,7 +285,7 @@ export function runDispatch(world: World, geom: Geometry, events: EventSink): vo
       }
       const target = getBuilding(world, w.targetBuildingId);
       if (target.flagId === flag.id) {
-        if (tryDeliver(world, events, flag, wareId)) continue;
+        if (tryDeliver(world, events, census, flag, wareId)) continue;
       }
       // Next hop toward the target, choosing land or a sea leg via harbors.
       w.nextFlag = chooseWareRoute(seaCtx, flag.id, w.targetBuildingId).nextFlag;
