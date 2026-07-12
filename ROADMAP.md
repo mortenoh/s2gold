@@ -54,6 +54,21 @@ the original; harvester trips out to a tree/field still free-walk. The
 mountain-meadow (0x12) build-quality fix also landed (it is buildable
 ground in every landscape, validated against the maps' own build layer).
 
+Open (terrain build-quality, both found while fixing 0x12; validated
+against the maps' own `build` layer):
+
+- Mountain _edges_ over-offer "Mines". `terrainMineable`
+  (`packages/engine/src/commands.ts`) checks only the node's own two
+  texture layers, so ~2.5% of nodes (real brown mountain-edge tiles) offer
+  a mine where the original's build layer marks them flag/nothing. The
+  original requires the surrounding triangles to be mountain, not just the
+  node's own textures. Renders brown, so it is a looseness rather than the
+  green-tile bug that was fixed; low visible impact.
+- Terrain `0x06` (shallow "buildable water") is castle-buildable in the
+  original (build layer: ~53% castle in greenland) but is in
+  `DEFAULT_IMPASSABLE` today, so we forbid building and walking on it.
+  Greenland-only, ~3400 nodes across the maps.
+
 ## C. Features (PLAN.md polish backlog, still open; audited 2026-07-12)
 
 - Sprite-based in-game UI: the statue frame, bottom HUD, hand cursor, and
