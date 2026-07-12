@@ -27,18 +27,25 @@ Remaining:
 - Pool QuadItems in `packages/renderer/src/sprites.ts` (a fresh object per
   drawn quad per frame survives; the offset rejection removed the bulk).
 
-## B. Fidelity vs the original (reference-study; retrobox unblocks capture)
+## B. Fidelity vs the original (reference-study)
 
-- Options screen: missing entirely (only a menu-level music toggle exists).
-- Main-menu completeness and order: add World Campaign, Resume last game,
-  Credits, and Quit entries; hide the dev Asset inspector behind a flag.
-- Custom hand cursor: the browser cursor is shown today.
-- Save UI decision: original 11-slot model with the ornamented dialog frame
+Landed 2026-07-12 (captures in `reference-study/captures/`, notes in
+`reference-study/NOTES.md`): Options screen, Credits screen, the original
+title-menu order with Resume last game (newest save via ?resume=1), the
+dev Asset inspector behind ?dev=1, and captures of the original's Options,
+Load dialog (11 trays), World Campaign globe, Credits, HUD, and build
+window. "Quit program" is deliberately omitted (no browser equivalent).
+
+Remaining:
+
+- Custom hand cursor: blocked on a RESOURCE.DAT converter (the cursor
+  sprites are not in the converted asset set).
+- Save UI decision: original 11-slot tray dialog (see captures/loadgame.png)
   vs the current named REST saves - decide, then implement or document.
-- Capture the remaining original screens with retrobox
-  (`../retrobox/docs/automation.md`): unlimited-play setup, Options,
-  Credits, HUD, build menu, building info, minimap, statistics, ware
-  window, in-game Esc menu. Feeds every item above.
+- World Campaign globe screen (captures/worldcampaign.png) as a fidelity
+  upgrade over the chapter list.
+- Remaining captures: HQ inventory window (click the building body),
+  statistics, ware window, the real in-game menu, Esc menu.
 
 ## C. Features (PLAN.md polish backlog, still open; audited 2026-07-12)
 
