@@ -43,10 +43,6 @@ Remaining:
 
 - World Campaign globe screen (captures/worldcampaign.png): blocked on
   per-chapter marker coordinates, which are not in the converted data.
-- URL scheme: replace `/play/game.html?map=<name>` with a clean,
-  refreshable route like `/game/<map>/<session-id>`, backed by
-  server-side session state (so a refresh restores the live game, not
-  just the map). Needs a server sessions API + client wiring.
 
 ## Gameplay fidelity (observed 2026-07-12)
 
