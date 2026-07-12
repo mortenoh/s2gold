@@ -121,7 +121,7 @@ describe('mesh builder', () => {
     expect(mesh.vertices.length).toBe(mesh.vertexCount * FLOATS_PER_VERTEX);
   });
 
-  it('keeps UVs normalized and brightness neutral at shading 64', () => {
+  it('keeps UVs normalized, shade at the neutral LUT row, and fog at 1', () => {
     const mesh = buildTerrainMesh(makeMap(2, 2));
     for (let v = 0; v < mesh.vertexCount; v++) {
       const o = v * FLOATS_PER_VERTEX;
@@ -129,7 +129,9 @@ describe('mesh builder', () => {
       expect(mesh.vertices[o + 2]).toBeLessThanOrEqual(1);
       expect(mesh.vertices[o + 3]).toBeGreaterThanOrEqual(0);
       expect(mesh.vertices[o + 3]).toBeLessThanOrEqual(1);
-      expect(mesh.vertices[o + 4]).toBe(1);
+      // Shading byte 64 (neutral) -> the gouraud LUT row-64 texel centre.
+      expect(mesh.vertices[o + 4]).toBeCloseTo((64 + 0.5) / 256, 6);
+      expect(mesh.vertices[o + 5]).toBe(1);
     }
   });
 

@@ -8,7 +8,7 @@
  */
 
 import type { MapJson as EngineMapJson } from '@s2gold/engine';
-import type { LandscapeSet, TerrainMapData } from '@s2gold/renderer';
+import type { LandscapeSet, TerrainAssets, TerrainMapData } from '@s2gold/renderer';
 import { assetUrl, fetchJson } from '../lib/manifest';
 
 /** Entry in maps/index.json. */
@@ -51,10 +51,11 @@ interface MapJson {
 }
 
 /** Terrain set -> tileset PNG under /assets/terrain/. */
-const TERRAIN_TEXTURES: Record<number, string> = {
-  0: 'terrain/tex5.png',
-  1: 'terrain/tex6.png',
-  2: 'terrain/tex7.png',
+/** Per-landscape terrain asset basenames (tex5/gouraud5 = greenland, ...). */
+const TERRAIN_SETS: Record<number, { tex: string; gouraud: string }> = {
+  0: { tex: 'tex5', gouraud: 'gouraud5' },
+  1: { tex: 'tex6', gouraud: 'gouraud6' },
+  2: { tex: 'tex7', gouraud: 'gouraud7' },
 };
 
 /** Decode a base64 string into bytes. */
@@ -106,13 +107,42 @@ export async function loadMap(entry: MapIndexEntry): Promise<LoadedMap> {
   };
 }
 
-/** Load the terrain tileset image for a landscape set. */
-export async function loadTerrainImage(terrain: LandscapeSet): Promise<HTMLImageElement> {
-  const rel = TERRAIN_TEXTURES[terrain] ?? TERRAIN_TEXTURES[0];
+/** Decode a base64 payload into bytes. */
+function b64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/**
+ * Load the palette-exact terrain inputs for a landscape set: the palette-index
+ * atlas, the palette (+ its water/lava CRNG cycles), and the gouraud LUT.
+ */
+export async function loadTerrainAssets(terrain: LandscapeSet): Promise<TerrainAssets> {
+  const set = TERRAIN_SETS[terrain] ?? TERRAIN_SETS[0];
+  const base = set ?? { tex: 'tex5', gouraud: 'gouraud5' };
   const img = new Image();
-  img.src = assetUrl(rel ?? 'terrain/tex5.png');
-  await img.decode();
-  return img;
+  img.src = assetUrl(`terrain/${base.tex}_indexed.png`);
+  const [palJson, gouJson] = await Promise.all([
+    fetchJson<{ colors: string; cycles?: { low: number; high: number; msPerStep: number }[] }>(
+      assetUrl(`terrain/${base.tex}_pal.json`),
+    ),
+    fetchJson<{ data: string }>(assetUrl(`terrain/${base.gouraud}.json`)),
+    img.decode(),
+  ]);
+  if (!palJson || !gouJson) {
+    throw new Error(
+      `terrain assets missing for landscape ${terrain} (re-run the asset pipeline: ` +
+        `terrain/${base.tex}_pal.json + terrain/${base.gouraud}.json)`,
+    );
+  }
+  return {
+    indexed: img,
+    palette: b64ToBytes(palJson.colors),
+    gouraud: b64ToBytes(gouJson.data),
+    cycles: palJson.cycles ?? [],
+  };
 }
 
 /** Pick the entry for /play/<map> or ?map= (by name or file substring), else miss200, else first. */

@@ -20,7 +20,13 @@ import {
   type LandscapeSet,
 } from '@s2gold/renderer';
 import { clear, el } from '../lib/dom';
-import { loadMap, loadMapIndex, loadTerrainImage, pickMap, type MapIndexEntry } from './map-loader';
+import {
+  loadMap,
+  loadMapIndex,
+  loadTerrainAssets,
+  pickMap,
+  type MapIndexEntry,
+} from './map-loader';
 import { buildStaticObjects, objectAtlasForLandscape } from './map-objects';
 import { loadAtlas } from './sprite-atlas';
 import { loadBobAtlas } from './bob-atlas';
@@ -608,7 +614,7 @@ async function boot(): Promise<void> {
     const gen = ++switchGen;
     delete document.body.dataset.mapReady;
     const map = await loadMap(entry);
-    const atlas = await loadTerrainImage(map.terrain);
+    const atlas = await loadTerrainAssets(map.terrain);
     if (gen !== switchGen) return; // superseded by a newer switch
     renderer.resize();
     renderer.load(map.data, atlas);
@@ -1148,7 +1154,7 @@ async function boot(): Promise<void> {
     if (session?.territoryDirty) refreshTerritory();
 
     renderer.resize();
-    renderer.render(camera);
+    renderer.render(camera, now);
     if (session) {
       refreshOverlays();
       roads.render(camera, cachedRoadSegs);

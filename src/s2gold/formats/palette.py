@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from s2gold.formats.binio import Reader
-from s2gold.formats.iff import read_form
+from s2gold.formats.iff import read_form, read_form_chunks
 
 Rgb = tuple[int, int, int]
 
@@ -43,3 +43,38 @@ class Palette:
         if count != 256:
             raise ValueError(f"LST palette with {count} colors")
         return cls.from_cmap(r.bytes(768))
+
+
+@dataclass(frozen=True)
+class PaletteCycle:
+    """An active DPaint CRNG palette-cycling range.
+
+    Attributes:
+        low: First palette index of the range (inclusive).
+        high: Last palette index of the range (inclusive).
+        ms_per_step: Milliseconds per one-slot rotation, from the CRNG rate
+            (16384 rate units = 60 steps/second).
+    """
+
+    low: int
+    high: int
+    ms_per_step: float
+
+
+def palette_cycles(data: bytes) -> list[PaletteCycle]:
+    """Extract the active CRNG palette-cycling ranges from an IFF LBM/BBM file.
+
+    S2's PAL5.BBM / TEX5.LBM carry sixteen CRNG chunks; only ranges with a
+    non-zero rate cycle in game (water 240-247 and lava 248-251 in practice).
+    """
+    _, chunks = read_form_chunks(data)
+    cycles: list[PaletteCycle] = []
+    for cid, body in chunks:
+        if cid != b"CRNG" or len(body) < 8:
+            continue
+        rate = int.from_bytes(body[2:4], "big")
+        low, high = body[6], body[7]
+        if rate <= 0 or high <= low:
+            continue
+        cycles.append(PaletteCycle(low=low, high=high, ms_per_step=16384 / rate * 1000 / 60))
+    return cycles

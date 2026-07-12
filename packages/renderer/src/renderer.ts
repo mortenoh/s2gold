@@ -16,13 +16,15 @@ import type { Camera } from './camera';
 const VERTEX_SHADER = `#version 300 es
 layout(location = 0) in vec2 aPos;
 layout(location = 1) in vec2 aUv;
-layout(location = 2) in float aBright;
+layout(location = 2) in float aShade;
+layout(location = 3) in float aFog;
 
 uniform vec2 uTranslate; // world-px offset (tile offset minus camera)
 uniform vec2 uScale;     // 2 * zoom / canvas size
 
 out vec2 vUv;
-out float vBright;
+out float vShade;
+out float vFog;
 
 void main() {
   vec2 world = aPos + uTranslate;
@@ -32,24 +34,33 @@ void main() {
   // [0, 0.98] by screen depth — always draw over the ground (see roads/sprites).
   gl_Position = vec4(clipX, clipY, 0.99, 1.0);
   vUv = aUv;
-  vBright = aBright;
+  vShade = aShade;
+  vFog = aFog;
 }
 `;
 
+// Palette-exact pipeline: the atlas holds raw palette INDICES (R8); the
+// interpolated per-vertex shade row picks the shaded index from the gouraud
+// LUT (GOU5/6/7.DAT, 256 rows x 256 columns), and the palette texture maps it
+// to RGB. Water/lava animate by rotating their palette slots (CRNG), so the
+// palette texture is the only thing that changes per animation step.
 const FRAGMENT_SHADER = `#version 300 es
 precision mediump float;
 
-uniform sampler2D uAtlas;
+uniform sampler2D uAtlasIdx; // R8 palette indices
+uniform sampler2D uGouraud;  // 256x256 LUT: (index, shade row) -> shaded index
+uniform sampler2D uPalette;  // 256x1 RGBA palette (animated)
 
 in vec2 vUv;
-in float vBright;
+in float vShade;
+in float vFog;
 out vec4 outColor;
 
 void main() {
-  vec4 tex = texture(uAtlas, vUv);
-  // P1 lighting approximation: shading byte / 64 as an RGB multiplier. The
-  // palette-exact gouraud LUT (GOU*.DAT) lands in a later phase.
-  outColor = vec4(clamp(tex.rgb * vBright, 0.0, 1.0), 1.0);
+  float idx = texture(uAtlasIdx, vUv).r * 255.0;
+  float shaded = texture(uGouraud, vec2((idx + 0.5) / 256.0, vShade)).r * 255.0;
+  vec3 rgb = texture(uPalette, vec2((shaded + 0.5) / 256.0, 0.5)).rgb;
+  outColor = vec4(rgb * vFog, 1.0);
 }
 `;
 
@@ -86,6 +97,25 @@ export interface TerrainRendererOptions {
   preserveDrawingBuffer?: boolean;
 }
 
+/** One CRNG palette-cycling range (inclusive indices, ms per rotation step). */
+export interface PaletteCycle {
+  readonly low: number;
+  readonly high: number;
+  readonly msPerStep: number;
+}
+
+/** The palette-exact terrain inputs (all from the converted asset pipeline). */
+export interface TerrainAssets {
+  /** Grayscale palette-index atlas (terrain/texN_indexed.png). */
+  readonly indexed: TexImageSource;
+  /** 768-byte RGB palette (terrain/texN_pal.json colors). */
+  readonly palette: Uint8Array;
+  /** 65536-byte gouraud LUT, row-major table[shade * 256 + index]. */
+  readonly gouraud: Uint8Array;
+  /** Active CRNG cycles (water/lava animation). */
+  readonly cycles: readonly PaletteCycle[];
+}
+
 /** WebGL2 renderer for one loaded map. Engine-agnostic: no game state. */
 export class TerrainRenderer {
   private readonly gl: WebGL2RenderingContext;
@@ -94,7 +124,16 @@ export class TerrainRenderer {
   private readonly uScale: WebGLUniformLocation;
   private readonly vao: WebGLVertexArrayObject;
   private readonly vbo: WebGLBuffer;
-  private readonly texture: WebGLTexture;
+  private readonly texIndex: WebGLTexture;
+  private readonly texGouraud: WebGLTexture;
+  private readonly texPalette: WebGLTexture;
+
+  /** Base (unrotated) 256-entry RGBA palette; cycles rotate slots of a copy. */
+  private basePalette: Uint8Array = new Uint8Array(0);
+  private paletteScratch: Uint8Array = new Uint8Array(256 * 4);
+  private cycles: readonly PaletteCycle[] = [];
+  /** Last uploaded per-cycle phases; palette re-uploads only on change. */
+  private cyclePhases: number[] = [];
 
   private vertexCount = 0;
   private worldW = 0;
@@ -139,11 +178,25 @@ export class TerrainRenderer {
 
     const vao = gl.createVertexArray();
     const vbo = gl.createBuffer();
-    const texture = gl.createTexture();
-    if (!vao || !vbo || !texture) throw new Error('failed to allocate GL objects');
+    const texIndex = gl.createTexture();
+    const texGouraud = gl.createTexture();
+    const texPalette = gl.createTexture();
+    if (!vao || !vbo || !texIndex || !texGouraud || !texPalette) {
+      throw new Error('failed to allocate GL objects');
+    }
     this.vao = vao;
     this.vbo = vbo;
-    this.texture = texture;
+    this.texIndex = texIndex;
+    this.texGouraud = texGouraud;
+    this.texPalette = texPalette;
+
+    // Static sampler bindings: index atlas on unit 0, gouraud LUT on 1,
+    // palette on 2.
+    gl.useProgram(program);
+    gl.uniform1i(gl.getUniformLocation(program, 'uAtlasIdx'), 0);
+    gl.uniform1i(gl.getUniformLocation(program, 'uGouraud'), 1);
+    gl.uniform1i(gl.getUniformLocation(program, 'uPalette'), 2);
+    gl.useProgram(null);
 
     gl.bindVertexArray(vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
@@ -154,6 +207,8 @@ export class TerrainRenderer {
     gl.vertexAttribPointer(1, 2, gl.FLOAT, false, stride, 8);
     gl.enableVertexAttribArray(2);
     gl.vertexAttribPointer(2, 1, gl.FLOAT, false, stride, 16);
+    gl.enableVertexAttribArray(3);
+    gl.vertexAttribPointer(3, 1, gl.FLOAT, false, stride, 20);
     gl.bindVertexArray(null);
 
     gl.disable(gl.DEPTH_TEST);
@@ -161,8 +216,8 @@ export class TerrainRenderer {
     gl.clearColor(0, 0, 0, 1);
   }
 
-  /** Upload a map mesh and its terrain atlas. Replaces any previous map. */
-  load(map: TerrainMapData, atlas: TexImageSource): void {
+  /** Upload a map mesh and its terrain assets. Replaces any previous map. */
+  load(map: TerrainMapData, assets: TerrainAssets): void {
     const gl = this.gl;
     const mesh = buildTerrainMesh(map);
     this.vertexCount = mesh.vertexCount;
@@ -176,13 +231,99 @@ export class TerrainRenderer {
     gl.bufferData(gl.ARRAY_BUFFER, mesh.vertices, gl.STATIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
-    gl.bindTexture(gl.TEXTURE_2D, this.texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlas);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const nearest = (): void => {
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    };
+
+    // Palette-index atlas: a grayscale image; keep only the red channel.
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.bindTexture(gl.TEXTURE_2D, this.texIndex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, gl.RED, gl.UNSIGNED_BYTE, assets.indexed);
+    nearest();
+
+    // Gouraud LUT: row-major table[shade * 256 + index] -> shaded index.
+    if (assets.gouraud.length !== 256 * 256) {
+      throw new Error(`gouraud LUT is ${assets.gouraud.length} bytes, expected 65536`);
+    }
+    gl.bindTexture(gl.TEXTURE_2D, this.texGouraud);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 256, 256, 0, gl.RED, gl.UNSIGNED_BYTE, assets.gouraud);
+    nearest();
+
+    // Palette: 768-byte RGB expanded to RGBA; water/lava CRNG cycles rotate
+    // slots of a scratch copy per animation step (see render()).
+    if (assets.palette.length !== 768) {
+      throw new Error(`palette is ${assets.palette.length} bytes, expected 768`);
+    }
+    this.basePalette = new Uint8Array(256 * 4);
+    for (let i = 0; i < 256; i++) {
+      this.basePalette[i * 4] = assets.palette[i * 3] ?? 0;
+      this.basePalette[i * 4 + 1] = assets.palette[i * 3 + 1] ?? 0;
+      this.basePalette[i * 4 + 2] = assets.palette[i * 3 + 2] ?? 0;
+      this.basePalette[i * 4 + 3] = 255;
+    }
+    this.cycles = assets.cycles;
+    this.cyclePhases = assets.cycles.map(() => -1);
+    gl.bindTexture(gl.TEXTURE_2D, this.texPalette);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA,
+      256,
+      1,
+      0,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      this.basePalette,
+    );
+    nearest();
     gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+    this.updatePalette(0);
+  }
+
+  /**
+   * Rotate the CRNG palette ranges to their phase at `nowMs` and re-upload the
+   * palette texture when any phase changed. A cycle of length N shifts its
+   * colors one slot toward higher indices every msPerStep.
+   */
+  private updatePalette(nowMs: number): void {
+    if (this.basePalette.length === 0 || this.cycles.length === 0) return;
+    let changed = false;
+    for (let c = 0; c < this.cycles.length; c++) {
+      const cycle = this.cycles[c];
+      if (!cycle) continue;
+      const len = cycle.high - cycle.low + 1;
+      const phase = Math.floor(nowMs / cycle.msPerStep) % len;
+      if (phase !== this.cyclePhases[c]) {
+        this.cyclePhases[c] = phase;
+        changed = true;
+      }
+    }
+    if (!changed) return;
+    const out = this.paletteScratch;
+    out.set(this.basePalette);
+    for (let c = 0; c < this.cycles.length; c++) {
+      const cycle = this.cycles[c];
+      if (!cycle) continue;
+      const len = cycle.high - cycle.low + 1;
+      const phase = this.cyclePhases[c] ?? 0;
+      for (let j = 0; j < len; j++) {
+        const src = (cycle.low + j) * 4;
+        const dst = (cycle.low + ((j + phase) % len)) * 4;
+        out[dst] = this.basePalette[src] ?? 0;
+        out[dst + 1] = this.basePalette[src + 1] ?? 0;
+        out[dst + 2] = this.basePalette[src + 2] ?? 0;
+      }
+    }
+    const gl = this.gl;
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.bindTexture(gl.TEXTURE_2D, this.texPalette);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 256, 1, gl.RGBA, gl.UNSIGNED_BYTE, out);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
   }
 
   /**
@@ -207,7 +348,7 @@ export class TerrainRenderer {
         const node = this.nodeOfVertex[v] ?? 0;
         const state = fog[node] ?? 2;
         const factor = FOG_BRIGHTNESS[state] ?? 1;
-        out[v * stride + 4] = (base[v * stride + 4] ?? 1) * factor;
+        out[v * stride + 5] = (base[v * stride + 5] ?? 1) * factor;
       }
       data = out;
     }
@@ -244,8 +385,8 @@ export class TerrainRenderer {
     return true;
   }
 
-  /** Render the loaded map for the given camera. */
-  render(camera: Camera): void {
+  /** Render the loaded map for the given camera; `nowMs` drives water/lava. */
+  render(camera: Camera, nowMs = 0): void {
     const gl = this.gl;
     const cw = this.canvas.width;
     const ch = this.canvas.height;
@@ -259,10 +400,15 @@ export class TerrainRenderer {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     if (!this.loaded) return;
 
+    this.updatePalette(nowMs);
     gl.useProgram(this.program);
     gl.bindVertexArray(this.vao);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.texPalette);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.texGouraud);
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.texture);
+    gl.bindTexture(gl.TEXTURE_2D, this.texIndex);
     gl.uniform2f(this.uScale, (2 * camera.zoom) / cw, (2 * camera.zoom) / ch);
 
     // The mesh spans [0, worldW + TR_W] x [-MAX_RAISE, worldH + TR_H] in world
@@ -295,7 +441,9 @@ export class TerrainRenderer {
     const gl = this.gl;
     gl.deleteBuffer(this.vbo);
     gl.deleteVertexArray(this.vao);
-    gl.deleteTexture(this.texture);
+    gl.deleteTexture(this.texIndex);
+    gl.deleteTexture(this.texGouraud);
+    gl.deleteTexture(this.texPalette);
     gl.deleteProgram(this.program);
     this.vertexCount = 0;
   }

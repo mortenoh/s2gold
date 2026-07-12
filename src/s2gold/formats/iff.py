@@ -5,6 +5,25 @@ from __future__ import annotations
 import struct
 
 
+def read_form_chunks(data: bytes) -> tuple[bytes, list[tuple[bytes, bytes]]]:
+    """Parse an IFF FORM file into (form_type, [(chunk_id, payload), ...]).
+
+    Preserves duplicates and order; CRNG palette-cycle chunks legitimately
+    repeat (one per range).
+    """
+    if data[0:4] != b"FORM":
+        raise ValueError(f"not an IFF FORM file (magic {data[0:4]!r})")
+    form_type = data[8:12]
+    pos = 12
+    chunks: list[tuple[bytes, bytes]] = []
+    while pos + 8 <= len(data):
+        cid = data[pos : pos + 4]
+        clen = struct.unpack(">I", data[pos + 4 : pos + 8])[0]
+        chunks.append((cid, data[pos + 8 : pos + 8 + clen]))
+        pos += 8 + clen + (clen & 1)
+    return form_type, chunks
+
+
 def read_form(data: bytes) -> tuple[bytes, dict[bytes, bytes]]:
     """Parse an IFF FORM file into (form_type, {chunk_id: payload}).
 

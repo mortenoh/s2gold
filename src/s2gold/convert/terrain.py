@@ -15,6 +15,7 @@ their own embedded ``CMAP`` and render through that.
 
 from __future__ import annotations
 
+import base64
 import json
 from pathlib import Path
 
@@ -23,7 +24,7 @@ from PIL import Image
 from s2gold.core import Manifest
 from s2gold.formats.gouraud import load_gouraud
 from s2gold.formats.lbm import decode_lbm
-from s2gold.formats.palette import Palette
+from s2gold.formats.palette import Palette, palette_cycles
 
 # (tileset filename, output name, external palette filename or None for embedded CMAP).
 _TILESETS: tuple[tuple[str, str, str | None], ...] = (
@@ -78,9 +79,27 @@ def run(extracted: Path, assets: Path) -> None:
 
         _render_rgba(img.width, img.height, img.pixels, palette).save(out_dir / f"{name}.png")
         Image.frombytes("L", (img.width, img.height), img.pixels).save(out_dir / f"{name}_indexed.png")
+        # Palette + active CRNG cycling ranges (water/lava animation): the
+        # renderer rotates these palette slots at their CRNG rates.
+        cycle_src = (pal_dir / pal_name) if pal_name else src_path
+        cycles = palette_cycles(cycle_src.read_bytes())
+        raw = bytearray()
+        for r, g, b in palette.colors:
+            raw += bytes((r, g, b))
+        (out_dir / f"{name}_pal.json").write_text(
+            json.dumps(
+                {
+                    "encoding": "base64",
+                    "colors": base64.b64encode(bytes(raw)).decode("ascii"),
+                    "cycles": [{"low": c.low, "high": c.high, "msPerStep": round(c.ms_per_step, 3)} for c in cycles],
+                },
+                separators=(",", ":"),
+            )
+        )
         textures[name] = {
             "png": f"terrain/{name}.png",
             "indexed": f"terrain/{name}_indexed.png",
+            "pal": f"terrain/{name}_pal.json",
             "width": img.width,
             "height": img.height,
             "palette": pal_name.removesuffix(".BBM").lower() if pal_name else "embedded",

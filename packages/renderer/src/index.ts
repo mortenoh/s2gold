@@ -47,7 +47,12 @@ export { buildTerrainMesh, FLOATS_PER_VERTEX, type TerrainMesh } from './mesh';
 
 export { Camera, wrap, type ZoomLevel } from './camera';
 
-export { TerrainRenderer, type TerrainRendererOptions } from './renderer';
+export {
+  TerrainRenderer,
+  type TerrainRendererOptions,
+  type TerrainAssets,
+  type PaletteCycle,
+} from './renderer';
 
 export { buildMinimapPixels, heightBrightness } from './minimap';
 

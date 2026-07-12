@@ -1,17 +1,18 @@
 /**
  * Terrain mesh builder: one interleaved vertex buffer with every triangle of
- * the map, drawn in a single call against the 256x256 terrain atlas.
+ * the map, drawn in a single call against the 256x256 palette-index atlas.
  *
- * Vertex layout (5 floats): x, y (world px), u, v (normalized atlas), b
- * (brightness multiplier). Each node contributes 6 vertices (RSU + LSD
- * triangle). Triangles at the south/east edges reference unwrapped neighbour
- * positions past the map edge while sampling attributes from the wrapped
- * nodes, so tiling the mesh at the torus period renders a seamless wrap.
+ * Vertex layout (6 floats): x, y (world px), u, v (normalized atlas), s (the
+ * gouraud LUT row coordinate derived from the node's shading byte, neutral
+ * 64), f (fog brightness multiplier, remodulated by the renderer). Each node
+ * contributes 6 vertices (RSU + LSD triangle). Triangles at the south/east
+ * edges reference unwrapped neighbour positions past the map edge while
+ * sampling attributes from the wrapped nodes, so tiling the mesh at the torus
+ * period renders a seamless wrap.
  *
- * P1 lighting approximation: the per-node shading byte (neutral 64) becomes a
- * plain RGB multiplier fitted to the measured luminance response of the real
- * gouraud table (0.5 + value / 128). The palette-exact gouraud LUT path
- * (GOU5/6/7.DAT) is deferred to a later phase.
+ * Lighting is palette-exact: the fragment shader interpolates the shade
+ * coordinate across each triangle (that is the gouraud) and resolves it
+ * through the GOU5/6/7 LUT to a shaded palette index.
  */
 
 import type { TerrainMapData } from './map-data';
@@ -32,8 +33,8 @@ import {
   type TexType,
 } from './terrain-data';
 
-/** Floats per vertex: x, y, u, v, brightness. */
-export const FLOATS_PER_VERTEX = 5;
+/** Floats per vertex: x, y, u, v, shade row, fog multiplier. */
+export const FLOATS_PER_VERTEX = 6;
 
 /** A built terrain mesh ready for upload to a GPU buffer. */
 export interface TerrainMesh {
@@ -129,10 +130,11 @@ export function buildTerrainMesh(map: TerrainMapData): TerrainMesh {
     vertices[o++] = pos.y;
     vertices[o++] = u / ATLAS_SIZE;
     vertices[o++] = v / ATLAS_SIZE;
-    // P1 approximation of the gouraud LUT: measured over the real GOU5 table,
-    // the effective luminance ratio is ~0.5 at row 0, 1.0 at the neutral row
-    // 64 and ~1.4 at row 128 -- close to linear in the shading byte.
-    vertices[o++] = 0.5 + (map.shading[idx] ?? 64) / 128;
+    // Gouraud LUT row coordinate: the raw shading byte (neutral 64) mapped to
+    // the row's texel centre in the 256-row table.
+    vertices[o++] = ((map.shading[idx] ?? 64) + 0.5) / 256;
+    // Fog multiplier lane; setFog() remodulates this per node.
+    vertices[o++] = 1;
   };
 
   for (let y = 0; y < height; y++) {
