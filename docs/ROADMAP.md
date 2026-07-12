@@ -32,22 +32,43 @@ Load dialog (11 trays), World Campaign globe, Credits, HUD, and build
 window. "Quit program" is deliberately omitted (no browser equivalent).
 
 Landed 2026-07-12 (part 2): original 11-slot save trays (captures/
-loadgame.png), QuadItem pooling, and in-game captures (HQ window, Esc).
-The HQ opens the Activity window (flag/build actions), not an inventory
-list; Esc does not open an in-game menu (the s2gold Game panel replaces
-it) - both recorded in NOTES.md.
+loadgame.png), QuadItem pooling, in-game captures, clicking a warehouse
+building (HQ/storehouse) opens its inventory window with hover tooltips,
+the decorative statue viewport frame from RESOURCE.DAT (corner
+caryatids), and a compact bottom-center HUD bar (replacing the heavy
+full-width top navbar) with panels/dropdowns opening upward.
 
 Remaining:
 
-- Custom hand cursor: blocked on a RESOURCE.DAT converter (the cursor
-  sprites are not in the converted asset set).
+- Custom hand cursor: the sprites are now converted (ui/hand*.png from
+  RESOURCE.DAT); wire them as the CSS cursor in the game/menus.
+- Full sprite-based window chrome: the window frame pieces (title bar,
+  borders, control icons) are converted (ui/) - restyle the DOM panels
+  to use them so windows look like the original, not flat dark boxes.
 - World Campaign globe screen (captures/worldcampaign.png): blocked on
   per-chapter marker coordinates, which are not in the converted data.
+- URL scheme: replace `/play/game.html?map=<name>` with a clean,
+  refreshable route like `/game/<map>/<session-id>`, backed by
+  server-side session state (so a refresh restores the live game, not
+  just the map). Needs a server sessions API + client wiring.
+
+## Gameplay fidelity (observed 2026-07-12)
+
+- Workers and construction travel should follow the road network, not
+  cut straight across terrain. Today a building's builder/worker walks
+  the free lattice A* (`findWalkPath`) to the site; the original routes
+  them over roads (a site with no road connection cannot be staffed or
+  supplied). Harvesters legitimately leave the road to reach their work
+  spot (a woodcutter walking to a tree is correct), so the fix is
+  specifically: builder-to-site and settler-to-building travel should be
+  road-constrained. Engine change; verify against the original first.
 
 ## C. Features (PLAN.md polish backlog, still open; audited 2026-07-12)
 
-- Sprite-based in-game UI from IO.LST (windows, icon build menu) - panels
-  are DOM elements today.
+- Sprite-based in-game UI: the RESOURCE.DAT/IO.LST chrome is now converted
+  (ui/ frame + window pieces + cursor); remaining work is restyling the DOM
+  panels and the build menu to use those sprites (the statue frame + bottom
+  HUD already landed).
 - Per-nation border-stone sprites (single fixed sprite today).
 - AI: seafaring (no ship/harbor references in `packages/engine/src/ai/`).
 - Storehouse-local inventories (`Player.wares` is one global pool).
