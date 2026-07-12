@@ -109,6 +109,34 @@ function completedBuildings(world: ReturnType<typeof createWorld>, player: numbe
   return n;
 }
 
+describe('AI catapult play', () => {
+  it('builds a catapult near the frontier and fires at the enemy', () => {
+    // Passive enemy with a general-garrisoned guardhouse the AI cannot
+    // capture (its privates lose every duel), so a live target remains in
+    // throwing range once the catapults are up.
+    const map = makeAiMap(40, 48, [20, 10], [20, 32]);
+    const world = createWorld(map, { seed: 777, players: 2 });
+    const geom = worldGeometry(world);
+    const gh = spawnBuilding(world, geom, geom.index(20, 18), 'guardhouse', 0);
+    garrisonBuilding(gh, [0, 0, 0, 0, 5]);
+    const ai = createAiState(1, { seed: 5 });
+
+    let placed = false;
+    let fired = false;
+    for (let i = 0; i < 90000 && !fired; i++) {
+      runAi(world, ai);
+      for (const e of tickWorld(world)) {
+        if (e.type === 'BuildingPlaced' && e.buildingType === 'catapult' && e.player === 1) {
+          placed = true;
+        }
+        if (e.type === 'CatapultFired' && e.player === 1) fired = true;
+      }
+    }
+    expect(placed).toBe(true); // the planner reaches and sites the catapult goal
+    expect(fired).toBe(true); // stones arrive and an enemy building is in range
+  }, 120000);
+});
+
 describe('P6 AI gate — beats a passive player on a small map', () => {
   it('bootstraps an economy, occupies military, and shrinks the passive player', () => {
     // Tall map so the torus wrap distance (>=32) far exceeds the direct HQ

@@ -64,7 +64,12 @@ const PLAN: readonly Goal[] = [
   { type: BUILDING.armory, count: 1, bias: 'nearHq' },
   { type: BUILDING.metalworks, count: 1, bias: 'nearHq' },
   { type: BUILDING.mint, count: 1, bias: 'nearHq' },
+  // Catapults: frontier area denial once the economy is deep. They are kind
+  // 'catapult' (not military), so the maxMilitary cap does not stop them, and
+  // they fire automatically as long as dispatch keeps stones coming.
+  { type: BUILDING.catapult, count: 1, bias: 'frontier' },
   { type: BUILDING.guardhouse, count: 4, bias: 'frontier' },
+  { type: BUILDING.catapult, count: 2, bias: 'frontier' },
 ];
 
 /** Current number of a building type owned by `player` (sites + working). */
