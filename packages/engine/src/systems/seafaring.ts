@@ -49,6 +49,8 @@ export interface SeaContext {
   harborsByPlayer: Map<number, Building[]>;
   graphByPlayer: Map<number, FlagGraph>;
   connCache: Map<string, boolean>;
+  /** Memoised chooseWareRoute plans; topology is frozen for a context's life. */
+  routeCache: Map<string, WareRoutePlan>;
 }
 
 /** True when a building is a working harbor that has a navigable-water dock. */
@@ -84,6 +86,7 @@ export function buildSeaContext(world: World, geom: Geometry): SeaContext {
     harborsByPlayer,
     graphByPlayer: new Map(),
     connCache: new Map(),
+    routeCache: new Map(),
   };
 }
 
@@ -138,9 +141,19 @@ export function chooseWareRoute(
   fromFlagId: number,
   targetBuildingId: number,
 ): WareRoutePlan {
+  // Identical queries repeat heavily within one pass (every parked ware
+  // re-plans every tick); road/flag/harbor topology cannot change while a
+  // context lives, so the memo is exact. Callers never mutate the plan.
+  const cacheKey = `${fromFlagId}:${targetBuildingId}`;
+  const cached = ctx.routeCache.get(cacheKey);
+  if (cached) return cached;
   const { world, geom } = ctx;
   const target = world.buildings.items[targetBuildingId];
-  if (!target) return { nextFlag: -1, useSea: false, nearHarborId: -1, farHarborId: -1 };
+  if (!target) {
+    const dead: WareRoutePlan = { nextFlag: -1, useSea: false, nearHarborId: -1, farHarborId: -1 };
+    ctx.routeCache.set(cacheKey, dead);
+    return dead;
+  }
   const fromFlag = getFlag(world, fromFlagId);
   const player = fromFlag.player;
   const graph = graphFor(ctx, player);
@@ -179,6 +192,7 @@ export function chooseWareRoute(
       }
     }
   }
+  ctx.routeCache.set(cacheKey, plan);
   return plan;
 }
 
