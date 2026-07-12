@@ -1,8 +1,8 @@
 # Roadmap
 
-The single source of truth for planned s2gold work. `PLAN.md` is the
+The single source of truth for planned s2gold work. `docs/PLAN.md` is the
 historical phase record (P0-P7 all shipped and gate-verified);
-`reference-study/NOTES.md` is the raw study log against the original game.
+`docs/reference-study/NOTES.md` is the raw study log against the original game.
 Sections are in rough priority order; items within a section are ordered by
 expected impact.
 
@@ -24,15 +24,16 @@ atlas loads, and torus-offset viewport rejection in the sprite pass.
 
 ## B. Fidelity vs the original (reference-study)
 
-Landed 2026-07-12 (captures in `reference-study/captures/`, notes in
-`reference-study/NOTES.md`): Options screen, Credits screen, the original
+Landed 2026-07-12 (captures in `docs/reference-study/captures/`, notes in
+`docs/reference-study/NOTES.md`): Options screen, Credits screen, the original
 title-menu order with Resume last game (newest save via ?resume=1), the
 dev Asset inspector behind ?dev=1, and captures of the original's Options,
 Load dialog (11 trays), World Campaign globe, Credits, HUD, and build
 window. "Quit program" is deliberately omitted (no browser equivalent).
 
-Landed 2026-07-12 (part 2): original 11-slot save trays (captures/
-loadgame.png), QuadItem pooling, in-game captures, clicking a warehouse
+Landed 2026-07-12 (part 2): original 11-slot save trays
+(docs/reference-study/captures/loadgame.png), QuadItem pooling, in-game
+captures, clicking a warehouse
 building (HQ/storehouse) opens its inventory window with hover tooltips,
 the decorative statue viewport frame from RESOURCE.DAT (corner
 caryatids), a compact bottom-center HUD bar (replacing the heavy
@@ -41,7 +42,7 @@ original hand cursor (ui/handa.png) on the game canvas and menus.
 
 Remaining:
 
-- World Campaign globe screen (captures/worldcampaign.png): blocked on
+- World Campaign globe screen (docs/reference-study/captures/worldcampaign.png): blocked on
   per-chapter marker coordinates, which are not in the converted data.
 
 ## Gameplay fidelity

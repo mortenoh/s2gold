@@ -120,7 +120,7 @@ UI, the Roman campaign with briefings/objectives/victory flow, and the intro vid
 Since that update, the following backlog items have also landed: donkey roads and
 road upgrade, geologists, ground ware-stack sprites, soldier rank overlays and
 fight animations, wasteland/winter terrain rules, and harbor territory recalc on
-construction. Open work is tracked in `docs/ROADMAP.md`.
+construction. Open work is tracked in `../ROADMAP.md`.
 
 ## Phases & milestone gates
 
