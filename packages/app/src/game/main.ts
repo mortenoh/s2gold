@@ -460,19 +460,22 @@ async function boot(): Promise<void> {
     element: () => settingsPanel,
   });
 
+  // One compact control bar anchored bottom-center, like the original's icon
+  // bar (rather than a full-width top navbar). Resources stay on it for
+  // at-a-glance stock; the map title moves here too.
   const hudTop = el(
     'div',
     { class: 'hud-top' },
-    el('a', { href: '/', text: 's2gold' }),
+    el('a', { class: 'hud-brand', href: '/', text: 's2gold' }),
     mapTitle,
     pauseButton,
+    speedSelect.element,
     menuButton,
     statsButton,
     goodsButton,
-    speedSelect.element,
-    resources,
     zoomButton,
     settingsButton,
+    resources,
     tickLabel,
     fps,
   );

@@ -76,12 +76,20 @@ export function createDropdown(
     if (open) {
       const rect = button.getBoundingClientRect();
       list.style.left = `${rect.left}px`;
-      list.style.top = `${rect.bottom + 4}px`;
+      // Open upward when the button sits in the lower half of the viewport
+      // (the HUD bar is bottom-anchored), so the popup stays on-screen.
       highlighted = Math.max(
         0,
         opts.findIndex((o) => o.value === value),
       );
       renderList();
+      if (rect.top > window.innerHeight / 2) {
+        list.style.top = 'auto';
+        list.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+      } else {
+        list.style.bottom = 'auto';
+        list.style.top = `${rect.bottom + 4}px`;
+      }
       list.querySelector('.highlighted')?.scrollIntoView({ block: 'nearest' });
     }
   }

@@ -20,11 +20,6 @@ const CORNERS: ReadonlyArray<[name: string, cls: string]> = [
   ['dskbobul', 'frame-bl'],
   ['dskbobur', 'frame-br'],
 ];
-const EDGES: ReadonlyArray<[name: string, cls: string]> = [
-  ['dskov10l', 'frame-left'],
-  ['dskov10r', 'frame-right'],
-];
-
 /**
  * Build and append the frame overlay to `root`, or do nothing when the ui
  * pieces are unavailable. Returns the overlay element (or null).
@@ -43,7 +38,6 @@ export async function installFrame(root: HTMLElement): Promise<HTMLElement | nul
     });
     overlay.append(img);
   };
-  for (const [name, cls] of EDGES) add(name, cls);
   for (const [name, cls] of CORNERS) add(name, cls);
   root.append(overlay);
   return overlay;

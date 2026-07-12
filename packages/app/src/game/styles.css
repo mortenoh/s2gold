@@ -32,24 +32,34 @@ body {
   cursor: grabbing;
 }
 
+/* Compact control bar anchored bottom-center (like the original's icon bar),
+   leaving the top clear so the map fills the screen. */
 .hud-top {
   position: absolute;
-  top: 8px;
-  left: 8px;
-  right: 8px;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 24px);
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
-  background: rgba(20, 20, 24, 0.8);
-  border: 1px solid #3a3a44;
-  border-radius: 6px;
+  gap: 8px;
+  padding: 4px 10px;
+  background: rgba(18, 18, 22, 0.82);
+  border: 1px solid #33333c;
+  border-radius: 8px;
   color: #ddd;
-  font-size: 13px;
+  font-size: 12px;
   z-index: 10;
-  /* The bar must never wrap; the map title may shrink instead. */
-  flex-wrap: nowrap;
-  overflow: hidden;
+  /* Wrap onto extra rows (stacking upward from the bottom) rather than
+     overflowing off-screen when many controls are present. */
+  flex-wrap: wrap;
+  justify-content: center;
+  row-gap: 4px;
+}
+
+.hud-brand {
+  font-weight: 600;
+  opacity: 0.7;
 }
 
 .hud-top > * {
@@ -1052,20 +1062,6 @@ body {
   position: absolute;
   image-rendering: pixelated;
   user-select: none;
-}
-
-/* Vertical stone edge strips, stretched to full height. */
-.frame-left,
-.frame-right {
-  top: 0;
-  height: 100%;
-  width: 16px;
-}
-.frame-left {
-  left: 0;
-}
-.frame-right {
-  right: 0;
 }
 
 /* Corner caryatids, scaled up so they read at any viewport size (the original

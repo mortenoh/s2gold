@@ -65,8 +65,9 @@ test('briefing shows diary text and Start lands in the game with the campaign pa
   await expect(page).toHaveURL(/\/play\/maps_miss200\?campaign=1/);
   await expect(page.getByTestId('game-canvas')).toBeVisible({ timeout: 15_000 });
 
-  // The in-game Objectives panel is available in campaign mode.
-  await expect(page.getByTestId('objectives-toggle')).toBeVisible();
+  // The in-game Objectives panel is available in campaign mode. The campaign
+  // controller mounts just after boot, which can lag under parallel load.
+  await expect(page.getByTestId('objectives-toggle')).toBeVisible({ timeout: 15_000 });
   await page.getByTestId('objectives-toggle').click();
   await expect(page.getByTestId('objectives-panel')).toBeVisible();
   await expect(page.getByTestId('objectives-progress')).toBeVisible();

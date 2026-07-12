@@ -21,10 +21,21 @@ export function syncHudPanelButton(button: HTMLElement, open: boolean): void {
   button.setAttribute('aria-expanded', String(open));
 }
 
-/** Anchor `panel` under `button`, clamped to the viewport's horizontal edges. */
+/**
+ * Anchor `panel` to `button`, clamped to the viewport edges. Opens below the
+ * button normally, but above it when the button sits in the lower half of the
+ * screen (the HUD bar is bottom-anchored), so the panel stays on-screen.
+ */
 function position(button: HTMLElement, panel: HTMLElement): void {
   const rect = button.getBoundingClientRect();
-  panel.style.top = `${rect.bottom + 6}px`;
+  const openUp = rect.top > window.innerHeight / 2;
+  if (openUp) {
+    panel.style.top = 'auto';
+    panel.style.bottom = `${window.innerHeight - rect.top + 6}px`;
+  } else {
+    panel.style.bottom = 'auto';
+    panel.style.top = `${rect.bottom + 6}px`;
+  }
   const left = Math.min(rect.left, window.innerWidth - panel.offsetWidth - 8);
   panel.style.left = `${Math.max(8, left)}px`;
 }
