@@ -35,13 +35,12 @@ Landed 2026-07-12 (part 2): original 11-slot save trays (captures/
 loadgame.png), QuadItem pooling, in-game captures, clicking a warehouse
 building (HQ/storehouse) opens its inventory window with hover tooltips,
 the decorative statue viewport frame from RESOURCE.DAT (corner
-caryatids), and a compact bottom-center HUD bar (replacing the heavy
-full-width top navbar) with panels/dropdowns opening upward.
+caryatids), a compact bottom-center HUD bar (replacing the heavy
+full-width top navbar) with panels/dropdowns opening upward, and the
+original hand cursor (ui/handa.png) on the game canvas and menus.
 
 Remaining:
 
-- Custom hand cursor: the sprites are now converted (ui/hand*.png from
-  RESOURCE.DAT); wire them as the CSS cursor in the game/menus.
 - Full sprite-based window chrome: the window frame pieces (title bar,
   borders, control icons) are converted (ui/) - restyle the DOM panels
   to use them so windows look like the original, not flat dark boxes.
