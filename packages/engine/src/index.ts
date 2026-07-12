@@ -322,9 +322,9 @@ export function visibleNodes(world: World, player: number): Set<number> {
   }
   // Add each military building's / HQ's extra sight disc, and lookout towers.
   const addDisc = (center: number, radius: number): void => {
-    for (let node = 0; node < geom.size; node++) {
+    geom.forEachNodeWithin(center, radius, (node) => {
       if (geom.distance(center, node) <= radius) visible.add(node);
-    }
+    });
   };
   for (const b of storeLive(world.buildings)) {
     if (b.player !== player) continue;

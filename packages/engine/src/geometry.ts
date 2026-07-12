@@ -108,6 +108,28 @@ export class Geometry {
     ];
   }
 
+  /**
+   * Visit every node whose torus distance from `center` can be <= radius, by
+   * enumerating the (2r+1)^2 window around it (each lattice step changes x
+   * and y by at most 1, so the window is a superset of the disc). Falls back
+   * to a full scan when the window would wrap onto itself. Callers must still
+   * apply an exact distance check.
+   */
+  forEachNodeWithin(center: number, radius: number, visit: (node: number) => void): void {
+    const span = 2 * radius + 1;
+    if (span >= this.width || span >= this.height) {
+      for (let node = 0; node < this.size; node++) visit(node);
+      return;
+    }
+    const cx = this.x(center);
+    const cy = this.y(center);
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        visit(this.index(cx + dx, cy + dy));
+      }
+    }
+  }
+
   /** Shortest lattice-step distance between two nodes across the torus. */
   distance(a: number, b: number): number {
     const ax = this.x(a);

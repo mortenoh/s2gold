@@ -66,25 +66,31 @@ export function recalcTerritory(world: World, geom: Geometry): boolean {
   const next = new Array<number>(size).fill(OWNER_NONE);
 
   if (points.length > 0) {
-    for (let node = 0; node < size; node++) {
-      let bestDist = Infinity;
-      let bestPlayer = -1;
-      let bestBuilding = Infinity;
-      for (const p of points) {
+    // Per-point bounded discs instead of scanning every node against every
+    // point: the winner per node is a strict lexicographic min over
+    // (distance, player, buildingId), so visiting order cannot change it.
+    const bestDist = new Float64Array(size).fill(Infinity);
+    const bestPlayer = new Int32Array(size).fill(-1);
+    const bestBuilding = new Float64Array(size).fill(Infinity);
+    for (const p of points) {
+      geom.forEachNodeWithin(p.node, p.radius, (node) => {
         const d = geom.distance(node, p.node);
-        if (d > p.radius) continue;
+        if (d > p.radius) return;
         // Nearer wins; on a tie prefer lower player, then lower building id.
         if (
-          d < bestDist ||
-          (d === bestDist &&
-            (p.player < bestPlayer || (p.player === bestPlayer && p.buildingId < bestBuilding)))
+          d < bestDist[node] ||
+          (d === bestDist[node] &&
+            (p.player < bestPlayer[node] ||
+              (p.player === bestPlayer[node] && p.buildingId < bestBuilding[node])))
         ) {
-          bestDist = d;
-          bestPlayer = p.player;
-          bestBuilding = p.buildingId;
+          bestDist[node] = d;
+          bestPlayer[node] = p.player;
+          bestBuilding[node] = p.buildingId;
         }
-      }
-      if (bestPlayer >= 0) next[node] = ownerByteFor(bestPlayer);
+      });
+    }
+    for (let node = 0; node < size; node++) {
+      if (bestPlayer[node] >= 0) next[node] = ownerByteFor(bestPlayer[node]);
     }
   }
 
