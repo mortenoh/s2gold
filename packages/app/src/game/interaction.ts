@@ -139,6 +139,12 @@ export interface InteractionDeps {
   openHarbor?(node: number, clientX: number, clientY: number): boolean;
   /** Close any open harbor panel. */
   closeHarbor?(): void;
+  /**
+   * Try to open the inventory (Goods) window for an own warehouse-class
+   * building (HQ / storehouse) at a node. Returns true when one was there, so
+   * the build menu is suppressed. Harbors are handled by openHarbor first.
+   */
+  openWarehouse?(node: number): boolean;
 }
 
 /** Live road-build preview: the hovered destination and the path to it. */
@@ -232,6 +238,7 @@ export class Interaction {
     // an own harbor opens its expedition panel; otherwise the build menu.
     if (this.deps.openMilitary?.(node, ev.clientX, ev.clientY)) return;
     if (this.deps.openHarbor?.(node, ev.clientX, ev.clientY)) return;
+    if (this.deps.openWarehouse?.(node)) return;
     this.openMenu(ev.clientX, ev.clientY, node);
   }
 

@@ -902,6 +902,12 @@ async function boot(): Promise<void> {
     closeMilitary: () => military.close(),
     openHarbor: (node, x, y) => harbor.openAt(node, x, y),
     closeHarbor: () => harbor.close(),
+    openWarehouse: (node) => {
+      const title = session?.warehouseTitleAt(node) ?? null;
+      if (!title) return false;
+      goodsPanel.open(title);
+      return true;
+    },
   });
   interactionRef = interaction;
 

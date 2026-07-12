@@ -712,6 +712,20 @@ export class GameSession {
     return b ? militaryView(this.world, b.id) : null;
   }
 
+  /**
+   * The display title of an own warehouse-class building (HQ / storehouse /
+   * harbor) at `node`, or null when there is none. Used to open the inventory
+   * window on a click (the stock shown is the player-wide warehouse pool).
+   */
+  warehouseTitleAt(node: number): string | null {
+    const b = buildingAt(this.world, node);
+    if (!b || b.player !== this.localPlayer || b.state !== 'working') return null;
+    const kind = buildingDef(b.type)?.kind;
+    if (kind === 'hq') return 'Headquarters';
+    if (kind === 'warehouse') return b.type === 'harbor' ? 'Harbor' : 'Storehouse';
+    return null;
+  }
+
   /** Owning player of a node (-1 = neutral). */
   ownerOf(node: number): number {
     return ownerAt(this.world, node);

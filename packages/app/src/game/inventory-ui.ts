@@ -108,6 +108,7 @@ export class GoodsPanel {
   private body: HTMLElement | null = null;
   /** Live count-cell references per ware key, for in-place per-frame updates. */
   private readonly cells = new Map<string, { row: HTMLElement; count: HTMLElement }>();
+  private title = 'Goods';
 
   constructor(private readonly deps: GoodsPanelDeps) {}
 
@@ -130,9 +131,10 @@ export class GoodsPanel {
     this.deps.onVisibility?.(false);
   }
 
-  open(): void {
+  open(title = 'Goods'): void {
     if (!this.deps.session()) return;
     this.close();
+    this.title = title;
     const closeButton = el('button', {
       text: '✕',
       attrs: { type: 'button', 'data-testid': 'goods-close', title: 'Close' },
@@ -143,7 +145,7 @@ export class GoodsPanel {
     const head = el(
       'div',
       { class: 'goods-panel-head' },
-      el('span', { class: 'goods-panel-title', text: 'Goods' }),
+      el('span', { class: 'goods-panel-title', text: this.title }),
       closeButton,
     );
     this.panel = el(
@@ -172,7 +174,7 @@ export class GoodsPanel {
         });
         const row = el(
           'div',
-          { class: 'goods-row' },
+          { class: 'goods-row', attrs: { title: label } },
           el('span', { class: 'goods-name', text: label }),
           count,
         );
