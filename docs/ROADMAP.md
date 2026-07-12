@@ -41,9 +41,6 @@ original hand cursor (ui/handa.png) on the game canvas and menus.
 
 Remaining:
 
-- Full sprite-based window chrome: the window frame pieces (title bar,
-  borders, control icons) are converted (ui/) - restyle the DOM panels
-  to use them so windows look like the original, not flat dark boxes.
 - World Campaign globe screen (captures/worldcampaign.png): blocked on
   per-chapter marker coordinates, which are not in the converted data.
 - URL scheme: replace `/play/game.html?map=<name>` with a clean,
@@ -64,10 +61,11 @@ Remaining:
 
 ## C. Features (PLAN.md polish backlog, still open; audited 2026-07-12)
 
-- Sprite-based in-game UI: the RESOURCE.DAT/IO.LST chrome is now converted
-  (ui/ frame + window pieces + cursor); remaining work is restyling the DOM
-  panels and the build menu to use those sprites (the statue frame + bottom
-  HUD already landed).
+- Sprite-based in-game UI: the statue frame, bottom HUD, hand cursor, and
+  window chrome (title bars/borders/body on all panels + the build menu)
+  have landed. Remaining: swap the build menu's text categories for the
+  original's building-icon grid, and use the real icon sprites on the HUD
+  bar buttons.
 - Per-nation border-stone sprites (single fixed sprite today).
 - AI: seafaring (no ship/harbor references in `packages/engine/src/ai/`).
 - Storehouse-local inventories (`Player.wares` is one global pool).
