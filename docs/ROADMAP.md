@@ -44,10 +44,6 @@ Remaining:
 
 - Sprite-based in-game UI from IO.LST (windows, icon build menu) - panels
   are DOM elements today.
-- Terrain edge blending (edge strips at atlas x=192 rows 176-240 painted
-  over lower-priority neighbours; the RttR edge-priority facts are recorded
-  in the terrain notes - water/lava palette animation and gouraud landed
-  2026-07-12).
 - Per-nation border-stone sprites (single fixed sprite today).
 - AI: seafaring (no ship/harbor references in `packages/engine/src/ai/`).
 - Storehouse-local inventories (`Player.wares` is one global pool).
@@ -62,8 +58,8 @@ Landed since the PLAN.md backlog was written: donkey roads + road upgrade,
 geologists, ground ware-stack sprites, soldier rank overlays + fight
 animations, wasteland/winter terrain rules, harbor territory recalc on
 construction, AI catapult play (2026-07-12), the World Campaign mission
-set (2026-07-12), and palette-exact gouraud lighting + water/lava palette
-animation (2026-07-12).
+set (2026-07-12), palette-exact gouraud lighting + water/lava palette
+animation (2026-07-12), and terrain edge blending (2026-07-12).
 
 ## D. Code health (review)
 
