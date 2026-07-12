@@ -677,7 +677,15 @@ async function boot(): Promise<void> {
     // legacy query params; legacy /play mode keeps its ?map=/?ai=/?campaign=.
     if (!sessionMode) {
       const url = new URL(window.location.href);
-      url.searchParams.set('map', entry.name);
+      // On the clean /play/<map> route the map lives in the path, so keep it there
+      // (and switch it in place) rather than duplicating it as a redundant ?map=
+      // query. The legacy root route still uses ?map=.
+      if (url.pathname.startsWith('/play/')) {
+        url.pathname = `/play/${entry.name}`;
+        url.searchParams.delete('map');
+      } else {
+        url.searchParams.set('map', entry.name);
+      }
       // Keep the URL honest about the active AI config (cleared on a plain switch).
       if (ai.length > 0) url.searchParams.set('ai', ai.join(','));
       else url.searchParams.delete('ai');
