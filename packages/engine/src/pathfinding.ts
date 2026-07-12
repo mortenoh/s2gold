@@ -15,7 +15,7 @@ import { ownerPlayer } from './constants';
 import type { Geometry } from './geometry';
 import { isWalkableTexture, type TerrainRules } from './terrain';
 import { isWaterNode } from './water';
-import { getFlag, storeLive, type World } from './world';
+import { getFlag, storeLive, type Road, type World } from './world';
 
 /** A binary min-heap of (id) ordered by (priority, id) for deterministic pops. */
 class MinHeap {
@@ -268,4 +268,56 @@ export function findFlagRoute(
     }
   }
   return null;
+}
+
+/** The lowest-id road that directly joins two flags, or null (deterministic). */
+function roadBetween(world: World, flagA: number, flagB: number): Road | null {
+  let best: Road | null = null;
+  for (const road of storeLive(world.roads)) {
+    const joins =
+      (road.flagA === flagA && road.flagB === flagB) ||
+      (road.flagA === flagB && road.flagB === flagA);
+    if (joins && (best === null || road.id < best.id)) best = road;
+  }
+  return best;
+}
+
+/**
+ * A door-to-door walk path for a settler being sent to staff `toNode` from
+ * `fromNode`, routed over the ROAD network instead of straight across terrain:
+ * the source building's flag, along roads, to the destination building's flag,
+ * then its door. Excludes `fromNode` (the {@link beginWalk} convention).
+ *
+ * Returns null when the two are not road-connected, so the caller leaves the
+ * worker in the pool until a road exists — the original S2 rule that a building
+ * with no road connection cannot be staffed or supplied. Only this staffing leg
+ * is road-constrained; a harvester's trip out to a tree/field keeps free-walking.
+ */
+export function findRoadWalkPath(
+  world: World,
+  geom: Geometry,
+  player: number,
+  fromNode: number,
+  toNode: number,
+): number[] | null {
+  const fromFlagId = world.flagAtNode[geom.neighbour(fromNode, 'SE')];
+  const toFlagId = world.flagAtNode[geom.neighbour(toNode, 'SE')];
+  if (fromFlagId < 0 || toFlagId < 0) return null;
+  const graph = buildFlagGraph(world, player);
+  const flagRoute = findFlagRoute(world, geom, graph, fromFlagId, toFlagId);
+  if (!flagRoute) return null;
+
+  // Expand the flag sequence into the underlying node path, orienting each
+  // road's stored node list to the direction of travel and skipping the shared
+  // junction node so it is not duplicated.
+  const path: number[] = [getFlag(world, fromFlagId).node];
+  for (let i = 0; i + 1 < flagRoute.length; i++) {
+    const road = roadBetween(world, flagRoute[i], flagRoute[i + 1]);
+    if (!road) return null;
+    const seg =
+      road.flagA === flagRoute[i] ? road.path.slice(1) : [...road.path].reverse().slice(1);
+    for (const n of seg) path.push(n);
+  }
+  path.push(toNode); // final leg: destination flag -> door
+  return path;
 }

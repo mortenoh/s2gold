@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { createWorld, tickWorld, worldGeometry } from './index';
 import { makeResource, RESOURCE, resourceType } from './constants';
 import { makeTwoIslandMap } from './harness';
-import { setResource, spawnBuilding } from './harness-economy';
+import { connectToHq, setResource, spawnBuilding } from './harness-economy';
 import { isWaterNode } from './water';
 
 describe('fishery catches fish from adjacent water', () => {
@@ -25,7 +25,9 @@ describe('fishery catches fish from adjacent water', () => {
 
     // A fishery on the coast within reach of that shore spot; it recruits its
     // fisher from the HQ over the first ticks (needs a rod-and-line, in stock).
+    // The fisher walks the road network to the site, so connect it to the HQ.
     const fishery = spawnBuilding(world, geom, geom.index(5, 6), 'fishery', 0, false);
+    connectToHq(world, geom, geom.index(5, 6));
 
     const before = world.players[0].wares.fish;
     let produced = false;

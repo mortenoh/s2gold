@@ -116,7 +116,7 @@ export function tickWorld(world: World, rules: TerrainRules = GREENLAND_RULES): 
   const events = new EventSink();
   runDueCommands(world, geom, rules, events); // 1. commands
   runPopulation(world); // 1b. HQ population growth (tops up the Helper pool)
-  runConstruction(world, geom, rules, events); // 2. construction (+ builder steps)
+  runConstruction(world, geom, events); // 2. construction (+ builder steps)
   runProduction(world, geom, rules, events); // 3. production (+ worker steps)
   runMilitary(world, geom, rules, events); // 4. military (occupy/fight/promote/catapult)
   runDispatch(world, geom, events); // 5a. ware routing + delivery
