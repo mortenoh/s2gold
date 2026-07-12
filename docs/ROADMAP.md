@@ -11,41 +11,21 @@ the reference-study gap list, and the 2026-07-11/12 full code review
 (findings below marked "review" were confirmed against the code; the
 correctness findings from that review are already fixed).
 
-## A. Performance (review; engine tick + render hot paths)
+## A. Performance (landed 2026-07-12)
 
-- Dispatch en-route census: `enRoute` in
-  `packages/engine/src/systems/dispatch.ts` scans every live ware once per
-  candidate building per tick (O(buildings x wares)). Build one per-tick
-  census Map instead - the pattern already exists as `transitCensus` in
-  `systems/production.ts`.
-- Bounded harvester searches: `nearestReachable`/`nearestResource` in
-  `packages/engine/src/systems/production.ts` scan every map node per idle
-  worker per tick although targets sit within radius 2-8. Enumerate the
-  (2r+1)^2 neighbourhood and add a "nothing found" cooldown (a depleted mine
-  currently rescans the full map every tick).
-- Ware route caching: `runDispatch` re-runs `chooseWareRoute` (full A* over
-  the flag graph) for every flag-parked ware every tick. Cache per-ware
-  routes and invalidate via a road-graph version counter bumped on road
-  build/demolish.
-- Frame-loop dirty gating: `packages/app/src/game/main.ts` rebuilds
-  `roadSegments`/`upgradedRoadSegments`, the disconnected-building flood
-  fill, and depleted-mine markers every animation frame (even paused). Gate
-  them behind the existing dirty-flag pattern (`staticsDirty` et al.).
-- Allocation-free distance: `Geometry.distance` in
-  `packages/engine/src/geometry.ts` allocates 18 throwaway arrays per call
-  inside the innermost A*/territory loops. Hoist the invariant cube
-  conversion and use scalar math; give `neighbours()` a reusable scratch
-  array.
-- Sprite torus sweep: `SpriteRenderer.render` in
-  `packages/renderer/src/sprites.ts` walks the full statics+dynamics lists
-  once per 3x3 torus offset per frame. Reject whole offsets against the
-  viewport first and pool QuadItems.
-- Bounded visibility discs: `visibleNodes` in `packages/engine/src/index.ts`
-  scans all map nodes per HQ/military building on every territory event.
-  Enumerate bounded discs around each point; the same fix applies to
-  `recalcTerritory` in `systems/territory.ts`.
-- Parallel boot loads: `boot()` in `packages/app/src/game/main.ts` awaits
-  five map-independent atlas loads sequentially; use `Promise.all`.
+The whole batch shipped, each change verified bit-identical against the
+previous engine via long-run world-hash traces (~40% higher tick throughput
+on a modest demo economy; the census/route wins grow with economy size):
+per-tick en-route census for dispatch, radius-bounded harvester/mine
+searches, memoised ware-route plans per sea context, bounded discs for
+territory recalc and visibility, allocation-free `Geometry.distance` +
+scratch-array A* expansion, per-tick app overlay caches, parallel boot
+atlas loads, and torus-offset viewport rejection in the sprite pass.
+
+Remaining:
+
+- Pool QuadItems in `packages/renderer/src/sprites.ts` (a fresh object per
+  drawn quad per frame survives; the offset rejection removed the bulk).
 
 ## B. Fidelity vs the original (reference-study; retrobox unblocks capture)
 
