@@ -1,11 +1,13 @@
 /**
- * Build-menu building icons cropped straight from the loaded nation atlas
- * (rom_z). The original build window shows buildings as pictures, not text; we
- * reuse the same building sprites the map draws — the working-building frame at
- * rom_z index `250 + 5 * id` (the stride-5 rule mirrored from
- * {@link buildingSprite}) — as CSS background crops, so no extra assets or
- * converter work are needed. When the atlas is absent the factory returns null
- * and the menu falls back to its text rows.
+ * Build-menu building icons cropped straight from a loaded nation atlas (the
+ * LOCAL player's people — rom_z / vik_z / afr_z / jap_z, or the winter twin — so
+ * the menu previews the buildings you will actually place). The original build
+ * window shows buildings as pictures, not text; we reuse the same building
+ * sprites the map draws — the working-building frame at index `250 + 5 * id` (the
+ * stride-5 rule mirrored from {@link buildingSprite}, index-parallel across all
+ * nation archives) — as CSS background crops, so no extra assets or converter work
+ * are needed. When the atlas is absent the factory returns null and the menu falls
+ * back to its text rows.
  */
 
 import type { BuildingType } from '@s2gold/engine';
@@ -42,7 +44,8 @@ export function makeBuildIconSet(atlas: LoadedAtlas | null): BuildIconSet | null
       if (index === null) return false;
       const frame = meta.sprites.get(index);
       if (!frame) return false;
-      const page = pages[frame.atlas] as (HTMLImageElement & { width: number; height: number }) | undefined;
+      const page = pages[frame.atlas] as
+        (HTMLImageElement & { width: number; height: number }) | undefined;
       if (!page) return false;
       const src = page.src;
       const natW = page.naturalWidth || page.width;

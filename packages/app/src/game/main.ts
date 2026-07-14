@@ -49,12 +49,14 @@ import {
   upgradedRoadSegments,
   BUILDING_ARCHIVE,
   buildingArchiveForLandscape,
+  nationBuildingArchive,
   BOB_ARCHIVE,
   SHIP_ARCHIVE,
   WORK_ARCHIVE,
 } from './game-render';
 import { Interaction } from './interaction';
-import { makeBuildIconSet } from './build-icons';
+import { makeBuildIconSet, type BuildIconSet } from './build-icons';
+import type { LoadedAtlas } from './sprite-atlas';
 import { makeHudIconSet, iconifyHudButton, HUD_ICON, IO_ARCHIVE } from './hud-icons';
 import { MilitaryPanel } from './military-ui';
 import { HarborPanel } from './harbor-ui';
@@ -135,6 +137,13 @@ interface S2Debug {
   aiPlayers: number;
   /** The chosen nation of a player slot (cosmetic; 'romans' by default). */
   nationOf(player: number): string;
+  /**
+   * The building/flag/border-stone sprite archive a player's structures actually
+   * render from (e.g. 'vik_z' for a Viking on a summer map, 'wrom_z' for a Roman
+   * on winter). Reflects the missing-atlas fallback, so tests can assert a
+   * non-Roman player really draws from its own people's archive.
+   */
+  nationArchiveOf(player: number): string;
   /** Live building count for a player (HQ + sites + working). */
   buildingsOf(player: number): number;
   /** Toggle fog of war (default on for a new game). */
@@ -574,10 +583,28 @@ async function boot(): Promise<void> {
   let camera = new Camera(1, 1);
   let session: GameSession | null = null;
   let landscape: LandscapeSet = 0;
-  // The building/flag/border-stone archive for the active map. Falls back to
-  // the always-registered summer rom_z when a landscape's archive is missing
-  // (assets converted before winter support): wrong-season beats invisible.
-  let nationArchive = BUILDING_ARCHIVE;
+  // Decoded building/flag/border-stone atlases by archive name, kept so the build
+  // menu can crop the LOCAL player's nation buildings (registerAtlas only feeds
+  // the GL renderer; the menu needs the raw LoadedAtlas). Seeded with the Roman
+  // summer archive loaded at boot.
+  const nationAtlasCache = new Map<string, LoadedAtlas>();
+  // Per-player building/flag/border-stone archive resolver for the active map.
+  // Each player's structures render from their own nation's archive; a nation
+  // whose atlas failed to load falls back to the season-appropriate Roman archive
+  // (and finally the always-registered summer rom_z): wrong-people beats invisible.
+  // Replaced on every switchMap once the session's nations are known.
+  let nationArchiveFor: (player: number) => string = () => BUILDING_ARCHIVE;
+  // Build-menu icons cropped from the local player's nation atlas; rebuilt per
+  // map switch (the local nation can change via ?nations=). Read through a getter
+  // by the interaction layer so the menu always reflects the current nation.
+  let buildIcons: BuildIconSet | null = null;
+  // Seed the build-icon atlas cache with the Roman summer archive loaded at boot;
+  // switchMap adds each present nation's atlas as it is loaded and rebuilds the
+  // menu icons from the local player's nation. Until then the menu is Roman.
+  if (romanAtlas) {
+    nationAtlasCache.set(BUILDING_ARCHIVE, romanAtlas);
+    buildIcons = makeBuildIconSet(romanAtlas);
+  }
   let objAtlasReady = false;
   // Current map identity (drives per-map save filtering + default save names).
   let currentMap = '';
@@ -648,20 +675,6 @@ async function boot(): Promise<void> {
     }
     objAtlasReady = sprites.hasAtlas(archive);
 
-    // Winter maps swap the Roman building/flag/border-stone graphics to the W*
-    // nation archive (wrom_z); greenland/wasteland keep the summer rom_z that is
-    // registered once at startup. Load the winter archive lazily on first winter map.
-    const wantedNation = buildingArchiveForLandscape(map.terrain);
-    if (!sprites.hasAtlas(wantedNation)) {
-      const loaded = await loadAtlas(wantedNation);
-      if (gen !== switchGen) return;
-      if (loaded) sprites.registerAtlas(loaded.meta, loaded.pages, loaded.pmaskPages);
-    }
-    nationArchive = sprites.hasAtlas(wantedNation) ? wantedNation : BUILDING_ARCHIVE;
-    if (nationArchive !== wantedNation) {
-      console.warn(`missing sprite archive ${wantedNation}; falling back to ${BUILDING_ARCHIVE}`);
-    }
-
     // Computer opponents: keep only slot indices this map can seat, then seed
     // enough players to cover the highest AI slot (human is always slot 0).
     const ai = aiPlayers.filter((n) => n > 0 && n < entry.players);
@@ -670,6 +683,49 @@ async function boot(): Promise<void> {
     // any short/omitted slot to romans, so passing the parsed array as-is is safe.
     session = new GameSession(map.engineMap, GAME_SEED, playerCount, ai, nations);
     session.fogEnabled = readFogPref();
+
+    // Per-nation building/flag/border-stone archives. Load ONLY the archives the
+    // players present actually need (their nations + the current season's variant),
+    // in parallel, non-fatal — never all eight peoples' atlases. A Viking player on
+    // a winter map pulls wvik_z; greenland/wasteland pull vik_z. Each player's
+    // structures then draw from their own people's archive.
+    const ns = session;
+    const wantedArchives = new Set<string>();
+    for (let p = 0; p < ns.playerCount; p++) {
+      wantedArchives.add(nationBuildingArchive(ns.nationOf(p), map.terrain));
+    }
+    // Also ensure the season-appropriate Roman archive is available as the shared
+    // fallback (rom_z is always registered at boot; wrom_z is loaded here on winter).
+    wantedArchives.add(buildingArchiveForLandscape(map.terrain));
+    const toLoad = [...wantedArchives].filter((a) => !sprites.hasAtlas(a));
+    if (toLoad.length > 0) {
+      const loaded = await Promise.all(toLoad.map((a) => loadAtlas(a)));
+      if (gen !== switchGen) return; // superseded by a newer switch
+      for (let i = 0; i < toLoad.length; i++) {
+        const la = loaded[i];
+        if (!la) {
+          console.warn(`missing sprite archive ${toLoad[i]}; falling back to Roman`);
+          continue;
+        }
+        sprites.registerAtlas(la.meta, la.pages, la.pmaskPages);
+        nationAtlasCache.set(toLoad[i], la);
+      }
+    }
+    // Resolver: owner's nation archive when registered, else the season Roman
+    // archive, else the always-present summer rom_z. Reads session live so it stays
+    // correct across this switch's lifetime.
+    const romanSeason = buildingArchiveForLandscape(map.terrain);
+    nationArchiveFor = (player) => {
+      const wanted = nationBuildingArchive(ns.nationOf(player), landscape);
+      if (sprites.hasAtlas(wanted)) return wanted;
+      return sprites.hasAtlas(romanSeason) ? romanSeason : BUILDING_ARCHIVE;
+    };
+    // Build-menu icons preview the LOCAL player's own buildings: crop from their
+    // nation atlas (season-appropriate), falling back to whatever the resolver
+    // picked when their atlas is missing.
+    const localArchive = nationArchiveFor(ns.localPlayer);
+    buildIcons = makeBuildIconSet(nationAtlasCache.get(localArchive) ?? null);
+
     // Show the local player's people (cosmetic label only for this phase).
     nationLabelEl.textContent = nationLabel(session.localNation);
     overlayTick = -1; // new world: drop per-tick overlay caches
@@ -783,6 +839,7 @@ async function boot(): Promise<void> {
       players: s.playerCount,
       aiPlayers: s.aiPlayers.length,
       nationOf: (player) => s.nationOf(player),
+      nationArchiveOf: (player) => nationArchiveFor(player),
       buildingsOf: (player) => s.buildingsOf(player),
       setFog: (on) => {
         s.setFog(on);
@@ -974,9 +1031,10 @@ async function boot(): Promise<void> {
       return session;
     },
     camera: () => camera,
-    // Build-menu building icons cropped from the (already-loaded) rom_z atlas;
-    // null when the atlas is missing, and the menu falls back to text rows.
-    buildIcons: makeBuildIconSet(romanAtlas),
+    // Build-menu building icons cropped from the local player's nation atlas
+    // (rebuilt per map switch); null when the atlas is missing, and the menu falls
+    // back to text rows. Read through a getter so a nation change is picked up.
+    buildIcons: () => buildIcons,
     onStatus: (text) => {
       status.textContent = text;
       status.hidden = text.length === 0;
@@ -1228,7 +1286,7 @@ async function boot(): Promise<void> {
             {
               carrier,
               jobs,
-              buildingArchive: nationArchive,
+              nationArchiveFor,
               objectArchive: objectAtlasForLandscape(landscape),
               workAvailable: sprites.hasAtlas(WORK_ARCHIVE),
             },
@@ -1239,9 +1297,10 @@ async function boot(): Promise<void> {
     // Territory border stones + geologist survey signs: real sprites drawn with a
     // depth test (a tree in front occludes them) instead of overprinting as flat
     // overlays. Both are fog-aware. Signs are mapbobs, so they batch with the tree
-    // statics; border stones are nation-archive (rom_z) and would, sprinkled around
-    // the frontier ring, split the mapbobs run into a draw call per stone — so they
+    // statics; border stones are nation-archive and would, sprinkled around the
+    // frontier ring, split the mapbobs run into a draw call per stone — so they
     // ride the renderer's separate `overlay` pass (still depth-tested, one batch).
+    // Each player's frontier uses THEIR nation's boundary-stone sprite.
     const borderStones: DynamicSprite[] = [];
     if (session) {
       const vis = session.fogEnabled ? session.visibility : null;
@@ -1252,7 +1311,7 @@ async function boot(): Promise<void> {
           borderCache[p] ?? [],
           p,
           vis,
-          nationArchive,
+          nationArchiveFor(p),
         )) {
           borderStones.push(s);
         }

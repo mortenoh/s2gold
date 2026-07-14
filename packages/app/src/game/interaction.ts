@@ -127,9 +127,11 @@ export interface InteractionDeps {
   camera(): Camera;
   /**
    * Building-icon set for the build submenu grid (cropped from the loaded nation
-   * atlas). Null/absent degrades the grid back to text rows.
+   * atlas). Resolved lazily each time a submenu opens so the icons track the local
+   * player's current nation (which can change across map switches). Null/absent —
+   * or a getter that returns null — degrades the grid back to text rows.
    */
-  buildIcons?: BuildIconSet | null;
+  buildIcons?: BuildIconSet | (() => BuildIconSet | null) | null;
   /** Called whenever road mode toggles, for HUD status text. */
   onStatus(text: string): void;
   /** True when the pending click ended a drag and should not open a menu. */
@@ -439,7 +441,8 @@ export class Interaction {
   /** Open (replacing any current) the building-list submenu for a category. */
   private openSubmenu(trigger: HTMLElement, node: number, types: readonly BuildingType[]): void {
     this.closeSubmenu();
-    const icons = this.deps.buildIcons ?? null;
+    const bi = this.deps.buildIcons;
+    const icons = (typeof bi === 'function' ? bi() : bi) ?? null;
     // Icon grid (the original build window shows buildings as pictures) when the
     // atlas is loaded, else the plain text rows. A per-cell fallback also fires
     // if a single sprite is missing, so one gap never breaks the grid.

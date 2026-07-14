@@ -30,6 +30,7 @@ import {
   type BuildingType,
   type Geometry,
   type JobType,
+  type Nation,
   type Settler,
   type Ship,
   type WareType,
@@ -71,6 +72,41 @@ export const WORK_ARCHIVE = 'cbob_rom_bobs';
  */
 export function buildingArchiveForLandscape(landscape: number): string {
   return landscape === 2 ? WINTER_BUILDING_ARCHIVE : BUILDING_ARCHIVE;
+}
+
+/**
+ * MBOB building/flag/border-stone archive prefix per {@link Nation}. The four
+ * peoples ship a parallel building family in DATA/MBOB — ROM_Z (romans), VIK_Z
+ * (vikings), AFR_Z (nubians; the original names the African/Nubian people file
+ * "afr"), JAP_Z (japanese) — with a winter twin (W*_Z). Each summer archive is
+ * INDEX-PARALLEL to rom_z: every sprite index we render (border stone 0/1, flags
+ * 100..117, buildings 250+5*id and their +2/+3 construction frames) exists at the
+ * SAME index and depicts the same object in that people's style. Verified by
+ * decoding all four atlas.json sprite-index sets (vik_z/afr_z/jap_z each cover
+ * every rendered index that rom_z does — the only shared gap is id-16's site
+ * shadow 333, absent from rom_z too) and by cropping index 250 (per-nation HQ:
+ * Roman villa / Viking keep / Nubian spired palace / Japanese pagoda), 335
+ * (woodcutter hut), 415 (sawmill), 100 (flag) and 0 (border stone — a distinct
+ * per-nation marker with a player-colour base region) from each archive.
+ */
+const NATION_ARCHIVE_PREFIX: Readonly<Record<Nation, string>> = {
+  romans: 'rom',
+  vikings: 'vik',
+  nubians: 'afr',
+  japanese: 'jap',
+};
+
+/**
+ * Building/flag/border-stone archive name for a {@link Nation} on a given
+ * landscape (renderer LandscapeSet: 0 greenland, 1 wasteland, 2 winter). Winter
+ * maps use the W* twin (wvik_z, ...); greenland and wasteland both use the summer
+ * archive. `nationBuildingArchive('romans', landscape)` equals
+ * {@link buildingArchiveForLandscape}. Pure mapping — the caller is responsible
+ * for falling back to Roman when a nation's atlas failed to load.
+ */
+export function nationBuildingArchive(nation: Nation, landscape: number): string {
+  const prefix = NATION_ARCHIVE_PREFIX[nation] ?? NATION_ARCHIVE_PREFIX.romans;
+  return `${landscape === 2 ? 'w' : ''}${prefix}_z`;
 }
 
 /**
@@ -259,11 +295,13 @@ export interface RenderAtlases {
   /** JOBS.BOB atlas (profession bodies + overlays), or null when unavailable. */
   readonly jobs: BobAtlas | null;
   /**
-   * Nation archive for buildings/flags: {@link BUILDING_ARCHIVE} (rom_z) on
-   * greenland/wasteland maps, {@link WINTER_BUILDING_ARCHIVE} (wrom_z) on winter.
-   * Select with {@link buildingArchiveForLandscape}.
+   * Per-player building/flag/border-stone archive resolver. Each player's
+   * structures render from THEIR nation's archive ({@link nationBuildingArchive}
+   * for the player's nation + the current landscape), so a Viking player's
+   * longhouses and a Roman player's villas draw side by side. The closure owns the
+   * missing-atlas fallback to Roman, so callers pass it a bare player index.
    */
-  readonly buildingArchive: string;
+  readonly nationArchiveFor: (player: number) => string;
   /** Graphics archive holding the map objects (trees) for the current map. */
   readonly objectArchive: string;
   /**
@@ -460,7 +498,7 @@ export function buildDynamics(
   anim: SceneAnimation,
   visibility: Uint8Array | null = null,
 ): DynamicSprite[] {
-  const { carrier, jobs, buildingArchive, objectArchive, workAvailable } = atlases;
+  const { carrier, jobs, nationArchiveFor, objectArchive, workAvailable } = atlases;
   const out: DynamicSprite[] = [];
   // Fog: a dynamic on a node that is not currently visible is hidden (explored
   // land keeps only its darkened terrain snapshot; unexplored is black). The
@@ -473,6 +511,9 @@ export function buildDynamics(
     if (!b) continue;
     if (hidden(b.node)) continue;
     const a = nodeAnchor(world, b.node);
+    // Buildings render from the owner's nation archive (Viking longhouse vs Roman
+    // villa at the identical sprite index — see nationBuildingArchive parity note).
+    const buildingArchive = nationArchiveFor(b.player);
     if (b.state === 'site' && b.type !== 'headquarters') {
       const site = buildingSprite(b.type, 'site');
       if (!site) continue; // unknown building kind: skip rather than draw garbage
@@ -536,10 +577,12 @@ export function buildDynamics(
     if (hidden(f.node)) continue;
     const a = nodeAnchor(world, f.node);
     const frame = anim.waveFrame % FLAG_FRAMES;
+    // Flags are per-nation in S2 (the flag sprite 100..107 differs by people), so
+    // draw each flag from its owner's nation archive.
     out.push({
       worldX: a.x,
       worldY: a.y,
-      archive: buildingArchive,
+      archive: nationArchiveFor(f.player),
       spriteIndex: FLAG_SPRITE_BASE + frame,
       shadowIndex: FLAG_SHADOW_BASE + frame,
       player: f.player,
