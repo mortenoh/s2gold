@@ -578,11 +578,21 @@ function execDemolish(
     // per-rank counts that die with the building object otherwise.
     const owner = world.players[b.player];
     if (owner) for (let r = 0; r < b.garrison.length; r++) owner.soldiers[r] += b.garrison[r];
-    // Remove the bound worker settler, if any.
-    if (b.workerId >= 0 && world.settlers.items[b.workerId]) {
-      world.settlers.items[b.workerId] = null;
-      world.settlers.free.push(b.workerId);
+    // Return the bound worker to the player's idle pool before removing its
+    // settler entity, mirroring how completeBuilding returns the builder: the
+    // profession (and the tool spent recruiting it) survives the demolition.
+    if (b.workerId >= 0) {
+      const w = world.settlers.items[b.workerId];
+      if (w) {
+        if (owner) owner.workers[w.job] = (owner.workers[w.job] ?? 0) + 1;
+        world.settlers.items[b.workerId] = null;
+        world.settlers.free.push(b.workerId);
+      }
     }
+    // Stored wares (a warehouse's wareStock, a producer's inputStock) are
+    // deliberately lost with the building — burning a building destroys its
+    // goods in the original too. Only people (garrison above, worker here) and
+    // the door flag survive.
     world.buildingAtNode[node] = -1;
     world.objectType[node] = OBJ_TYPE.none;
     world.buildings.items[bId] = null;

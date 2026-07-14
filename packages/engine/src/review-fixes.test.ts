@@ -13,6 +13,7 @@ import {
   worldGeometry,
   type GameEvent,
 } from './index';
+import { JOB } from './constants';
 import { makeFlatMap } from './harness';
 import {
   claimArea,
@@ -141,6 +142,29 @@ describe('soldiers are never silently deleted', () => {
 
     // Pre-fix the per-rank garrison counts died with the building object.
     expect(soldierTotal(world, 0)).toBe(before);
+  });
+});
+
+describe('workers are never silently deleted', () => {
+  it('demolishing a staffed producer returns its worker to the idle pool', () => {
+    const world = createWorld(makeFlatMap(20, 20, 5, 5), { seed: 13, players: 1 });
+    const geom = worldGeometry(world);
+    const node = geom.index(8, 5); // inside HQ territory (radius 9)
+    const b = spawnBuilding(world, geom, node, 'woodcutter', 0);
+    expect(connectToHq(world, geom, node)).not.toBeNull();
+    world.players[0].workers[JOB.woodcutter] = 1;
+    run(world, 200); // recruit + walk HQ -> flag -> door
+    expect(b.workerId).toBeGreaterThanOrEqual(0);
+    expect(world.players[0].workers[JOB.woodcutter]).toBe(0);
+    const workerId = b.workerId;
+
+    applyCommand(world, { type: 'demolish', player: 0, node });
+    run(world, 1);
+
+    // Pre-fix the worker settler was deleted without repaying the pool, so the
+    // profession (and the tool spent recruiting it) leaked on every demolish.
+    expect(world.players[0].workers[JOB.woodcutter]).toBe(1);
+    expect(world.settlers.items[workerId]).toBeNull();
   });
 });
 
