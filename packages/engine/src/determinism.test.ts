@@ -1,7 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { deserializeWorld, hashWorld, serializeWorld, tickWorld, type MapJson } from './index';
+import {
+  deserializeWorld,
+  hashWorld,
+  serializeWorld,
+  tickWorld,
+  warehouseTotals,
+  warehouseWareTotal,
+  type MapJson,
+} from './index';
 import { makeFlatMap, setupDemoWorld } from './harness';
 
 const MAP_PATH = resolve(__dirname, '../../app/public/assets/maps/maps_miss200.json');
@@ -56,13 +64,16 @@ describe('save migrations', () => {
   it('migrates a true v1 save (no military/seafaring/donkey fields) to current', () => {
     const { world } = setupDemoWorld(makeFlatMap(32, 32, 4, 4), 99);
     for (let i = 0; i < 200; i++) tickWorld(world);
+    // The pre-v3 global ware pool for player 0 (v3 splits this into the HQ).
+    const expectedPool = warehouseTotals(world, 0);
     // Strip everything v1 predates, as an old save would look.
     const raw = JSON.parse(serializeWorld(world)) as Record<string, unknown>;
     raw.version = 1;
     delete raw.ships;
     delete raw.expeditions;
     delete raw.signs;
-    for (const b of (raw.buildings as { items: (Record<string, unknown> | null)[] }).items) {
+    const rawBuildings = (raw.buildings as { items: (Record<string, unknown> | null)[] }).items;
+    for (const b of rawBuildings) {
       if (!b) continue;
       delete b.garrison;
       delete b.occupied;
@@ -76,10 +87,21 @@ describe('save migrations', () => {
       delete r.upgraded;
       delete r.donkeyId;
     }
-    for (const p of raw.players as Record<string, unknown>[]) delete p.donkeys;
+    // v1/v2 kept a single player-global ware pool (`Player.wares`); reconstruct it
+    // from the HQ stock so the v2->v3 split is actually exercised, THEN drop the
+    // per-warehouse stock the old schema never had.
+    for (const p of raw.players as Record<string, unknown>[]) {
+      delete p.donkeys;
+      const hqId = p.hqBuildingId as number;
+      const hq = hqId >= 0 ? rawBuildings[hqId] : null;
+      p.wares = hq ? { ...(hq.wareStock as Record<string, number>) } : {};
+    }
+    for (const b of rawBuildings) {
+      if (b) delete b.wareStock;
+    }
 
     const revived = deserializeWorld(JSON.stringify(raw));
-    expect(revived.version).toBe(2);
+    expect(revived.version).toBe(3);
     // Migrated fields exist and the world ticks without throwing (pre-fix a
     // v1 save crashed stats sampling on `for (const g of b.garrison)`).
     for (const b of revived.buildings.items) {
@@ -88,9 +110,41 @@ describe('save migrations', () => {
       expect(typeof b.occupied).toBe('boolean');
       expect(typeof b.coinsEnabled).toBe('boolean');
     }
+    // v3: the old global pool landed in the HQ's own inventory, and Player.wares
+    // is gone.
+    expect((revived.players[0] as { wares?: unknown }).wares).toBeUndefined();
+    expect(warehouseTotals(revived, 0)).toEqual(expectedPool);
     expect(() => {
       for (let i = 0; i < 200; i++) tickWorld(revived);
     }).not.toThrow();
+  });
+
+  it('migrates a v2 global ware pool into the HQ inventory (v3)', () => {
+    const { world } = setupDemoWorld(makeFlatMap(32, 32, 4, 4), 7);
+    for (let i = 0; i < 100; i++) tickWorld(world);
+    const expectedPool = warehouseTotals(world, 0);
+    // Rewrite the current save into a v2 shape: a single player-global pool, no
+    // per-warehouse stock.
+    const raw = JSON.parse(serializeWorld(world)) as Record<string, unknown>;
+    raw.version = 2;
+    const rawBuildings = (raw.buildings as { items: (Record<string, unknown> | null)[] }).items;
+    for (const p of raw.players as Record<string, unknown>[]) {
+      const hqId = p.hqBuildingId as number;
+      const hq = hqId >= 0 ? rawBuildings[hqId] : null;
+      p.wares = hq ? { ...(hq.wareStock as Record<string, number>) } : {};
+    }
+    for (const b of rawBuildings) {
+      if (b) delete b.wareStock;
+    }
+
+    const revived = deserializeWorld(JSON.stringify(raw));
+    expect(revived.version).toBe(3);
+    // The whole v2 pool lands in the HQ's inventory; every other warehouse (none
+    // here) would start empty. The aggregate equals the pre-migration pool.
+    expect((revived.players[0] as { wares?: unknown }).wares).toBeUndefined();
+    const hq = revived.buildings.items[revived.players[0].hqBuildingId];
+    expect(hq?.wareStock.stone).toBe(expectedPool.stone);
+    expect(warehouseWareTotal(revived, 0, 'plank')).toBe(expectedPool.plank);
   });
 
   it('rejects a future version', () => {

@@ -58,10 +58,11 @@ describe('goodsEntries', () => {
     const plankBefore = countOf(session.goods, 'plank');
     const coalBefore = countOf(session.goods, 'coal');
 
-    // Simulate the running economy delivering wares into the warehouse.
-    const wares = session.world.players[0]!.wares;
-    wares.plank = (wares.plank ?? 0) + 7;
-    wares.coal = (wares.coal ?? 0) + 3;
+    // Simulate the running economy delivering wares into the HQ warehouse's own
+    // stock (inventories are per-warehouse now; goods sums across warehouses).
+    const hq = session.world.buildings.items[session.world.players[0]!.hqBuildingId]!;
+    hq.wareStock.plank = (hq.wareStock.plank ?? 0) + 7;
+    hq.wareStock.coal = (hq.wareStock.coal ?? 0) + 3;
 
     // Re-reading the live snapshot (as the per-frame update() does) reflects it.
     expect(countOf(session.goods, 'plank')).toBe(plankBefore + 7);

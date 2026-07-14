@@ -16,12 +16,18 @@ import {
   ownerAt,
   shipsOf,
   tickWorld,
+  warehouseWareTotal,
   worldGeometry,
   type World,
 } from './index';
 import { applyCommand } from './commands';
 import { makeTwoIslandMap, TWO_ISLAND } from './harness';
-import { spawnBuilding, connectBuildings, garrisonBuilding } from './harness-economy';
+import {
+  spawnBuilding,
+  connectBuildings,
+  garrisonBuilding,
+  grantWarehouse,
+} from './harness-economy';
 import { recalcTerritory } from './systems/territory';
 import { getBuilding, getFlag, storeAlloc, storeLive, type Ship } from './world';
 
@@ -188,14 +194,14 @@ function setupTransport(seed: number): {
 describe('P7 sea ware transport', () => {
   it('ships a ware from one island to a consumer on another', () => {
     const { world } = setupTransport(3);
-    const basePlank = world.players[0].wares.plank;
+    const basePlank = warehouseWareTotal(world, 0, 'plank');
 
     let sawCargo = false;
     let delivered = false;
     for (let i = 0; i < 4000; i++) {
       tickWorld(world);
       for (const s of shipsOf(world, 0)) if (s.cargo.length > 0) sawCargo = true;
-      if (world.players[0].wares.plank > basePlank) {
+      if (warehouseWareTotal(world, 0, 'plank') > basePlank) {
         delivered = true;
         break;
       }
@@ -232,7 +238,7 @@ describe('P7 sea ware transport', () => {
       );
       const plankBack =
         homeFlag.wares.some((wid) => world.wares.items[wid]?.type === 'plank') ||
-        (world.players[0].wares.plank ?? 0) > 0;
+        warehouseWareTotal(world, 0, 'plank') > 0;
       unloaded = shipEmptyIdle && plankBack;
     }
     expect(unloaded).toBe(true);
@@ -247,8 +253,16 @@ describe('P7 sea ware transport', () => {
       geom.index(TWO_ISLAND.harborA.x, TWO_ISLAND.harborA.y),
       BUILDING.harbor,
     );
-    const planks0 = world.players[0].wares.plank ?? 0;
-    const stones0 = world.players[0].wares.stone ?? 0;
+    // Expedition assembly draws from the assembling harbor's OWN stock (wares
+    // are per-warehouse now), so seed the harbor with exactly one kit.
+    grantWarehouse(
+      world,
+      0,
+      { plank: SEA.expeditionBoards, stone: SEA.expeditionStones },
+      harborA.id,
+    );
+    const planks0 = warehouseWareTotal(world, 0, 'plank');
+    const stones0 = warehouseWareTotal(world, 0, 'stone');
     const builders0 = world.players[0].workers.builder ?? 0;
 
     applyCommand(world, { player: 0, type: 'prepareExpedition', harborId: harborA.id });
@@ -257,16 +271,17 @@ describe('P7 sea ware transport', () => {
       for (const e of tickWorld(world)) if (e.type === 'ExpeditionReady') ready = true;
     }
     expect(ready).toBe(true);
-    expect(world.players[0].wares.plank ?? 0).toBeLessThan(planks0); // kit drawn
+    expect(warehouseWareTotal(world, 0, 'plank')).toBeLessThan(planks0); // kit drawn
 
     applyCommand(world, { player: 0, type: 'demolish', node: harborA.node });
     for (let i = 0; i < 5; i++) tickWorld(world);
 
     // Pre-fix the expedition entry persisted forever with its materials and
-    // builder locked up. Now the kit is refunded and the entry dropped.
+    // builder locked up. Now the kit is refunded (to the HQ warehouse, since the
+    // harbor is gone) and the entry dropped, so the aggregate returns to start.
     expect(world.expeditions.length).toBe(0);
-    expect(world.players[0].wares.plank ?? 0).toBe(planks0);
-    expect(world.players[0].wares.stone ?? 0).toBe(stones0);
+    expect(warehouseWareTotal(world, 0, 'plank')).toBe(planks0);
+    expect(warehouseWareTotal(world, 0, 'stone')).toBe(stones0);
     expect(world.players[0].workers.builder ?? 0).toBe(builders0);
   });
 });
@@ -282,6 +297,13 @@ describe('P7 expedition founding', () => {
       BUILDING.harbor,
     );
     manufactureShip(world, geom, harborA.id);
+    // Expedition assembly draws from the harbor's own warehouse stock: seed a kit.
+    grantWarehouse(
+      world,
+      0,
+      { plank: SEA.expeditionBoards, stone: SEA.expeditionStones },
+      harborA.id,
+    );
     const targetSpot = geom.index(TWO_ISLAND.harborB.x, TWO_ISLAND.harborB.y);
 
     // Prepare, then wait for the kit (boards + stones + builder) to assemble.
@@ -319,6 +341,13 @@ describe('P7 expedition founding', () => {
       BUILDING.harbor,
     );
     manufactureShip(world, geom, harborA.id);
+    // Expedition assembly draws from the harbor's own warehouse stock: seed a kit.
+    grantWarehouse(
+      world,
+      0,
+      { plank: SEA.expeditionBoards, stone: SEA.expeditionStones },
+      harborA.id,
+    );
     const targetSpot = geom.index(TWO_ISLAND.harborB.x, TWO_ISLAND.harborB.y);
 
     applyCommand(world, { player: 0, type: 'prepareExpedition', harborId: harborA.id });
@@ -368,6 +397,13 @@ describe('P7 expedition founding', () => {
       BUILDING.harbor,
     );
     manufactureShip(world, geom, harborA.id);
+    // Expedition assembly draws from the harbor's own warehouse stock: seed a kit.
+    grantWarehouse(
+      world,
+      0,
+      { plank: SEA.expeditionBoards, stone: SEA.expeditionStones },
+      harborA.id,
+    );
     const targetSpot = geom.index(TWO_ISLAND.harborB.x, TWO_ISLAND.harborB.y);
     const doorNode = geom.neighbour(targetSpot, 'SE');
 

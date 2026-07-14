@@ -52,6 +52,31 @@ const MIGRATIONS: Readonly<Record<number, (w: World) => void>> = {
       b.promotionTimer ??= -1;
     }
   },
+  // v2 -> v3: storehouse-local inventories. The old model kept a single
+  // player-global ware pool (`Player.wares`); wares now live in each
+  // warehouse-class building's `wareStock`. There is no per-warehouse
+  // information in a v2 save, so the whole global pool lands in the HQ's
+  // inventory (the seed warehouse) — matching a fresh world where the HQ starts
+  // with all the stock. Every other building gets an empty `{}` stock.
+  2: (w) => {
+    for (const b of w.buildings?.items ?? []) {
+      if (!b) continue;
+      (b as { wareStock?: Record<string, number> }).wareStock ??= {};
+    }
+    for (const player of w.players ?? []) {
+      if (!player) continue;
+      const legacy = (player as { wares?: Record<string, number> }).wares;
+      const hqId = player.hqBuildingId;
+      const hq = legacy && hqId >= 0 ? w.buildings?.items?.[hqId] : null;
+      if (hq && legacy) {
+        const stock = (hq as { wareStock: Record<string, number> }).wareStock;
+        for (const [ware, count] of Object.entries(legacy)) {
+          stock[ware] = (stock[ware] ?? 0) + count;
+        }
+      }
+      delete (player as { wares?: unknown }).wares;
+    }
+  },
 };
 
 /** Parse a serialized world, migrating older versions up to the current one. */

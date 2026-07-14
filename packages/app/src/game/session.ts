@@ -39,7 +39,9 @@ import {
   territoryOf,
   tickWorld,
   visibleNodes,
+  warehouseTotals,
   worldGeometry,
+  zeroWares,
   type AiState,
   type Building,
   type BuildingType,
@@ -227,15 +229,19 @@ export class GameSession {
     return this.world.players.length;
   }
 
-  /** Player-0 warehouse ware counts. */
+  /** Player-0 build-material counts, summed across all warehouses (HUD readout). */
   get inventory(): { trunk: number; plank: number; stone: number } {
-    const w = this.world.players[0]?.wares;
-    return { trunk: w?.trunk ?? 0, plank: w?.plank ?? 0, stone: w?.stone ?? 0 };
+    const w = warehouseTotals(this.world, 0);
+    return { trunk: w.trunk ?? 0, plank: w.plank ?? 0, stone: w.stone ?? 0 };
   }
 
-  /** The local player's full ware inventory (all goods) for the goods window. */
+  /**
+   * The local player's full ware inventory summed across all warehouses (HQ +
+   * storehouses + harbors) for the HUD Goods window. The per-warehouse breakdown
+   * is available via {@link warehouseGoodsAt}.
+   */
   get goods(): Record<string, number> {
-    return { ...(this.world.players[0]?.wares ?? {}) };
+    return warehouseTotals(this.world, 0);
   }
 
   /**
@@ -309,12 +315,13 @@ export class GameSession {
       buildings[b.player]++;
       for (const g of b.garrison) soldiers[b.player] += g;
     }
-    // Reserve soldiers (warehouse) + total warehouse wares.
+    // Reserve soldiers (per-player pool) + total warehouse wares (summed over
+    // each player's warehouses, since stock is now per-warehouse).
     for (let p = 0; p < n; p++) {
       const pl = w.players[p];
       if (!pl) continue;
       for (const s of pl.soldiers) soldiers[p] += s;
-      for (const count of Object.values(pl.wares)) goods[p] += count;
+      for (const count of Object.values(warehouseTotals(w, p))) goods[p] += count;
     }
     this.statsTicks.push(w.tick);
     for (let p = 0; p < n; p++) {
@@ -715,7 +722,8 @@ export class GameSession {
   /**
    * The display title of an own warehouse-class building (HQ / storehouse /
    * harbor) at `node`, or null when there is none. Used to open the inventory
-   * window on a click (the stock shown is the player-wide warehouse pool).
+   * window on a click; the stock shown is THAT warehouse's own inventory
+   * ({@link warehouseGoodsAt}), not the player-wide sum.
    */
   warehouseTitleAt(node: number): string | null {
     const b = buildingAt(this.world, node);
@@ -724,6 +732,20 @@ export class GameSession {
     if (kind === 'hq') return 'Headquarters';
     if (kind === 'warehouse') return b.type === 'harbor' ? 'Harbor' : 'Storehouse';
     return null;
+  }
+
+  /**
+   * The own warehouse-class building at `node` (HQ / storehouse / harbor) and its
+   * per-warehouse ware stock, or null when there is none. Backs the warehouse
+   * inventory window so clicking a specific warehouse shows ITS stock (distinct
+   * from the HUD Goods button's player-wide sum via {@link goods}).
+   */
+  warehouseGoodsAt(node: number): { buildingId: number; goods: Record<string, number> } | null {
+    const b = buildingAt(this.world, node);
+    if (!b || b.player !== this.localPlayer || b.state !== 'working') return null;
+    const kind = buildingDef(b.type)?.kind;
+    if (kind !== 'hq' && kind !== 'warehouse') return null;
+    return { buildingId: b.id, goods: { ...b.wareStock } };
   }
 
   /** Owning player of a node (-1 = neutral). */
@@ -870,6 +892,7 @@ export class GameSession {
           deliveredStones: def.cost.stones,
           needBoards: def.cost.boards,
           needStones: def.cost.stones,
+          wareStock: zeroWares(),
         },
       ),
     );
@@ -908,15 +931,29 @@ export class GameSession {
   }
 
   /**
-   * Debug/e2e cheat: top up `player`'s warehouse with an expedition kit worth of
-   * boards + stones and an idle builder, so a prepared expedition assembles at
-   * once. Exercises the real assembly path (no expedition state is forced ready).
+   * Debug/e2e cheat: top up an expedition kit worth of boards + stones plus an
+   * idle builder so a prepared expedition assembles at once. Expedition assembly
+   * draws from the assembling harbor's OWN stock (per-warehouse inventories), so
+   * the boards/stones are credited to the player's lowest-id working harbor (the
+   * expedition harbor in the e2e flow), falling back to the HQ. Exercises the
+   * real assembly path (no expedition state is forced ready).
    */
   debugGrantExpeditionSupplies(player: number): void {
     const p = this.world.players[player];
     if (!p) return;
-    p.wares.plank = (p.wares.plank ?? 0) + SEA.expeditionBoards;
-    p.wares.stone = (p.wares.stone ?? 0) + SEA.expeditionStones;
+    let target: Building | null = null;
+    for (const b of this.world.buildings.items) {
+      if (!b || b.player !== player || b.state !== 'working') continue;
+      const kind = buildingDef(b.type)?.kind;
+      if (b.type === 'harbor') {
+        target = b;
+        break; // prefer a harbor (where an expedition assembles)
+      }
+      if (kind === 'hq' && !target) target = b; // HQ fallback
+    }
+    if (!target) return;
+    target.wareStock.plank = (target.wareStock.plank ?? 0) + SEA.expeditionBoards;
+    target.wareStock.stone = (target.wareStock.stone ?? 0) + SEA.expeditionStones;
     p.workers.builder = (p.workers.builder ?? 0) + 1;
   }
 

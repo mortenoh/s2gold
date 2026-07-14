@@ -14,14 +14,14 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { createWorld, tickWorld, worldGeometry, type World } from './index';
+import { createWorld, tickWorld, warehouseWareTotal, worldGeometry, type World } from './index';
 import { makeFlatMap } from './harness';
 import { connectToHq, spawnBuilding } from './harness-economy';
 import { storeLive } from './world';
 
 function waterSupply(world: World): number {
   return (
-    world.players[0].wares.water +
+    warehouseWareTotal(world, 0, 'water') +
     [...storeLive(world.wares)].filter((w) => w.type === 'water').length
   );
 }

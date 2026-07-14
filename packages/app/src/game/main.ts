@@ -972,7 +972,9 @@ async function boot(): Promise<void> {
       // Goods button. nodeToScreen is canvas-relative; offset by the canvas rect.
       const s = nodeToScreen(node);
       const rect = canvas.getBoundingClientRect();
-      goodsPanel.open(title, { x: rect.left + s.x, y: rect.top + s.y });
+      // Pass the clicked node so the panel shows THIS warehouse's own stock,
+      // not the player-wide sum (the HUD Goods button path passes no node).
+      goodsPanel.open(title, { x: rect.left + s.x, y: rect.top + s.y }, node);
       return true;
     },
   });

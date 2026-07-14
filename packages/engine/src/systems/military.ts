@@ -41,9 +41,11 @@ import { findWalkPath } from '../pathfinding';
 import { nextRange } from '../rng';
 import type { TerrainRules } from '../terrain';
 import {
+  drawWareFromWarehouses,
   getBuilding,
   storeFree,
   storeLive,
+  warehouseWareTotal,
   type Building,
   type Player,
   type Settler,
@@ -151,10 +153,12 @@ function runRecruitment(world: World, events: EventSink): void {
     }
     const pool = player.soldiers.reduce((a, b) => a + b, 0);
     const needed = soldierDemand(world, player);
+    // Beer/sword/shield are drawn from the player's warehouse stock (aggregate);
+    // the recruit itself stays a global-pool draw (Helper).
     const canAfford =
-      (player.wares[WARE.beer] ?? 0) > 0 &&
-      (player.wares[WARE.sword] ?? 0) > 0 &&
-      (player.wares[WARE.shield] ?? 0) > 0 &&
+      warehouseWareTotal(world, player.index, WARE.beer) > 0 &&
+      warehouseWareTotal(world, player.index, WARE.sword) > 0 &&
+      warehouseWareTotal(world, player.index, WARE.shield) > 0 &&
       (player.workers.carrier ?? 0) > 0;
 
     if (player.recruitTimer < 0) {
@@ -168,9 +172,9 @@ function runRecruitment(world: World, events: EventSink): void {
     if (player.recruitTimer <= 0) {
       player.recruitTimer = -1;
       if (canAfford) {
-        player.wares[WARE.beer]--;
-        player.wares[WARE.sword]--;
-        player.wares[WARE.shield]--;
+        drawWareFromWarehouses(world, player.index, WARE.beer, 1);
+        drawWareFromWarehouses(world, player.index, WARE.sword, 1);
+        drawWareFromWarehouses(world, player.index, WARE.shield, 1);
         player.workers.carrier--;
         player.soldiers[0]++;
         events.emit({ type: 'SoldierRecruited', player: player.index });

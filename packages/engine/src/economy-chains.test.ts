@@ -5,6 +5,7 @@ import {
   claimArea,
   connectBuildings,
   connectToHq,
+  grantWarehouse,
   paintMountain,
   setResource,
   spawnBuilding,
@@ -68,7 +69,7 @@ function buildCoinPipeline(seed: number): World {
   const mint = geom.index(9, 11);
   mountainResource(world, geom, gold, RESOURCE.gold);
   mountainResource(world, geom, coal, RESOURCE.coal);
-  world.players[0].wares.fish = 400; // mine food
+  grantWarehouse(world, 0, { fish: 400 }); // mine food
   spawnBuilding(world, geom, gold, 'goldmine', 0, false);
   spawnBuilding(world, geom, coal, 'coalmine', 0, false);
   spawnBuilding(world, geom, mint, 'mint', 0, false);
@@ -97,7 +98,7 @@ function buildIronChain(seed: number): World {
   mountainResource(world, geom, iron, RESOURCE.iron);
   mountainResource(world, geom, coal1, RESOURCE.coal);
   mountainResource(world, geom, coal2, RESOURCE.coal);
-  world.players[0].wares.fish = 500;
+  grantWarehouse(world, 0, { fish: 500 });
   spawnBuilding(world, geom, iron, 'ironmine', 0, false);
   spawnBuilding(world, geom, coal1, 'coalmine', 0, false);
   spawnBuilding(world, geom, coal2, 'coalmine', 0, false);

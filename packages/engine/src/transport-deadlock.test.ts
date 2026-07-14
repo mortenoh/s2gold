@@ -33,9 +33,15 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { createWorld, tickWorld, worldGeometry, type World } from './index';
+import { createWorld, tickWorld, warehouseWareTotal, worldGeometry, type World } from './index';
 import { makeFlatMap } from './harness';
-import { claimArea, connectToHq, placeBuildingAndTick, spawnBuilding } from './harness-economy';
+import {
+  claimArea,
+  connectToHq,
+  grantWarehouse,
+  placeBuildingAndTick,
+  spawnBuilding,
+} from './harness-economy';
 import { getBuilding, type Building } from './world';
 
 /** Convert a freshly-spawned building into a never-completing construction site:
@@ -59,9 +65,9 @@ function buildStarWorld(): { world: World } {
   const world = createWorld(makeFlatMap(60, 60, 30, 30), { seed: 5, players: 1 });
   const geom = worldGeometry(world);
   claimArea(world, geom, 5, 5, 55, 55);
-  const p = world.players[0];
-  p.wares.plank = 1_000_000; // effectively inexhaustible board stock to hand out
-  p.wares.pickaxe = 20; // tools so every quarry can recruit its stonemason
+  // Seed the HQ warehouse: inexhaustible boards to hand out, plus tools so every
+  // quarry can recruit its stonemason.
+  grantWarehouse(world, 0, { plank: 1_000_000, pickaxe: 20 });
 
   // Quarry spokes first, so their carriers act right after the hub is refilled to
   // 8 each tick (worst-case ordering that makes the pre-fix freeze deterministic).
@@ -106,19 +112,18 @@ function buildStarWorld(): { world: World } {
 describe('star-network transport deadlock', () => {
   it('warehouse-bound stone keeps flowing while the HQ hub stays saturated', () => {
     const { world } = buildStarWorld();
-    const p = world.players[0];
-    const startStone = p.wares.stone;
+    const startStone = warehouseWareTotal(world, 0, 'stone');
 
     // Warm up until the hub saturates and stone has begun arriving.
     for (let i = 0; i < 40_000; i++) tickWorld(world);
-    const midStone = p.wares.stone;
+    const midStone = warehouseWareTotal(world, 0, 'stone');
 
     // The hub is genuinely saturated with outbound boards throughout.
     expect(hqFlagWares(world)).toBe(8);
 
     // Throughput must CONTINUE past saturation, not just in an initial burst.
     for (let i = 0; i < 20_000; i++) tickWorld(world);
-    const endStone = p.wares.stone;
+    const endStone = warehouseWareTotal(world, 0, 'stone');
 
     // Pre-fix these are all frozen at startStone (68) forever; post-fix the
     // warehouse absorbs stone through its door despite the full hub.

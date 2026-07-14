@@ -179,7 +179,9 @@ function tryDeliver(
       accepted = true;
     }
   } else if (isWarehouse(b)) {
-    world.players[b.player].wares[w.type]++;
+    // Delivered into THIS warehouse's own stock (not a global pool): a ware
+    // routed to a given warehouse physically lands there.
+    b.wareStock[w.type] = (b.wareStock[w.type] ?? 0) + 1;
     accepted = true;
   } else {
     const def = buildingDef(b.type);
@@ -215,7 +217,58 @@ function priorityOrder(world: World, player: number): WareType[] {
   return [...WARE_TYPES].sort((a, b) => (prio[a] ?? 999) - (prio[b] ?? 999) || (a < b ? -1 : 1));
 }
 
-/** Emit warehouse-stored wares toward buildings that still need them. */
+/**
+ * The nearest working warehouse of `player` that can supply `wareType` to
+ * `neederId`: it must hold the ware in its own stock, have a free slot on its
+ * door flag to emit onto, and have a road/sea route to the needer. "Nearest" is
+ * by flag-route cost (chooseWareRoute, reusing its memo), tie-broken by lowest
+ * warehouse id. Returns -1 when no warehouse can currently supply this request —
+ * which includes the case where the only stocked warehouse is cut off from the
+ * road network (constraint (d): an unconnected warehouse supplies nothing).
+ */
+function nearestSupplyingWarehouse(
+  world: World,
+  seaCtx: SeaContext,
+  player: number,
+  wareType: WareType,
+  neederId: number,
+): number {
+  const needer = getBuilding(world, neederId);
+  let best = -1;
+  let bestCost = Infinity;
+  for (const wh of storeLive(world.buildings)) {
+    if (wh.player !== player || wh.state !== 'working' || !isWarehouse(wh)) continue;
+    if ((wh.wareStock[wareType] ?? 0) <= 0) continue;
+    const whFlag = getFlag(world, wh.flagId);
+    if (whFlag.wares.length >= FLAG_WARE_CAPACITY) continue; // no slot to emit onto
+    let cost: number;
+    if (wh.flagId === needer.flagId) {
+      cost = 0; // needer sits on the warehouse's own flag: delivered directly
+    } else {
+      const route = chooseWareRoute(seaCtx, wh.flagId, neederId);
+      if (route.nextFlag < 0 && !route.useSea) continue; // unroutable from this warehouse
+      cost = route.cost;
+    }
+    if (cost < bestCost || (cost === bestCost && (best < 0 || wh.id < best))) {
+      bestCost = cost;
+      best = wh.id;
+    }
+  }
+  return best;
+}
+
+/**
+ * Emit warehouse-stored wares toward buildings that still need them (pull model).
+ *
+ * For each player and ware type (in transport-priority order), repeatedly pick
+ * the neediest needer (net of wares already en route), then draw the ware from
+ * the NEAREST road-connected warehouse that has it in stock — so a request is
+ * served by the closest warehouse holding the good, not always the HQ. A needer
+ * that no warehouse can reach/stock is skipped for the rest of this ware's pass
+ * (so one starved needer can't wedge the loop), and stock physically leaves the
+ * specific warehouse it was drawn from. Deterministic throughout: needers by
+ * (need desc, distance-to-HQ, id); warehouses by (route cost, id).
+ */
 function runWarehouseSupply(
   world: World,
   geom: Geometry,
@@ -224,41 +277,35 @@ function runWarehouseSupply(
 ): void {
   for (const player of world.players) {
     const order = priorityOrder(world, player.index);
-    for (const wh of storeLive(world.buildings)) {
-      if (wh.player !== player.index || wh.state !== 'working' || !isWarehouse(wh)) continue;
-      const whFlag = getFlag(world, wh.flagId);
-      for (const wareType of order) {
-        // Targets found to be unroutable this pass; skipped so the neediest
-        // unconnected site can't starve the reachable ones behind it.
-        const skip = new Set<number>();
-        while (player.wares[wareType] > 0 && whFlag.wares.length < FLAG_WARE_CAPACITY) {
-          const target = findNeeder(world, geom, census, player.index, wareType, whFlag.node, skip);
-          if (target < 0) break;
-          // A ware only leaves the warehouse when it can actually travel: either
-          // the target uses this very flag, or a road/sea route exists. Without
-          // this check the ware would freeze at the flag (and its slot) forever
-          // when the player has not yet connected the target's flag. Skip such a
-          // target and try the next-neediest rather than abandoning the pass.
-          const targetBuilding = getBuilding(world, target);
-          if (targetBuilding.flagId !== whFlag.id) {
-            const route = chooseWareRoute(seaCtx, whFlag.id, target);
-            if (route.nextFlag < 0 && !route.useSea) {
-              skip.add(target);
-              continue;
-            }
-          }
-          const wid = storeAlloc(world.wares, (id) => ({
-            id,
-            type: wareType,
-            loc: 'flag' as const,
-            locId: whFlag.id,
-            targetBuildingId: target,
-            nextFlag: -1,
-          }));
-          whFlag.wares.push(wid);
-          censusAdd(census, target, wareType, 1);
-          player.wares[wareType]--;
+    // Stable anchor for findNeeder's distance tie-break among equally-needy
+    // buildings: the player's HQ door flag node (0 when HQ-less).
+    const hq = player.hqBuildingId >= 0 ? world.buildings.items[player.hqBuildingId] : null;
+    const anchorNode = hq ? getFlag(world, hq.flagId).node : 0;
+    for (const wareType of order) {
+      // Needers no warehouse can currently supply this pass (out of stock or
+      // unroutable); skipped so the loop advances to servable ones.
+      const skip = new Set<number>();
+      for (;;) {
+        const needer = findNeeder(world, geom, census, player.index, wareType, anchorNode, skip);
+        if (needer < 0) break;
+        const whId = nearestSupplyingWarehouse(world, seaCtx, player.index, wareType, needer);
+        if (whId < 0) {
+          skip.add(needer);
+          continue;
         }
+        const wh = getBuilding(world, whId);
+        const whFlag = getFlag(world, wh.flagId);
+        const wid = storeAlloc(world.wares, (id) => ({
+          id,
+          type: wareType,
+          loc: 'flag' as const,
+          locId: whFlag.id,
+          targetBuildingId: needer,
+          nextFlag: -1,
+        }));
+        whFlag.wares.push(wid);
+        censusAdd(census, needer, wareType, 1);
+        wh.wareStock[wareType] = (wh.wareStock[wareType] ?? 0) - 1;
       }
     }
   }

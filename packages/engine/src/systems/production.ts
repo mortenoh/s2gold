@@ -39,6 +39,7 @@ import {
   getFlag,
   storeAlloc,
   storeLive,
+  warehouseWareCensus,
   type Building,
   type Player,
   type Settler,
@@ -114,13 +115,18 @@ function transitCensus(world: World): Map<number, Record<string, number>> {
 }
 
 /**
- * True when it's still worth producing `ware`: the player's stock plus in-transit
- * supply is below the reserve cap. Always-wanted wares (construction materials,
- * tools, weapons, coins — see {@link ALWAYS_WANTED}) never gate.
+ * True when it's still worth producing `ware`: the player's warehouse stock
+ * (aggregated over all warehouses) plus in-transit supply is below the reserve
+ * cap. Always-wanted wares (construction materials, tools, weapons, coins — see
+ * {@link ALWAYS_WANTED}) never gate.
  */
-function wareWanted(player: Player, ware: WareType, transit: Record<string, number>): boolean {
+function wareWanted(
+  warehouse: Record<string, number>,
+  ware: WareType,
+  transit: Record<string, number>,
+): boolean {
   if (ALWAYS_WANTED.has(ware)) return true;
-  const supply = (player.wares[ware] ?? 0) + (transit[ware] ?? 0);
+  const supply = (warehouse[ware] ?? 0) + (transit[ware] ?? 0);
   return supply < SURPLUS_RESERVE;
 }
 
@@ -689,6 +695,9 @@ export function runProduction(
 ): void {
   runGrowth(world);
   const transit = transitCensus(world);
+  // Per-player warehouse ware totals (aggregate over warehouses) for the surplus
+  // gate — one pass, reused for every producer this tick.
+  const warehouse = warehouseWareCensus(world);
 
   for (const b of storeLive(world.buildings)) {
     if (b.state !== 'working') continue;
@@ -706,7 +715,7 @@ export function runProduction(
     // leaves queued output, so gate on the work timer (about to restart) rather
     // than an empty queue, or a jammed producer would never idle.
     const ware = producedWare(def);
-    if (ware && !wareWanted(player, ware, transit.get(b.player) ?? {})) {
+    if (ware && !wareWanted(warehouse.get(b.player) ?? {}, ware, transit.get(b.player) ?? {})) {
       const betweenCycles =
         def.kind === 'harvester' || def.kind === 'farm'
           ? !worker || worker.state === 'idle'

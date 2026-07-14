@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { createWorld, tickWorld, worldGeometry } from './index';
+import { createWorld, tickWorld, warehouseWareTotal, worldGeometry } from './index';
 import { makeResource, RESOURCE, resourceType } from './constants';
 import { makeTwoIslandMap } from './harness';
 import { connectToHq, setResource, spawnBuilding } from './harness-economy';
@@ -29,14 +29,18 @@ describe('fishery catches fish from adjacent water', () => {
     const fishery = spawnBuilding(world, geom, geom.index(5, 6), 'fishery', 0, false);
     connectToHq(world, geom, geom.index(5, 6));
 
-    const before = world.players[0].wares.fish;
+    const before = warehouseWareTotal(world, 0, 'fish');
     let produced = false;
     for (let i = 0; i < 6000 && !produced; i++) {
       tickWorld(world);
       // Count fish anywhere (warehouse, flags, in transit) so a delivered-or-not
       // fish still shows the fishery worked.
       const inTransit = [...world.wares.items].filter((w) => w && w.type === 'fish').length;
-      if (world.players[0].wares.fish > before || inTransit > 0 || fishery.outputQueue.length > 0) {
+      if (
+        warehouseWareTotal(world, 0, 'fish') > before ||
+        inTransit > 0 ||
+        fishery.outputQueue.length > 0
+      ) {
         produced = true;
       }
     }

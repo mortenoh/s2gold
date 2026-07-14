@@ -14,10 +14,17 @@ import {
   tickWorld,
   worldGeometry,
   applyCommand,
+  warehouseWareTotal,
   type GameEvent,
 } from './index';
 import { makeFlatMap } from './harness';
-import { claimArea, connectToHq, setResource, spawnBuilding } from './harness-economy';
+import {
+  claimArea,
+  connectToHq,
+  grantWarehouse,
+  setResource,
+  spawnBuilding,
+} from './harness-economy';
 
 /** Run `n` ticks, collecting every emitted event. */
 function runTicks(world: ReturnType<typeof createWorld>, n: number): GameEvent[] {
@@ -143,7 +150,7 @@ describe('new-settler recruitment (Helper + tool -> worker, CONSTANTS.md §7)', 
     const geom = worldGeometry(world);
     const p = world.players[0];
     expect(p.workers.farmer).toBe(0); // no farmers to start (Normal preset)
-    const scytheBefore = p.wares.scythe;
+    const scytheBefore = warehouseWareTotal(world, 0, 'scythe');
     const helperBefore = p.workers.carrier;
     expect(scytheBefore).toBeGreaterThan(0);
 
@@ -153,7 +160,7 @@ describe('new-settler recruitment (Helper + tool -> worker, CONSTANTS.md §7)', 
 
     const recruited = events.filter((e) => e.type === 'SettlerRecruited' && e.job === 'farmer');
     expect(recruited.length).toBe(1);
-    expect(p.wares.scythe).toBe(scytheBefore - 1); // tool consumed
+    expect(warehouseWareTotal(world, 0, 'scythe')).toBe(scytheBefore - 1); // tool consumed
     expect(p.workers.carrier).toBe(helperBefore - 1); // Helper consumed
   });
 });
@@ -169,7 +176,7 @@ describe('distribution fairness (CONSTANTS.md §3-4)', () => {
     expect(connectToHq(world, geom, sawA.node)).not.toBeNull();
     expect(connectToHq(world, geom, sawB.node)).not.toBeNull();
     tickWorld(world); // execute the road commands
-    world.players[0].wares.trunk = 16; // known shared stock
+    grantWarehouse(world, 0, { trunk: 16 }); // known shared stock
 
     let toA = 0;
     let toB = 0;
