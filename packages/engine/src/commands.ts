@@ -282,9 +282,24 @@ export function canPlaceFlag(
   return true;
 }
 
-/** True when the node sits on mineable mountain terrain (for mine placement). */
-export function terrainMineable(world: World, node: number): boolean {
-  return isMountainTexture(world.terrain1[node]) && isMountainTexture(world.terrain2[node]);
+/**
+ * True when a mine may be founded at `node`: all six triangles around it are
+ * mountain. This mirrors {@link terrainBuildable} (which requires all six to be
+ * buildable meadow) rather than only checking the node's own two texture layers —
+ * a mountain-EDGE node whose own layers are mountain but whose outer triangles are
+ * not is flag/nothing in the original's build layer, never a mine. Requiring the
+ * full triangle fan matches the original: across the shipped maps it removes ~62%
+ * of the false mines the own-layer check offered (23906 -> 9057 divergent nodes)
+ * while never rejecting a node the build layer marks as mine (zero false negatives).
+ * The ~9k residual is flag/nothing the build layer encodes from height/proximity
+ * that terrain ids alone cannot express.
+ */
+export function terrainMineable(world: World, geom: Geometry, node: number): boolean {
+  for (const tri of geom.trianglesAround(node)) {
+    const tex = tri.layer === 1 ? world.terrain1[tri.node] : world.terrain2[tri.node];
+    if (!isMountainTexture(tex)) return false;
+  }
+  return true;
 }
 
 /** True when a building type must be placed on the coast (harbor / shipyard). P7. */
@@ -326,7 +341,7 @@ export function canPlaceBuilding(
   // land node on the shore; every other building requires buildable meadow.
   const def = buildingDef(buildingType);
   if (def?.size === 'mine') {
-    if (!terrainMineable(world, node)) return false;
+    if (!terrainMineable(world, geom, node)) return false;
   } else if (requiresCoast(buildingType)) {
     // The shore relaxes the full meadow BQ: the node's own two texture layers
     // must be buildable land, and it must touch navigable water (P7).

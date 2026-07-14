@@ -6,6 +6,7 @@ import {
   rulesForLandscape,
   isBuildableTexture,
   isWalkableTexture,
+  isWaterTexture,
   terrainId,
 } from './terrain';
 
@@ -114,6 +115,19 @@ describe('greenland regression + cross-landscape divergence', () => {
     expect(isWalkableTexture(0x02, GREENLAND_RULES)).toBe(false); // snow
     expect(isWalkableTexture(0x03, GREENLAND_RULES)).toBe(false); // swamp
     expect(isWalkableTexture(0x12, GREENLAND_RULES)).toBe(true); // mountain meadow
+  });
+
+  it('treats greenland "buildable water" (0x06) as walkable buildable land, not water', () => {
+    // The original build layer marks 0x06 flag/house/castle (49% castle across the
+    // shipped greenland maps, never mine) and it carries subsurface well-water, so
+    // it is buildable ground, not sailable water. It renders like shallow water,
+    // but the renderer tables are separate from these gameplay facts.
+    expect(isWalkableTexture(0x06, GREENLAND_RULES)).toBe(true);
+    expect(isBuildableTexture(0x06, GREENLAND_RULES)).toBe(true);
+    expect(isWaterTexture(0x06)).toBe(false); // ships must not sail it
+    // Open water (0x05) stays the only navigable-water slot.
+    expect(isWaterTexture(0x05)).toBe(true);
+    expect(isWalkableTexture(0x05, GREENLAND_RULES)).toBe(false);
   });
 
   it('diverges on the shared slots that change material by landscape', () => {
