@@ -130,6 +130,18 @@ own `build` layer across all 50 shipped maps, 940032 nodes):
   carries no such sprites, files, or text-bank strings; those buildings come
   from The Settlers II: 10th Anniversary (2006) and the RttR addon set, not
   the 1996 Gold Edition this project reimplements. Nothing to build.
+- "Non-Roman settler work animations" — CLOSED as not-a-gap (2026-07-15).
+  Investigated for a build and found the original has no such data: DATA/CBOB
+  holds only ROM_BOBS.LST (no VIK/AFR/JAP twin anywhere in the installer),
+  and the MBOB `<nation>_BOBS.LST` archives are building-graphics variants
+  (verified by decoding all four: border stones 0/1, flags 100.., HQ 250 —
+  the same index classes as `<nation>_Z`), not figures. RttR confirms the
+  original's behavior: files.h maps its "rom_bobs" to DATA/CBOB/ROM_BOBS.LST
+  and every figures/nof*.cpp work draw uses that one archive for all four
+  peoples ("vik_bobs" appears nowhere in s25client); nation only affects
+  in-building draw offsets (e.g. nofMiner's per-nation workplace offsets).
+  Settlers are distinguished by player colour, not people — s2gold's shared
+  cbob_rom_bobs work archive is faithful as-is. Nothing to build.
 
 Landed 2026-07-14 (multi-nation core + setup, phase 1 of 2): the four S2
 peoples (romans/vikings/nubians/japanese) are now a first-class engine +
@@ -166,10 +178,12 @@ non-fatal, falling back to the season-appropriate Roman archive when a nation
 atlas is missing (never boots all eight). The build-menu icons crop from the
 LOCAL player's nation atlas, so the menu previews the buildings you will place.
 `__s2debug.nationArchiveOf(player)` exposes the resolved archive for tests.
-CAVEAT: settler WORK animations still come from the Roman-only cbob_rom_bobs
-(the only converted work-anim archive), so non-Roman workers keep Roman
-work/walk figures for now; only the static building/flag/border layers are
-per-nation. The `_y` MBOB archives turned out to be a pixel-identical subset of
+NOTE: settler WORK animations come from the single cbob_rom_bobs archive for
+every people — originally flagged here as a caveat, since confirmed to be the
+original's own behavior (see the CLOSED "Non-Roman settler work animations"
+item above): the game ships exactly one work-anim archive and distinguishes
+settlers by player colour, so only the building/flag/border layers are
+per-nation by design. The `_y` MBOB archives turned out to be a pixel-identical subset of
 the `_z` set (same sprites, same anchors, missing only the highest building
 indices 465..535) — redundant for rendering, so we use `_z` exclusively.
 

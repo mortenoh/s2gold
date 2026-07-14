@@ -60,6 +60,14 @@ export const SHIP_ARCHIVE = 'boot_z';
  * single-direction, player-coloured action figures (axe swing, rod cast, scythe,
  * planting) with their tool + head baked into one sprite, drawn with the sprite's
  * native anchor so the figure works *beside* the object rather than centred on it.
+ *
+ * Deliberately NATION-INDEPENDENT, matching the original: the Gold Edition ships
+ * no VIK/AFR/JAP work-animation archives (DATA/CBOB holds only ROM_BOBS.LST; the
+ * MBOB `<nation>_BOBS.LST` files are building-graphics variants, not figures),
+ * and RttR draws every people's work loops from this one archive (files.h maps
+ * "rom_bobs" to DATA/CBOB/ROM_BOBS.LST; every figures/nof*.cpp work draw uses it,
+ * with nation only ever affecting draw *offsets* for in-building workers).
+ * Settlers are told apart by player colour, not people.
  */
 export const WORK_ARCHIVE = 'cbob_rom_bobs';
 
