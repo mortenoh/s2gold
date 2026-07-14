@@ -87,12 +87,17 @@ own `build` layer across all 50 shipped maps, 940032 nodes):
   HUD bar buttons carry original io_dat icons (Pause hourglass, Game save
   monitor, Stats chart, Goods shelf, Zoom magnifier, Settings cog).
   Mute/Music stay text: io_dat has no faithful speaker/note glyph.
-- Work animations for the remaining outdoor jobs (e.g. the hunter): the
-  five main jobs (woodcutter, stonemason, forester, fisher, farmer) play
-  their real CBOB action loops; jobs without decoded frame ranges in
-  `WORK_ANIM` (game-render.ts) still use the walk-cycle-in-place fallback.
-  Needs empirical frame-range decoding in cbob_rom_bobs, same method as
-  the existing five.
+- Work animations for the remaining outdoor jobs: the five main jobs
+  (woodcutter, stonemason, forester, fisher, farmer) plus the geologist
+  now play their real CBOB action loops in `WORK_ANIM` (game-render.ts) -
+  the geologist landed 2026-07-14 (bald grey head hammering the rock,
+  ore chips flying, cbob_rom_bobs 314..329, cross-checked against RttR's
+  nofGeologist "rom_bobs" offsets). Remaining gap: the builder, whose
+  rom_bobs frames are a multi-posture around-the-scaffold sequence
+  (279..290 / 353..356) with no single in-place loop that fits the
+  simplified single-node construction model, stays on the walk-cycle
+  fallback. The hunter is an in-building generator (SIMPLIFIED, no
+  outdoor game hunt) so it never draws an outdoor action loop.
 - Per-nation border-stone sprites (single fixed sprite today).
 - AI: seafaring (no ship/harbor references in `packages/engine/src/ai/`).
 - Storehouse-local inventories (`Player.wares` is one global pool).

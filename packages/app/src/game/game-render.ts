@@ -84,7 +84,8 @@ export function buildingArchiveForLandscape(landscape: number): string {
  * red cap swinging an axe (16..31), stonemason purple cap swinging a pickaxe with
  * stone chips flying (40..47), forester green cap kneeling to plant saplings
  * (48..83), fisher casting a rod over the water (108..131), farmer wide-brim hat
- * swinging a scythe (132..159). Jobs absent here keep the walk-cycle fallback.
+ * swinging a scythe (132..159), geologist bald grey head hammering the ground
+ * with sparks (314..329). Jobs absent here keep the walk-cycle fallback.
  *
  * The stonemason block (40..47) is the only run in the whole archive that carries
  * purple-cap pixels — the S2 quarry-worker cap colour, matching the jobs.bob id-7
@@ -92,6 +93,15 @@ export function buildingArchiveForLandscape(landscape: number): string {
  * forester blocks (a brown-cap ground-hacking run at 32..39 precedes it); the cap
  * is baked purple (only the tunic is a player-colour region in the pmask), so it
  * stays purple under every owner's tint exactly like the original.
+ *
+ * The geologist block (314..329) is the survey/prospecting loop: a bald,
+ * grey-headed figure in a player-coloured blue tunic raises a hammer and strikes
+ * the rock, chips of ore flying, before it plants a sign. Confirmed against the
+ * original: RttR's nofGeologist draws this action from the same archive it calls
+ * "rom_bobs" (our {@link WORK_ARCHIVE}) at indices 314..329 — the identical index
+ * space as the stonemason (RttR 40..47 == our 40..47) and woodcutter chop
+ * (RttR 24..31), so its numbering transfers 1:1. The archive's 357..361 geologist
+ * "cheer" and the sign-planting frames are one-shots, not part of the loop.
  */
 export const WORK_ANIM: Partial<Readonly<Record<JobType, { start: number; frames: number }>>> = {
   woodcutter: { start: 16, frames: 16 },
@@ -99,6 +109,7 @@ export const WORK_ANIM: Partial<Readonly<Record<JobType, { start: number; frames
   forester: { start: 48, frames: 36 },
   fisher: { start: 108, frames: 24 },
   farmer: { start: 132, frames: 28 },
+  geologist: { start: 314, frames: 16 },
 };
 
 /**

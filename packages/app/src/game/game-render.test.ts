@@ -322,12 +322,28 @@ describe('workSprite', () => {
   it('maps the verified outdoor jobs to their CBOB frame runs', () => {
     // Frame 0 lands on each block's first frame (empirically verified: woodcutter
     // axe swing, stonemason pickaxe swing, forester planting, fisher rod cast,
-    // farmer scythe).
+    // farmer scythe, geologist hammer strike).
     expect(workSprite(JOB.woodcutter, 0)).toBe(16);
     expect(workSprite(JOB.stonemason, 0)).toBe(40);
     expect(workSprite(JOB.forester, 0)).toBe(48);
     expect(workSprite(JOB.fisher, 0)).toBe(108);
     expect(workSprite(JOB.farmer, 0)).toBe(132);
+    expect(workSprite(JOB.geologist, 0)).toBe(314);
+  });
+
+  it('gives the geologist the hammer-strike survey block (314..329), not the fallback', () => {
+    const geo = WORK_ANIM.geologist;
+    if (!geo) throw new Error('geologist work anim expected');
+    // RttR's nofGeologist plays this exact run from "rom_bobs" (our WORK_ARCHIVE),
+    // the same 1:1 index space as the stonemason (40..47) and woodcutter chop.
+    expect(geo).toEqual({ start: 314, frames: 16 });
+    for (const f of [0, 1, 15, 16, 33]) {
+      const idx = workSprite(JOB.geologist, f);
+      expect(idx).not.toBeNull();
+      expect(idx).toBeGreaterThanOrEqual(314);
+      expect(idx).toBeLessThan(330);
+    }
+    expect(workSprite(JOB.geologist, 16)).toBe(workSprite(JOB.geologist, 0));
   });
 
   it('gives the stonemason the purple-cap pickaxe block (40..47), not the fallback', () => {
