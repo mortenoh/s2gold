@@ -467,7 +467,8 @@ export class Interaction {
 
   /**
    * A build-menu grid cell: the building's real icon (cropped from the atlas)
-   * above a small cost caption, with the full name + cost in the tooltip. The
+   * above a small cost caption, with the full name + cost in the tooltip and
+   * accessible name (the visible text alone is just the cost). The
    * cost text stays in the cell's text content so a missing-name icon still tells
    * the player what it costs. Falls back to a text row when its sprite is absent.
    */
@@ -479,7 +480,7 @@ export class Interaction {
     const cell = el('button', {
       class: 'ctx-grid-cell',
       title: `${name} (${cost})`,
-      attrs: { type: 'button', 'data-testid': `ctx-${type}` },
+      attrs: { type: 'button', 'data-testid': `ctx-${type}`, 'aria-label': `${name} (${cost})` },
     });
     cell.append(icon, el('span', { class: 'ctx-grid-cost', text: `(${cost})` }));
     cell.addEventListener('click', (ev) => {

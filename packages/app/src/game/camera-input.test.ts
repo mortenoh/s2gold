@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isEditableTarget } from './main';
+import { isEditableTarget } from './camera-input';
 
 /**
  * Guards the global game shortcuts (pan/zoom/pause) against firing while the user

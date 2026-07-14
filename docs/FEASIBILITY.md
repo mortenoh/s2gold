@@ -58,14 +58,14 @@ transcription work, not reverse engineering.
 
 ## 3. Browser technology assessment
 
-| Concern       | Assessment                                                                                                                                                                                                                                               |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Rendering     | WebGL2. The map is a triangular grid; the original gouraud-shades each triangle by slope (GOU tables). WebGL vertex colors reproduce this exactly and give effortless 60 fps + smooth scrolling/zoom. Original ran on a 486; performance is a non-issue. |
-| Simulation    | Deterministic fixed-tick integer sim (like the original's game frames), decoupled from rendering. Runs headless in Node for tests — this is what makes an agent-built game verifiable.                                                                   |
-| Sound FX      | WebAudio `AudioBuffer`s decoded once at import. Trivial.                                                                                                                                                                                                 |
-| Music         | XMID → standard MIDI (documented transform, ~200 lines) → **pre-rendered to OGG at install time** with local `fluidsynth` (installed) + a freely-licensed GM soundfont. Browser just plays audio files — no in-browser synth needed.                     |
-| Intro video   | SMK → WebM at install time with local `ffmpeg` (has a native Smacker decoder, installed). Optional, not on the critical path.                                                                                                                            |
-| Asset serving | Converted assets are plain static files (PNG atlases + JSON + OGG/WAV) in a git-ignored directory; Vite serves them in dev, any static server in prod.                                                                                                   |
+| Concern       | Assessment                                                                                                                                                                                                                                                                     |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Rendering     | WebGL2. The map is a triangular grid; the original gouraud-shades each triangle by slope (GOU tables). WebGL vertex colors reproduce this exactly and give effortless 60 fps + smooth scrolling/zoom. Original ran on a 486; performance is a non-issue.                       |
+| Simulation    | Deterministic fixed-tick integer sim (like the original's game frames), decoupled from rendering. Runs headless in Node for tests — this is what makes an agent-built game verifiable.                                                                                         |
+| Sound FX      | WebAudio `AudioBuffer`s decoded once at import. Trivial.                                                                                                                                                                                                                       |
+| Music         | XMID → standard MIDI (documented transform, ~200 lines) → **pre-rendered to MP3 at install time** with local `fluidsynth` (installed) + a freely-licensed GM soundfont. MP3 over OGG so Safari plays it natively. Browser just plays audio files — no in-browser synth needed. |
+| Intro video   | SMK → MP4 (H.264) at install time with local `ffmpeg` (has a native Smacker decoder, installed). Optional, not on the critical path.                                                                                                                                           |
+| Asset serving | Converted assets are plain static files (PNG atlases + JSON + WAV/MP3) in a git-ignored directory; Vite serves them in dev, any static server in prod.                                                                                                                         |
 
 ## 4. Install-time extraction (`make install`)
 
@@ -75,8 +75,8 @@ asks for the path to the GOG `.exe` and a local Python CLI (typer) does everythi
 1. `innoextract` (system binary, verified installed) unpacks the Inno Setup 5.6.2
    installer — proven this session against the real installer.
 2. Converters transform every format (LST/BOB/LBM/BBM/WLD/GER/FNT/GOU/PCM/XMID) into
-   web-native assets: PNG atlases + JSON metadata, WAV/OGG audio, pre-rendered OGG
-   music (fluidsynth), optional WebM intro (ffmpeg).
+   web-native assets: PNG atlases + JSON metadata, WAV sound effects, pre-rendered
+   MP3 music (fluidsynth), optional MP4 intro (ffmpeg).
 3. Output lands in a git-ignored assets directory; the browser app loads it as plain
    static files. Re-running is idempotent.
 

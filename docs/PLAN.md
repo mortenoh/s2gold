@@ -38,9 +38,10 @@ Companion to `docs/FEASIBILITY.md` (read that first). Codename: **s2gold**.
 - **Game: TypeScript (strict)**, pnpm workspaces, Vite, ESLint + Prettier
 - **Rendering:** WebGL2 (terrain mesh w/ vertex-color gouraud, sprite batching); UI from
   original `IO.LST`/`FONT14.FNT` assets on an overlay canvas/DOM hybrid
-- **Audio:** WebAudio playing pre-converted files — SFX as WAV/OGG, music pre-rendered
-  to OGG at install time (XMID → SMF in Python, then fluidsynth + free GM soundfont
-  such as GeneralUser GS, downloaded by `make install`, git-ignored)
+- **Audio:** WebAudio playing pre-converted files — SFX as WAV, music pre-rendered
+  to MP3 at install time (XMID → SMF in Python, then fluidsynth + free GM soundfont
+  such as GeneralUser GS, downloaded by `make install`, git-ignored; MP3 chosen over
+  OGG so Safari can play it natively — see `format-notes/CONTRACTS.md`)
 - **Testing:** pytest (pipeline), Vitest (engine/renderer units), Playwright MCP +
   `@playwright/test` (E2E), golden-image tests for converters against real extracted data
 
@@ -48,18 +49,23 @@ Companion to `docs/FEASIBILITY.md` (read that first). Codename: **s2gold**.
 
 ```
 s2gold/
-  Makefile               install (extract+convert), dev, test, e2e
-  docs/                  FEASIBILITY.md, PLAN.md, format-notes/, gameplay-notes/
-  pipeline/              Python typer CLI (uv project)
-    s2gold_pipeline/     inno.py, lst.py, bob.py, lbm.py, wld.py, txt.py, fnt.py,
-                         gouraud.py, sound.py, xmidi.py, atlas.py, cli.py
-    tests/               pytest golden tests (skip if no extracted data)
+  Makefile               install (extract+convert), dev, serve, test, e2e
+  docs/                  FEASIBILITY.md, PLAN.md, GUIDE.md, format-notes/,
+                         gameplay-notes/, engine-notes/, reference-study/
+  src/s2gold/            Python typer CLI (uv project, root pyproject.toml)
+    formats/             lst, bob/datidx, bitmaps, lbm/iff, wld, xmidi, gametext,
+                         gouraud, palette readers
+    convert/             converters (palettes, terrain, pics, graphics, ui, bobs,
+                         fonts, maps, texts, audio, video) + atlas packer
+    server/              FastAPI app: built frontend, /assets, /api (saves, sessions)
+  tests/                 pytest golden tests (asset-dependent ones skip if no
+                         extracted data)
   packages/
     engine/              deterministic sim: map, pathfinding, economy, military; zero DOM
     renderer/            WebGL2 terrain + sprites + minimap
-    ui/                  windows, HUD, menus built from IO.LST art
-    app/                 Vite shell + game loop glue; serves public/assets
-  packages/app/public/assets/   (gitignored) pipeline output: atlases, JSON, OGG
+    app/                 Vite shell + game loop glue + DOM UI (game/, menu/, ui/);
+                         serves public/assets
+  packages/app/public/assets/   (gitignored) pipeline output: atlases, JSON, WAV/MP3
   e2e/                   Playwright specs
   extracted/             (gitignored) innoextract output
 ```
@@ -78,8 +84,8 @@ s2gold/
    WLD/SWD maps → JSON/binary, GER/ENG + RTX texts → JSON, FNT fonts → atlas.
 4. BOB decoder (carrier/settler composited body-part animations) — fiddliest format;
    golden-image tests.
-5. Sounds: raw PCM → WAV; music: XMID → SMF → fluidsynth render → OGG; optional
-   SMK intro → WebM via ffmpeg.
+5. Sounds: raw PCM → WAV; music: XMID → SMF → fluidsynth render → MP3; optional
+   SMK intro → MP4 (H.264) via ffmpeg.
 6. Idempotent, versioned output manifest so the app can verify asset completeness.
 
 Subcommands for dev: `s2gold inspect <file>`, `s2gold convert <category>`, `s2gold verify`.
@@ -105,7 +111,7 @@ Subcommands for dev: `s2gold inspect <file>`, `s2gold convert <category>`, `s2go
 ### D. Audio
 
 - SFX trigger table (which sound at which event/animation frame), positional volume;
-  music playlist (pre-rendered OGGs) per documented track order; volume settings.
+  music playlist (pre-rendered MP3s) per documented track order; volume settings.
 
 ## Progress (updated 2026-07-09)
 

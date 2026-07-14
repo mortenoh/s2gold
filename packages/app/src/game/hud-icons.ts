@@ -58,7 +58,8 @@ export function makeHudIconSet(atlas: LoadedAtlas | null): HudIconSet | null {
     apply(box, spriteIndex, px = ICON_PX) {
       const frame = meta.sprites.get(spriteIndex);
       if (!frame) return false;
-      const page = pages[frame.atlas] as (HTMLImageElement & { width: number; height: number }) | undefined;
+      const page = pages[frame.atlas] as
+        (HTMLImageElement & { width: number; height: number }) | undefined;
       if (!page) return false;
       const src = page.src;
       const natW = page.naturalWidth || page.width;
