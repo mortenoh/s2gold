@@ -103,7 +103,7 @@ function analyzeSea(world: World, geom: Geometry, player: number): SeaMap {
   const targets: number[] = [];
   for (let n = 0; n < geom.size; n++) {
     if (isWaterNode(world, n)) continue;
-    if (ownerPlayer(world.owner[n]) !== OWNER_NONE) continue; // must be unclaimed by anyone
+    if (world.owner[n] !== OWNER_NONE) continue; // must be unclaimed by anyone
     if (!isCoastalLand(world, geom, n)) continue;
     if (!spotFree(world, geom, n, player)) continue;
     targets.push(n);
