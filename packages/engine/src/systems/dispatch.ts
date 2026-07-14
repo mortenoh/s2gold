@@ -14,7 +14,15 @@
  * en-route count for the next pick.
  */
 
-import { buildingDef, FLAG_WARE_CAPACITY, WARE, WARE_TYPES, type WareType } from '../constants';
+import {
+  BUILDING,
+  buildingDef,
+  FLAG_WARE_CAPACITY,
+  SEA,
+  WARE,
+  WARE_TYPES,
+  type WareType,
+} from '../constants';
 import type { EventSink } from '../events';
 import type { Geometry } from '../geometry';
 import { buildSeaContext, chooseWareRoute, type SeaContext } from './seafaring';
@@ -65,11 +73,29 @@ function censusGet(census: EnRouteCensus, buildingId: number, type: WareType): n
 }
 
 /** Remaining demand of a building for a ware type (0 when satisfied). */
-function demand(b: Building, wareType: WareType): number {
+function demand(world: World, b: Building, wareType: WareType): number {
   if (b.state === 'site') {
     if (wareType === WARE.plank) return Math.max(0, b.needBoards - b.deliveredBoards);
     if (wareType === WARE.stone) return Math.max(0, b.needStones - b.deliveredStones);
     return 0;
+  }
+  // A harbor assembling an expedition is a warehouse (def.inputs empty), so the
+  // per-input demand path below would never pull its kit. The original game
+  // routes the boards/stones to the harbor over roads from your storehouses;
+  // model that by giving a preparing (not-yet-ready) expedition its harbor a
+  // plank/stone demand for the KIT SHORTFALL — the boards/stones already drawn
+  // into the kit (e.boards/e.stones) plus any sitting in the harbor's own stock
+  // (runExpeditionAssembly drains that into the kit each tick). Without this the
+  // kit can only fill by chance surplus-drift, and never does when the HQ is the
+  // nearest warehouse (it wins the surplus tie), stranding every expedition.
+  if (b.type === BUILDING.harbor && (wareType === WARE.plank || wareType === WARE.stone)) {
+    const e = world.expeditions.find((x) => x.harborId === b.id && !x.ready);
+    if (e) {
+      if (wareType === WARE.plank) {
+        return Math.max(0, SEA.expeditionBoards - e.boards - (b.wareStock.plank ?? 0));
+      }
+      return Math.max(0, SEA.expeditionStones - e.stones - (b.wareStock.stone ?? 0));
+    }
   }
   const def = buildingDef(b.type);
   if (!def) return 0;
@@ -106,7 +132,7 @@ function findNeeder(
   for (const b of storeLive(world.buildings)) {
     if (b.player !== player) continue;
     if (skip?.has(b.id)) continue;
-    const need = demand(b, wareType) - censusGet(census, b.id, wareType);
+    const need = demand(world, b, wareType) - censusGet(census, b.id, wareType);
     if (need <= 0) continue;
     const d = geom.distance(fromNode, getFlag(world, b.flagId).node);
     if (

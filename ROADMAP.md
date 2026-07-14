@@ -110,7 +110,7 @@ own `build` layer across all 50 shipped maps, 940032 nodes):
   fallback. The hunter is an in-building generator (SIMPLIFIED, no
   outdoor game hunt) so it never draws an outdoor action loop.
 - Per-nation border-stone sprites (single fixed sprite today).
-- AI: seafaring (no ship/harbor references in `packages/engine/src/ai/`).
+- AI: seafaring — landed 2026-07-14 (see the model paragraph below).
 - Gold-edition extra chains: vineyard/winery, charburner (`BUILDING_DEFS`
   lacks them).
 - Original combat/sea sound-id verification.
@@ -138,6 +138,44 @@ inventory (`session.warehouseGoodsAt`). A v2->v3 save migration dumps the old
 global pool into the HQ's inventory. Production's surplus gate and the
 `transitCensus` are unchanged in spirit; per-tick cost stays bounded by reusing
 the existing flag-graph route memo (no per-ware full A*).
+
+Landed 2026-07-14 (AI seafaring): the computer opponent now expands over water
+using ONLY player-facing commands, via a new stateless priority cascade
+(`packages/engine/src/ai/seafaring.ts`) that `ai/index.ts` runs when the land
+planner yields nothing this cycle (land expansion exhausted) and the player owns
+coastal territory. Model: (1) trigger — `planNextBuilding` returns null and a
+cheap `ownsCoast` scan passes; (2) found a harbor — pick the coastal site inside
+own territory that is road-connectable within budget AND opens a real sea
+crossing (same water component as an unowned coastal target on a DIFFERENT land
+component), preferring explicit `HARBOR_TEXTURE_FLAG` spots, then nearest-HQ,
+then lowest node id; (3) build one shipyard on owned coast and let the normal
+economy feed it boards so it spawns a ship; (4) prepare an expedition at a
+harbor that is road-wired to the HQ (so the kit is deliverable) with an idle ship
+and a reachable target; (5) launch — choose the largest reachable unowned
+landmass (ties: nearest dock, then lowest node id), re-picking each cycle so a
+spot claimed mid-assembly is abandoned; cap of one concurrent expedition. It is
+fully deterministic (sorted scans, no RNG) and self-correcting (a lost
+building/ship becomes the next goal again). Interaction with storehouse
+inventories: a harbor is a warehouse with no input demand, so the expedition kit
+never routed to it and the feature could not fill a kit by roads — the original
+game routes boards/stones to the ordering harbor. `systems/dispatch.ts` now gives
+a preparing (not-yet-ready) expedition its harbor a plank/stone demand for the
+kit SHORTFALL, so the existing pull-model transport delivers it over roads from
+the nearest warehouse; this completes the mechanic for human players too
+(previously only the debug `debugGrantExpeditionSupplies` hook could fill a kit).
+Proven end-to-end by `ai/ai-seafaring.test.ts` on `makeTwoIslandMap` (an AI
+colonises a second island autonomously; a run-twice determinism check).
+KNOWN LIMITATION / follow-up: the cascade assumes the AI already OWNS a
+road-connectable, BUILDABLE coastal launch site facing an unowned island. On the
+shipped 128²-scale sea maps it usually does not — the land planner only pushes
+military toward a nearby ENEMY, so when the enemy is across water the AI places
+no frontier military, its territory stays the HQ disc, and it never reaches a
+buildable shore (many shore tiles are also non-buildable rock/beach). A
+coast-directed general-expansion drive (claim territory toward the nearest
+target-bearing shore, independent of an enemy) is the separable next step; it was
+prototyped and deliberately NOT shipped because it could not complete a
+colonisation on any shipped map within a bounded budget (occupation / road-reach
+long-tail over 60+ nodes) and would have been half-working.
 
 Landed since the PLAN.md backlog was written: donkey roads + road upgrade,
 geologists, ground ware-stack sprites, soldier rank overlays + fight
