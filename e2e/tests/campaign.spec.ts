@@ -182,3 +182,58 @@ test('world briefing shows the objective and starts on the mission map', async (
 
   expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);
 });
+
+test('world globe highlights the current mission, selects continents, and starts', async ({
+  page,
+}) => {
+  // The globe is a progressive enhancement over the strip: with the converted
+  // world.png/worldmsk.png present it renders the map; without them the plain
+  // list is shown (covered by the "lists eighteen missions" test).
+  test.skip(!(await assetsPresent(page)), 'converted assets not installed');
+
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(String(err)));
+
+  // Complete missions 101-103 so 104 is the current (highlighted) mission and
+  // continents 101-104 are selectable while 105+ stay locked.
+  await page.addInitScript(
+    ([key]) => {
+      window.localStorage.setItem(key, JSON.stringify({ completed: [101, 102, 103] }));
+    },
+    [CAMPAIGN_PROGRESS_KEY],
+  );
+
+  await page.goto('/campaign/world');
+  const panel = page.getByTestId('campaign-panel');
+  await expect(panel).toBeVisible();
+
+  // The map mounted and the current mission (104) is the initial selection.
+  const canvas = page.locator('.world-map-canvas');
+  await expect(page.getByTestId('world-map')).toBeVisible();
+  await expect(canvas).toBeVisible();
+  await expect(panel).toHaveAttribute('data-selected-chapter', '104');
+
+  // Click continents by their verified worldmsk centroids (mask space 512x340),
+  // mapped through the canvas's on-screen box.
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error('world map canvas has no layout box');
+  const scale = box.width / 512;
+  const clickRegion = async (cx: number, cy: number): Promise<void> => {
+    await page.mouse.click(box.x + cx * scale, box.y + cy * scale);
+  };
+
+  // North America (mission 102, unlocked) -> selection moves to 102.
+  await clickRegion(59, 72);
+  await expect(panel).toHaveAttribute('data-selected-chapter', '102');
+
+  // Japan (mission 105, locked) -> selection is unchanged (not selectable).
+  await clickRegion(477, 134);
+  await expect(panel).toHaveAttribute('data-selected-chapter', '102');
+
+  // Start opens the selected mission's briefing (region/list -> briefing -> Start).
+  await page.getByTestId('world-start').click();
+  await expect(page).toHaveURL(/\/campaign\/102$/);
+  await expect(page.getByTestId('briefing-panel')).toBeVisible();
+
+  expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);
+});

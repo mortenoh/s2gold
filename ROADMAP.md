@@ -40,10 +40,21 @@ caryatids), a compact bottom-center HUD bar (replacing the heavy
 full-width top navbar) with panels/dropdowns opening upward, and the
 original hand cursor (ui/handa.png) on the game canvas and menus.
 
-Remaining:
-
-- World Campaign globe screen (docs/reference-study/captures/worldcampaign.png): blocked on
-  per-chapter marker coordinates, which are not in the converted data.
+Landed 2026-07-14: World Campaign globe screen
+(docs/reference-study/captures/worldcampaign.png) at `/campaign/world`. The
+green marble backdrop (setup990) with the colour-keyed world map (world.png)
+centred on it, the selected mission's continent brightened/gold-tinted and
+marked with a pale X, and Start / Return buttons. The per-region marker data
+everyone thought was missing was in fact `worldmsk.png` all along: a flat-colour
+mask (one colour per continent, black ocean) whose nine region colours + pixel
+centroids were extracted empirically and drive both the highlight compositing
+and the X placement. Ours additionally lets the player pick a continent (mask
+hit-test on click) and keeps an accessible mission strip below the map, so every
+mission stays reachable by keyboard; when the map/mask art is absent the screen
+degrades to the plain chapter list. The nine continents map to missions 101-109
+in a documented narrative order anchored on Europe (the reference capture's
+highlighted region); the eighteen missions run on `maps3_omap*`, so missions
+110-118 have no continent and live in the strip only.
 
 ## Gameplay fidelity
 

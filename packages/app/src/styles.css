@@ -825,6 +825,111 @@ a.campaign-chapter:focus-visible {
   font-size: 11px;
 }
 
+/* ---- World Campaign globe ---- */
+/* The globe reproduces the original's world-campaign screen: the green marble
+   backdrop shows unscrimmed, the keyed map sits on it, and Start/Return sit
+   below. The dark scrim (.menu-campaign::before) is dropped only in this mode. */
+.menu-campaign--globe::before {
+  display: none;
+}
+
+.world-globe-panel {
+  align-items: center;
+  gap: 14px;
+  width: min(680px, 96vw);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  background: rgba(8, 12, 8, 0.28);
+  border-color: rgba(240, 200, 74, 0.22);
+  backdrop-filter: none;
+}
+
+.world-map-stage {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.world-map-canvas {
+  display: block;
+  width: min(600px, 92vw);
+  height: auto;
+  image-rendering: pixelated;
+  cursor: default;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.55));
+}
+
+.world-globe-panel.globe-hover .world-map-canvas {
+  cursor: pointer;
+}
+
+.world-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+
+/* Original-style Start/Return: gold lettering on a dark-red raised plate. */
+.world-btn {
+  min-width: 150px;
+  text-align: center;
+  padding: 8px 22px;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  text-decoration: none;
+  background: linear-gradient(#7a1f1c, #4d1210);
+  border: 1px solid #2a0a09;
+  border-radius: 4px;
+  box-shadow:
+    inset 0 1px 0 rgba(240, 200, 74, 0.25),
+    0 3px 6px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  transition:
+    filter 0.1s ease,
+    transform 0.1s ease;
+}
+
+.world-btn:hover,
+.world-btn:focus-visible {
+  filter: brightness(1.18);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+/* The accessible mission strip: compact numeric chips, wrapping under the map. */
+.world-strip {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  max-height: none;
+  overflow: visible;
+}
+
+.world-strip .campaign-chapter {
+  grid-template-columns: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 30px;
+  justify-content: center;
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.world-strip .campaign-chapter .chapter-badge {
+  font-size: 11px;
+}
+
+.world-strip .campaign-chapter.selected {
+  border-color: var(--accent);
+  background: rgba(240, 200, 74, 0.22);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
 /* ---- briefing screen ---- */
 .menu-briefing {
   align-items: center;
