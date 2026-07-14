@@ -113,10 +113,32 @@ own `build` layer across all 50 shipped maps, 940032 nodes):
 - AI: seafaring — landed 2026-07-14 (see the model paragraph below).
 - Gold-edition extra chains: vineyard/winery, charburner (`BUILDING_DEFS`
   lacks them).
-- Original combat/sea sound-id verification.
+- Original combat/sea sound-id verification — landed 2026-07-14 (see the
+  paragraph below).
 - Per-nation border stones and the Gold extra chains (vineyard/charburner)
   are blocked: all players are Roman today and the extra-chain sprites do
   not exist in the original assets - revisit with multi-nation support.
+
+Landed 2026-07-14 (combat/sea sound-id verification): the eight previously
+guessed SOUND.LST ids in `packages/app/src/game/audio-map.ts` were checked
+against Return-to-the-Roots `master` (GitHub code-search API + raw sources;
+numeric constants only, no code copied), after confirming our index space
+matches theirs via the known-good worker anchors (nofWoodcutter 53/85,
+nofStonemason 56). Result: two guesses became researched FACTS and were
+corrected — `fightClash` 64->103 (attack swing) and `soldierDied` 92->104
+(death cry), both from `nodeObjs/noFighting.cpp`, which plays the melee duel as
+a positioned world-sound loop (103 attack / 101 block / 105 hit / 104 death; we
+collapse to the leading swing per FightStarted event). The remaining six stay
+DOCUMENTED CHOICES because the original has NO positioned world sound for them:
+`playNOSound` never appears in the catapult (`nofCatapultMan.cpp` /
+`nobUsual.cpp`), attacker/capture, or ship (`noShip.cpp`) sources — those events
+surface via UI/postbox messages in the original. Rather than silence them (a
+feedback regression), catapultFire (74), buildingCaptured (87) and the four sea
+cues (shipBuilt 84, expeditionReady 66, expeditionLanded 90, shipArrived 67)
+remain voiced with installed clips, now documented as deliberate embellishments
+with per-id acoustic characterisations. All ids were listen-verified via ffprobe
+and a new `audio-map.test.ts` pins the two facts and asserts every mapped id is a
+real SOUND.LST clip.
 
 Landed 2026-07-14 (storehouse-local inventories, WORLD_VERSION 3): wares no
 longer live in a single `Player.wares` pool — each warehouse-class building
