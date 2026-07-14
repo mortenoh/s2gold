@@ -112,16 +112,16 @@ own `build` layer across all 50 shipped maps, 940032 nodes):
 - Per-nation border-stone sprites — landed 2026-07-14 (multi-nation phase 2;
   each people's boundary-stone sprite at archive index 0/1, player-colour base).
 - AI: seafaring — landed 2026-07-14 (see the model paragraph below).
-- Gold-edition extra chains: vineyard/winery, charburner (`BUILDING_DEFS`
-  lacks them).
 - Original combat/sea sound-id verification — landed 2026-07-14 (see the
   paragraph below).
 - Multi-nation support — phase 1 (core + setup) AND phase 2 (rendering) both
   landed 2026-07-14 (see the two paragraphs below). Each player's buildings,
   flags, and border stones now draw from their own people's sprite archive.
-- Gold extra chains (vineyard/charburner) are still blocked: the extra-chain
-  building sprites do not exist in the original assets (`BUILDING_DEFS` lacks
-  the buildings too), independent of nation rendering.
+- "Gold-edition extra chains" (vineyard/winery, charburner) — CLOSED as not
+  part of the target game (2026-07-14). The extracted Gold-edition data
+  carries no such sprites, files, or text-bank strings; those buildings come
+  from The Settlers II: 10th Anniversary (2006) and the RttR addon set, not
+  the 1996 Gold Edition this project reimplements. Nothing to build.
 
 Landed 2026-07-14 (multi-nation core + setup, phase 1 of 2): the four S2
 peoples (romans/vikings/nubians/japanese) are now a first-class engine +
