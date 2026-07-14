@@ -53,6 +53,7 @@ import {
 } from './game-render';
 import { Interaction } from './interaction';
 import { makeBuildIconSet } from './build-icons';
+import { makeHudIconSet, iconifyHudButton, HUD_ICON, IO_ARCHIVE } from './hud-icons';
 import { MilitaryPanel } from './military-ui';
 import { HarborPanel } from './harbor-ui';
 import { SaveMenu } from './save-ui';
@@ -530,18 +531,33 @@ async function boot(): Promise<void> {
   // Map-independent atlases (Roman buildings/flags, ships, work animations,
   // carrier + jobs BOBs): five independent fetch+decode chains, loaded in
   // parallel; registration order stays deterministic after the join.
-  const [romanAtlas, shipAtlas, workAtlas, carrier, jobs] = await Promise.all([
+  // The io_dat atlas holds the original UI icons; it feeds the HUD button crops
+  // only (not the world sprite renderer), so it is loaded here but never
+  // registered as a game-sprite archive. Non-fatal when missing.
+  const [romanAtlas, shipAtlas, workAtlas, carrier, jobs, ioAtlas] = await Promise.all([
     loadAtlas(BUILDING_ARCHIVE),
     loadAtlas(SHIP_ARCHIVE),
     loadAtlas(WORK_ARCHIVE),
     loadBobAtlas('carrier', BOB_ARCHIVE),
     loadBobAtlas('jobs', JOBS_ARCHIVE),
+    loadAtlas(IO_ARCHIVE),
   ]);
   if (romanAtlas) sprites.registerAtlas(romanAtlas.meta, romanAtlas.pages, romanAtlas.pmaskPages);
   if (shipAtlas) sprites.registerAtlas(shipAtlas.meta, shipAtlas.pages, shipAtlas.pmaskPages);
   if (workAtlas) sprites.registerAtlas(workAtlas.meta, workAtlas.pages, workAtlas.pmaskPages);
   if (carrier) sprites.registerAtlas(carrier.meta, carrier.pages, carrier.pmaskPages);
   if (jobs) sprites.registerAtlas(jobs.meta, jobs.pages, jobs.pmaskPages);
+
+  // Put original icon sprites on the bottom HUD bar buttons (falls back to the
+  // existing text labels when the io_dat atlas is missing). Done after boot so
+  // the atlas is loaded; the buttons keep their testids, handlers and titles.
+  const ioIcons = makeHudIconSet(ioAtlas);
+  iconifyHudButton(pauseButton, ioIcons, HUD_ICON.pause);
+  iconifyHudButton(menuButton, ioIcons, HUD_ICON.game);
+  iconifyHudButton(statsButton, ioIcons, HUD_ICON.stats);
+  iconifyHudButton(goodsButton, ioIcons, HUD_ICON.goods);
+  iconifyHudButton(zoomButton, ioIcons, HUD_ICON.zoom);
+  iconifyHudButton(settingsButton, ioIcons, HUD_ICON.settings);
 
   let camera = new Camera(1, 1);
   let session: GameSession | null = null;
@@ -663,7 +679,7 @@ async function boot(): Promise<void> {
     currentMapTitle = map.title || entry.name;
     mapTitle.textContent = map.title || entry.name;
     mapSelect.setValue(entry.name);
-    zoomButton.textContent = zoomLabel();
+    setHudLabel(zoomButton, zoomLabel());
     document.title = `s2gold — ${map.title || entry.name}`;
     // Leaving the chapter's map ends campaign tracking: the win condition
     // must not be satisfiable (and progress recorded) on a different map.
@@ -777,15 +793,28 @@ async function boot(): Promise<void> {
 
   // --- HUD controls ---------------------------------------------------------
 
+  // Update an (icon-or-text) HUD button's label: writes the hidden `.hud-btn-label`
+  // span when iconified (leaving the icon intact) or the button text otherwise,
+  // and keeps aria-label in sync. Text stays in textContent for the e2e asserts.
+  const setHudLabel = (button: HTMLElement, text: string): void => {
+    const label = button.querySelector<HTMLElement>('.hud-btn-label');
+    if (label) label.textContent = text;
+    else button.textContent = text;
+    button.setAttribute('aria-label', text);
+  };
+
   const zoomLabel = (): string => `Zoom ${camera.zoom.toFixed(camera.zoom % 1 === 0 ? 0 : 2)}x`;
   zoomButton.addEventListener('click', () => {
     camera.toggleZoom(canvas.width, canvas.height);
-    zoomButton.textContent = zoomLabel();
+    setHudLabel(zoomButton, zoomLabel());
   });
 
   function setPaused(paused: boolean): void {
     if (session) session.paused = paused;
-    pauseButton.textContent = paused ? 'Resume' : 'Pause';
+    setHudLabel(pauseButton, paused ? 'Resume' : 'Pause');
+    // The pause button has no panel, so mark it active while paused to keep the
+    // toggled state visible now that it is icon-only.
+    pauseButton.classList.toggle('active', paused);
   }
   pauseButton.addEventListener('click', () => setPaused(!(session?.paused ?? false)));
 
@@ -840,7 +869,7 @@ async function boot(): Promise<void> {
       const sy = (ev.clientY - rect.top) * dpr;
       const deltaPx = ev.deltaMode === 1 ? ev.deltaY * 16 : ev.deltaY;
       camera.zoomAt(camera.zoom * Math.exp(-deltaPx * 0.001), sx, sy);
-      zoomButton.textContent = zoomLabel();
+      setHudLabel(zoomButton, zoomLabel());
     },
     { passive: false },
   );
@@ -882,7 +911,7 @@ async function boot(): Promise<void> {
       ev.preventDefault();
     } else if (ev.key === 'z' || ev.key === 'Z') {
       camera.toggleZoom(canvas.width, canvas.height);
-      zoomButton.textContent = zoomLabel();
+      setHudLabel(zoomButton, zoomLabel());
     } else if (ev.key === ' ') {
       setPaused(!(session?.paused ?? false));
       ev.preventDefault();
