@@ -105,6 +105,10 @@ function resolveBias(world: World, geom: Geometry, player: number, goal: Goal): 
       const enemyNode = enemyReferenceNode(world, geom, player);
       return enemyNode < 0 ? null : { kind: 'frontier', enemyNode };
     }
+    // Coast-directed expansion is driven by seafaring.ts (which owns the sea
+    // analysis needed to locate the objective shore), never a fixed planner goal.
+    case 'coast':
+      return null;
   }
 }
 
