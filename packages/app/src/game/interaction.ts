@@ -15,6 +15,7 @@ import {
 } from '@s2gold/engine';
 import type { Camera } from '@s2gold/renderer';
 import { el } from '../lib/dom';
+import type { BuildIconSet } from './build-icons';
 import { mineDepletedAt, nodeAtWorld } from './game-render';
 import type { GameSession } from './session';
 
@@ -106,6 +107,9 @@ const BUILDINGS_BY_SIZE: Readonly<Record<BuildingSize, BuildingType[]>> = (() =>
   return groups;
 })();
 
+/** Max px extent of a build-menu icon (sprites shrink to fit this square). */
+const BUILD_ICON_PX = 46;
+
 /** Human-readable build cost, e.g. "2 boards" or "2 boards, 3 stone". */
 function costText(type: BuildingType): string {
   const cost = BUILD_COST[type];
@@ -121,6 +125,11 @@ export interface InteractionDeps {
   readonly root: HTMLElement;
   session(): GameSession;
   camera(): Camera;
+  /**
+   * Building-icon set for the build submenu grid (cropped from the loaded nation
+   * atlas). Null/absent degrades the grid back to text rows.
+   */
+  buildIcons?: BuildIconSet | null;
   /** Called whenever road mode toggles, for HUD status text. */
   onStatus(text: string): void;
   /** True when the pending click ended a drag and should not open a menu. */
@@ -430,16 +439,19 @@ export class Interaction {
   /** Open (replacing any current) the building-list submenu for a category. */
   private openSubmenu(trigger: HTMLElement, node: number, types: readonly BuildingType[]): void {
     this.closeSubmenu();
+    const icons = this.deps.buildIcons ?? null;
+    // Icon grid (the original build window shows buildings as pictures) when the
+    // atlas is loaded, else the plain text rows. A per-cell fallback also fires
+    // if a single sprite is missing, so one gap never breaks the grid.
     const items = types.map((type) =>
-      this.action(
-        `${BUILDING_LABEL[type] ?? titleCase(type)} (${costText(type)})`,
-        () => this.placeBuildingAndConnect(node, type),
-        `ctx-${type}`,
-      ),
+      icons ? this.buildingCell(node, type, icons) : this.buildingRow(node, type),
     );
     const sub = el(
       'div',
-      { class: 'ctx-menu ctx-submenu', attrs: { 'data-testid': 'ctx-submenu' } },
+      {
+        class: `ctx-menu ctx-submenu${icons ? ' ctx-submenu-grid' : ''}`,
+        attrs: { 'data-testid': 'ctx-submenu' },
+      },
       ...items,
     );
     trigger.classList.add('active');
@@ -448,6 +460,40 @@ export class Interaction {
     // Open to the right of the trigger, flipping to its left edge if cramped.
     this.placeFloating(sub, tr.right - 2, tr.top, tr.left + 2, tr.bottom);
     this.submenu = sub;
+  }
+
+  /**
+   * A build-menu grid cell: the building's real icon (cropped from the atlas)
+   * above a small cost caption, with the full name + cost in the tooltip. The
+   * cost text stays in the cell's text content so a missing-name icon still tells
+   * the player what it costs. Falls back to a text row when its sprite is absent.
+   */
+  private buildingCell(node: number, type: BuildingType, icons: BuildIconSet): HTMLElement {
+    const name = BUILDING_LABEL[type] ?? titleCase(type);
+    const cost = costText(type);
+    const icon = el('span', { class: 'ctx-grid-icon' });
+    if (!icons.apply(icon, type, BUILD_ICON_PX)) return this.buildingRow(node, type);
+    const cell = el('button', {
+      class: 'ctx-grid-cell',
+      title: `${name} (${cost})`,
+      attrs: { type: 'button', 'data-testid': `ctx-${type}` },
+    });
+    cell.append(icon, el('span', { class: 'ctx-grid-cost', text: `(${cost})` }));
+    cell.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      this.placeBuildingAndConnect(node, type);
+      this.closeMenu();
+    });
+    return cell;
+  }
+
+  /** Text-row fallback for a build-menu building (name + cost). */
+  private buildingRow(node: number, type: BuildingType): HTMLElement {
+    return this.action(
+      `${BUILDING_LABEL[type] ?? titleCase(type)} (${costText(type)})`,
+      () => this.placeBuildingAndConnect(node, type),
+      `ctx-${type}`,
+    );
   }
 
   /**
