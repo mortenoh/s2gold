@@ -227,7 +227,9 @@ function stepCarrier(world: World, carrier: Settler, events: EventSink): void {
         isWarehouse(tgt) &&
         tgt.state === 'working'
       ) {
-        world.players[tgt.player].wares[carried.type]++;
+        // Straight into this warehouse's own stock (the warehouse door bypasses
+        // the flag's transit slots; stock is per-warehouse, not a global pool).
+        tgt.wareStock[carried.type] = (tgt.wareStock[carried.type] ?? 0) + 1;
         storeFree(world.wares, carried.id);
         carrier.carryingWareId = -1;
         carrier.state = 'carrierIdle';

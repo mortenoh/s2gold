@@ -7,7 +7,14 @@
 import { readFileSync } from 'node:fs';
 import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { applyCommand, createWorld, flagsOf, tickWorld, worldGeometry } from './index';
+import {
+  applyCommand,
+  createWorld,
+  flagsOf,
+  tickWorld,
+  warehouseWareTotal,
+  worldGeometry,
+} from './index';
 import { canPlaceBuilding } from './commands';
 import { findWalkPath } from './pathfinding';
 import { GREENLAND_RULES } from './terrain';
@@ -36,7 +43,7 @@ describe.skipIf(!existsSync(MAP))('warehouse supply requires a route', () => {
     }
     expect(spot).toBeGreaterThanOrEqual(0);
 
-    const planksBefore = world.players[0]?.wares.plank ?? 0;
+    const planksBefore = warehouseWareTotal(world, 0, 'plank');
     applyCommand(world, {
       player: 0,
       type: 'placeBuilding',
@@ -46,7 +53,7 @@ describe.skipIf(!existsSync(MAP))('warehouse supply requires a route', () => {
 
     // No road: the planks must stay in the warehouse and off the HQ flag.
     for (let t = 0; t < 500; t++) tickWorld(world);
-    expect(world.players[0]?.wares.plank).toBe(planksBefore);
+    expect(warehouseWareTotal(world, 0, 'plank')).toBe(planksBefore);
     const hqFlag = flagsOf(world, 0)[0];
     if (!hqFlag) throw new Error('no HQ flag');
     expect(hqFlag.wares.length).toBe(0);

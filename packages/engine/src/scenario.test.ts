@@ -1,7 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { buildingAt, tickWorld, type GameEvent, type MapJson } from './index';
+import {
+  buildingAt,
+  tickWorld,
+  warehouseTotals,
+  warehouseWareTotal,
+  type GameEvent,
+  type MapJson,
+} from './index';
 import { setupDemoWorld } from './harness';
 
 const MAP_PATH = resolve(__dirname, '../../app/public/assets/maps/maps_miss200.json');
@@ -23,7 +30,7 @@ describe('P2 economy scenario', () => {
     const { world, layout } = setupDemoWorld(map, 2024);
     const hqId = world.players[0].hqBuildingId;
 
-    const startWares = { ...world.players[0].wares };
+    const startWares = warehouseTotals(world, 0);
     const counts = {
       treeFelled: 0,
       stoneMined: 0,
@@ -84,7 +91,7 @@ describe('P2 economy scenario', () => {
 
     // Inventory moved: buildings consumed starting boards/stones, and produced
     // wares flowed back into the HQ store.
-    expect(world.players[0].wares.trunk + world.players[0].wares.plank).not.toBe(
+    expect(warehouseWareTotal(world, 0, 'trunk') + warehouseWareTotal(world, 0, 'plank')).not.toBe(
       startWares.trunk + startWares.plank,
     );
   });

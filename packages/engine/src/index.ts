@@ -27,7 +27,14 @@ import {
   VISUALRANGE_MILITARY,
   ownerPlayer,
 } from './constants';
-import { storeLive, type Building, type Flag, type Ship, type World } from './world';
+import {
+  storeLive,
+  warehouseTotals,
+  type Building,
+  type Flag,
+  type Ship,
+  type World,
+} from './world';
 
 export const ENGINE_VERSION = '0.1.0';
 
@@ -37,7 +44,16 @@ export function version(): string {
 }
 
 // --- Re-exports (public API + supporting types) ---------------------------
-export { createWorld, makeBuilding, storeAlloc, WORLD_VERSION } from './world';
+export {
+  createWorld,
+  isWarehouseBuilding,
+  makeBuilding,
+  storeAlloc,
+  warehouseTotals,
+  warehouseWareTotal,
+  WORLD_VERSION,
+  zeroWares,
+} from './world';
 export type {
   World,
   Flag,
@@ -213,7 +229,9 @@ export function playerInventory(world: World, player: number): PlayerInventoryVi
   const p = world.players[player];
   if (!p) return null;
   return {
-    wares: { ...p.wares },
+    // Aggregate ware totals summed over the player's warehouses (stock now lives
+    // per-warehouse in Building.wareStock, not a single pool).
+    wares: warehouseTotals(world, player),
     workers: { ...p.workers },
     donkeys: p.donkeys,
     toolPriority: p.toolPriority.slice(),

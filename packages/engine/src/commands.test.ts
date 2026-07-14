@@ -12,6 +12,7 @@ import {
   terrainBuildable,
   tickWorld,
   worldGeometry,
+  warehouseWareTotal,
   BUILDING,
 } from './index';
 import { makeFlatMap } from './harness';
@@ -218,7 +219,7 @@ describe('ware transport and carrier hand-off', () => {
     tickWorld(world);
 
     const flag = flagAt(world, fNode)!;
-    const before = world.players[0].wares.stone;
+    const before = warehouseWareTotal(world, 0, 'stone');
     applyCommand(world, {
       tick: world.tick,
       player: 0,
@@ -235,10 +236,10 @@ describe('ware transport and carrier hand-off', () => {
     for (let i = 0; i < 700; i++) {
       tickWorld(world);
       if (world.roads.items.some((r) => r && r.carrierId >= 0)) carrierSeen = true;
-      if (world.players[0].wares.stone >= before + 3) break;
+      if (warehouseWareTotal(world, 0, 'stone') >= before + 3) break;
     }
     expect(carrierSeen).toBe(true);
-    expect(world.players[0].wares.stone).toBe(before + 3);
+    expect(warehouseWareTotal(world, 0, 'stone')).toBe(before + 3);
   });
 });
 

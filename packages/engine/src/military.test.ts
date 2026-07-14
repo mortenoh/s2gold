@@ -14,11 +14,12 @@ import {
   tickWorld,
   worldGeometry,
   applyCommand,
+  warehouseWareTotal,
   type GameEvent,
   type MapJson,
 } from './index';
 import { makeFlatMap } from './harness';
-import { garrisonBuilding, spawnBuilding } from './harness-economy';
+import { garrisonBuilding, grantWarehouse, spawnBuilding } from './harness-economy';
 
 /** Run `n` ticks, collecting every emitted event. */
 function runTicks(world: ReturnType<typeof createWorld>, n: number): GameEvent[] {
@@ -70,7 +71,7 @@ describe('soldier recruitment (MILITARY.md §6 / CONSTANTS.md §7)', () => {
     const p = world.players[0];
     // Drain the starting soldier pool so demand forces a recruit.
     p.soldiers = [0, 0, 0, 0, 0];
-    const beforeBeer = p.wares.beer;
+    const beforeBeer = warehouseWareTotal(world, 0, 'beer');
     const beforeHelpers = p.workers.carrier;
 
     // A working guardhouse creates demand for 3 soldiers.
@@ -81,7 +82,7 @@ describe('soldier recruitment (MILITARY.md §6 / CONSTANTS.md §7)', () => {
     expect(recruited.length).toBeGreaterThanOrEqual(1);
     // The new soldier is a private (rank 0) — either still pooled or already
     // ordered out to the guardhouse.
-    expect(p.wares.beer).toBeLessThan(beforeBeer); // beer consumed
+    expect(warehouseWareTotal(world, 0, 'beer')).toBeLessThan(beforeBeer); // beer consumed
     expect(p.workers.carrier).toBeLessThan(beforeHelpers); // a Helper became a soldier
   });
 });
@@ -227,8 +228,8 @@ describe('headquarters reserve defense (MILITARY.md §4)', () => {
     const world = createWorld(makeFlatMap2(60, 20, [5, 10], [50, 10]), { seed });
     const geom = worldGeometry(world);
     world.players[0].soldiers = [0, 0, 0, 0, 0];
-    world.players[0].wares.sword = 0; // no recruitment to perturb counts
-    world.players[1].wares.sword = 0;
+    grantWarehouse(world, 0, { sword: 0 }); // no recruitment to perturb counts
+    grantWarehouse(world, 1, { sword: 0 });
     world.players[1].soldiers = reserve.slice(); // the HQ's only defenders
     const fort = spawnBuilding(world, geom, geom.index(44, 10), 'fortress', 0, false);
     garrisonBuilding(fort, fortGarrison);
@@ -302,8 +303,8 @@ describe('headquarters reserve defense (MILITARY.md §4)', () => {
     const world = createWorld(makeFlatMap2(60, 20, [5, 10], [50, 10]), { seed });
     const geom = worldGeometry(world);
     world.players[0].soldiers = [0, 0, 0, 0, 0];
-    world.players[0].wares.sword = 0;
-    world.players[1].wares.sword = 0;
+    grantWarehouse(world, 0, { sword: 0 });
+    grantWarehouse(world, 1, { sword: 0 });
     world.players[1].soldiers = reserve.slice();
     const fort = spawnBuilding(world, geom, geom.index(44, 10), 'fortress', 0, false);
     garrisonBuilding(fort, fortGarrison);
@@ -381,7 +382,7 @@ describe('capture reinforcement is capped at maxTroops (MILITARY.md §4)', () =>
     const geom = worldGeometry(world);
     world.players[0].soldiers = [0, 0, 0, 0, 0];
     world.players[1].soldiers = [0, 0, 0, 0, 0];
-    world.players[0].wares.sword = 0; // no recruitment to perturb the soldier count
+    grantWarehouse(world, 0, { sword: 0 }); // no recruitment to perturb the soldier count
     const fort = spawnBuilding(world, geom, geom.index(20, 10), 'fortress', 0, false);
     garrisonBuilding(fort, [3, 3, 3, 0, 0]); // 9 soldiers (strongest sent first)
     const bar = spawnBuilding(world, geom, geom.index(26, 10), 'barracks', 1, false);

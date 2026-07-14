@@ -13,7 +13,7 @@ import { BUILDING, isGraniteType, isTreeType, RADIUS, type BuildingType } from '
 import { Geometry } from './geometry';
 import { findWalkPath } from './pathfinding';
 import { GREENLAND_RULES } from './terrain';
-import { createWorld, type MapJson, type World } from './world';
+import { createWorld, warehouseTotals, type MapJson, type World } from './world';
 import { tickWorld } from './index';
 
 const B64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -261,7 +261,7 @@ export function worldSummary(world: World): string {
   for (const w of world.wares.items) {
     if (w && (w.loc === 'flag' || w.loc === 'carried')) waresInTransit++;
   }
-  const inv = world.players[0]?.wares ?? { trunk: 0, plank: 0, stone: 0 };
+  const inv = world.players[0] ? warehouseTotals(world, 0) : { trunk: 0, plank: 0, stone: 0 };
   const jobStr = Object.entries(jobs)
     .map(([j, n]) => `${j}:${n}`)
     .join(' ');

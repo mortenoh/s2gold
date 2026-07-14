@@ -84,6 +84,23 @@ export function claimArea(
   }
 }
 
+/**
+ * Seed ware stock into a specific warehouse (defaults to the player's HQ). Now
+ * that inventories are per-warehouse (Building.wareStock), tests that need known
+ * starting stock write it here instead of into the old player-global pool. Each
+ * key SETS that ware's count (not add), mirroring the old `world.players[p].wares.X = N`.
+ */
+export function grantWarehouse(
+  world: World,
+  player: number,
+  wares: Record<string, number>,
+  buildingId?: number,
+): void {
+  const id = buildingId ?? world.players[player].hqBuildingId;
+  const b = getBuilding(world, id);
+  for (const [ware, count] of Object.entries(wares)) b.wareStock[ware] = count;
+}
+
 /** Paint mountain terrain (id 0x01) on a node so a mine may sit there. */
 export function paintMountain(world: World, node: number): void {
   world.terrain1[node] = 0x01;

@@ -109,6 +109,13 @@ export class GoodsPanel {
   /** Live count-cell references per ware key, for in-place per-frame updates. */
   private readonly cells = new Map<string, { row: HTMLElement; count: HTMLElement }>();
   private title = 'Goods';
+  /**
+   * Map node of the specific warehouse whose stock this panel shows, or null for
+   * the player-wide sum (the HUD Goods button). Set by {@link open} when a
+   * warehouse building is clicked so {@link update} reads that one warehouse's
+   * inventory instead of the aggregate.
+   */
+  private sourceNode: number | null = null;
 
   constructor(private readonly deps: GoodsPanelDeps) {}
 
@@ -136,11 +143,15 @@ export class GoodsPanel {
    * window horizontally over that point and places it just above — used when a
    * warehouse is clicked so its inventory pops up over the building. Omitted for
    * the HUD Goods button, which anchors the panel to itself via wireHudPanel.
+   *
+   * `node` (a clicked warehouse's map node) makes the panel show THAT warehouse's
+   * own stock; omitted (HUD Goods button) it shows the player-wide sum.
    */
-  open(title = 'Goods', at?: { x: number; y: number }): void {
+  open(title = 'Goods', at?: { x: number; y: number }, node?: number): void {
     if (!this.deps.session()) return;
     this.close();
     this.title = title;
+    this.sourceNode = node ?? null;
     const closeButton = el('button', {
       text: '✕',
       attrs: { type: 'button', 'data-testid': 'goods-close', title: 'Close' },
@@ -230,7 +241,13 @@ export class GoodsPanel {
   update(): void {
     const session = this.deps.session();
     if (!this.body || !session) return;
-    const goods = session.goods;
+    // A warehouse-click panel shows that one warehouse's stock; the HUD Goods
+    // button (no source node) shows the player-wide sum. A warehouse that has
+    // since been demolished falls back to all-zeros.
+    const goods =
+      this.sourceNode === null
+        ? session.goods
+        : (session.warehouseGoodsAt(this.sourceNode)?.goods ?? {});
     for (const { key, count } of goodsEntries(goods)) {
       const cell = this.cells.get(key);
       if (!cell) continue;

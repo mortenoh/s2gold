@@ -26,10 +26,12 @@ import { buildFlagGraph, findFlagRoute, findWaterPath } from '../pathfinding';
 import { recalcTerritory } from './territory';
 import { harborDockNode } from '../water';
 import {
+  creditWareToHqStock,
   getFlag,
   storeAlloc,
   storeFree,
   storeLive,
+  zeroWares,
   type Building,
   type Ship,
   type World,
@@ -129,6 +131,12 @@ export interface WareRoutePlan {
   nearHarborId: number;
   /** Chosen destination harbor id (the far harbor) when useSea; else -1. */
   farHarborId: number;
+  /**
+   * Total route cost (road hops, plus SEA.legPenalty for a sea leg), or Infinity
+   * when the target is unreachable. Used by dispatch to pick the nearest
+   * road-connected warehouse that can supply a request.
+   */
+  cost: number;
 }
 
 /**
@@ -151,7 +159,13 @@ export function chooseWareRoute(
   const { world, geom } = ctx;
   const target = world.buildings.items[targetBuildingId];
   if (!target) {
-    const dead: WareRoutePlan = { nextFlag: -1, useSea: false, nearHarborId: -1, farHarborId: -1 };
+    const dead: WareRoutePlan = {
+      nextFlag: -1,
+      useSea: false,
+      nearHarborId: -1,
+      farHarborId: -1,
+      cost: Infinity,
+    };
     ctx.routeCache.set(cacheKey, dead);
     return dead;
   }
@@ -166,6 +180,7 @@ export function chooseWareRoute(
     useSea: false,
     nearHarborId: -1,
     farHarborId: -1,
+    cost: bestCost,
   };
 
   const harbors = ctx.harborsByPlayer.get(player) ?? [];
@@ -188,6 +203,7 @@ export function chooseWareRoute(
             useSea: true,
             nearHarborId: near.id,
             farHarborId: far.id,
+            cost: total,
           };
         }
       }
@@ -296,7 +312,8 @@ function foundHarbor(world: World, geom: Geometry, node: number, player: number)
   const bId = storeAlloc(world.buildings, (id) =>
     makeBuilding(
       { id, type: BUILDING.harbor, node, player, flagId },
-      { state: 'working', staffed: true },
+      // A founded colony harbor is a working warehouse: open its own (empty) stock.
+      { state: 'working', staffed: true, wareStock: zeroWares() },
     ),
   );
   world.buildingAtNode[node] = bId;
@@ -495,19 +512,23 @@ function runExpeditionAssembly(world: World, events: EventSink): void {
     // and a builder toward a launch that can never happen.
     const harbor = world.buildings.items[e.harborId];
     if (!harbor || harbor.type !== BUILDING.harbor || harbor.player !== e.player) {
-      player.wares.plank = (player.wares.plank ?? 0) + e.boards;
-      player.wares.stone = (player.wares.stone ?? 0) + e.stones;
+      // Harbor gone: the drawn kit can't return to a dead warehouse, so refund
+      // it to the HQ's stock (or nearest surviving warehouse) instead.
+      creditWareToHqStock(world, e.player, 'plank', e.boards);
+      creditWareToHqStock(world, e.player, 'stone', e.stones);
       if (e.hasBuilder) player.workers[JOB.builder] = (player.workers[JOB.builder] ?? 0) + 1;
       world.expeditions.splice(i, 1);
       continue;
     }
     if (e.ready) continue;
-    while (e.boards < SEA.expeditionBoards && (player.wares.plank ?? 0) > 0) {
-      player.wares.plank--;
+    // Boards/stones are drawn from the assembling harbor's OWN stock (they were
+    // routed to the harbor as a warehouse), not a global pool.
+    while (e.boards < SEA.expeditionBoards && (harbor.wareStock.plank ?? 0) > 0) {
+      harbor.wareStock.plank--;
       e.boards++;
     }
-    while (e.stones < SEA.expeditionStones && (player.wares.stone ?? 0) > 0) {
-      player.wares.stone--;
+    while (e.stones < SEA.expeditionStones && (harbor.wareStock.stone ?? 0) > 0) {
+      harbor.wareStock.stone--;
       e.stones++;
     }
     if (!e.hasBuilder && ensureWorkerAvailable(world, events, player, JOB.builder)) {

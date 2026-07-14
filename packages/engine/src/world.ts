@@ -11,6 +11,7 @@
 import type { Command } from './commands';
 import {
   BUILDING,
+  buildingDef,
   DEFAULT_TRANSPORT_PRIORITY,
   HQ_START_SOLDIERS,
   HQ_START_WARES,
@@ -29,7 +30,7 @@ import { seedRng, type RngState } from './rng';
 import { recalcTerritory } from './systems/territory';
 
 /** Format version for serialized worlds. */
-export const WORLD_VERSION = 2;
+export const WORLD_VERSION = 3;
 
 /** A stored ware token. */
 export interface Ware {
@@ -107,6 +108,15 @@ export interface Building {
    * order preserved so alternating outputs — armory sword/shield — stay ordered).
    */
   outputQueue: WareType[];
+  /**
+   * Per-warehouse ware inventory (S2 storehouse-local stock). Populated with a
+   * full zeroed ware record only on warehouse-class buildings (HQ, storehouse,
+   * harbor) once they are working; every other building leaves it empty `{}`.
+   * Wares are stored INTO the specific warehouse they were routed to and drawn
+   * FROM it, so stock is no longer a single player-global pool. See
+   * systems/dispatch.ts for the nearest-warehouse supply rule.
+   */
+  wareStock: Record<WareType, number>;
   /** Production work timer (ticks remaining in the current cycle; 0 = idle). */
   workTimer: number;
   /** Alternating-output toggle (armory: 0 = sword, 1 = shield). */
@@ -240,9 +250,17 @@ export type SettlerState =
 export interface Player {
   index: number;
   hqBuildingId: number;
-  /** Ware type -> count stored across the player's warehouses (HQ + storehouses). */
-  wares: Record<WareType, number>;
-  /** Job type -> idle worker count available for dispatch/recruitment. */
+  /**
+   * Job type -> idle worker count available for dispatch/recruitment.
+   *
+   * NOTE: settlers/soldiers/donkeys stay a player-global pool (below). The
+   * original stores civilians in warehouses too, but the engine has always
+   * modelled the settler population as a per-player pool sourced from the HQ
+   * (recruit.ts runPopulation), and this change deliberately keeps that. Only
+   * WARES became warehouse-local (Building.wareStock); the tools recruitment
+   * spends are drawn from warehouse stock (recruit.ts) so the two models stay
+   * consistent — a recruit needs a Helper (pool) plus its tool (warehouse).
+   */
   workers: Record<JobType, number>;
   /**
    * Bred pack donkeys available to staff upgraded (donkey) roads as a second
@@ -385,7 +403,8 @@ export function decodeBase64ToBytes(b64: string): number[] {
   return out;
 }
 
-function zeroWares(): Record<WareType, number> {
+/** A full ware record with every ware type at 0 (canonical WARE_TYPES key order). */
+export function zeroWares(): Record<WareType, number> {
   const r = {} as Record<WareType, number>;
   for (const w of WARE_TYPES) r[w] = 0;
   return r;
@@ -465,7 +484,6 @@ export function createWorld(map: MapJson, options: CreateWorldOptions): World {
     const player: Player = {
       index: p,
       hqBuildingId: -1,
-      wares: { ...zeroWares(), ...HQ_START_WARES },
       workers: { ...zeroWorkers(), ...HQ_START_WORKERS },
       donkeys: 0,
       toolPriority: [...TOOL_WARES],
@@ -513,6 +531,7 @@ export function makeBuilding(
     staffed: false,
     inputStock: [],
     outputQueue: [],
+    wareStock: {},
     workTimer: 0,
     altToggle: 0,
     garrison: new Array<number>(NUM_SOLDIER_RANKS).fill(0),
@@ -533,8 +552,15 @@ function placeHeadquarters(world: World, geom: Geometry, node: number, player: n
   const bId = storeAlloc(world.buildings, (id) =>
     makeBuilding(
       { id, type: BUILDING.headquarters, node, player, flagId },
-      // The HQ is always a manned territory anchor (MILITARY.md §3).
-      { state: 'working', staffed: true, occupied: true },
+      // The HQ is always a manned territory anchor (MILITARY.md §3). It also holds
+      // the player's starting ware stock in its own warehouse inventory — the
+      // single seed warehouse until storehouses/harbors are built.
+      {
+        state: 'working',
+        staffed: true,
+        occupied: true,
+        wareStock: { ...zeroWares(), ...HQ_START_WARES },
+      },
     ),
   );
   world.buildingAtNode[node] = bId;
@@ -573,4 +599,103 @@ export function getShip(world: World, id: number): Ship {
   const s = world.ships.items[id];
   if (!s) throw new Error(`no ship ${id}`);
   return s;
+}
+
+// --- Warehouse inventory helpers ------------------------------------------
+//
+// Wares live in each warehouse-class building's `wareStock` (HQ, storehouse,
+// harbor). These helpers give the systems and views a consistent read/write
+// surface: an aggregate SUM over a player's warehouses (HUD/AI/stats keep
+// working on the whole economy), plus a deterministic draw/credit that debits
+// or credits SPECIFIC warehouses in ascending building-id order.
+
+/** True when a building holds ware stock (working HQ or storehouse/harbor). */
+export function isWarehouseBuilding(b: Building): boolean {
+  const def = buildingDef(b.type);
+  return !!def && (def.kind === 'hq' || def.kind === 'warehouse');
+}
+
+/** Aggregate count of a ware across all of a player's working warehouses. */
+export function warehouseWareTotal(world: World, player: number, ware: WareType): number {
+  let total = 0;
+  for (const b of storeLive(world.buildings)) {
+    if (b.player !== player || b.state !== 'working' || !isWarehouseBuilding(b)) continue;
+    total += b.wareStock[ware] ?? 0;
+  }
+  return total;
+}
+
+/** Aggregate ware record (sum over warehouses) for a player. */
+export function warehouseTotals(world: World, player: number): Record<WareType, number> {
+  const out = zeroWares();
+  for (const b of storeLive(world.buildings)) {
+    if (b.player !== player || b.state !== 'working' || !isWarehouseBuilding(b)) continue;
+    for (const w of WARE_TYPES) out[w] += b.wareStock[w] ?? 0;
+  }
+  return out;
+}
+
+/**
+ * Per-player aggregate ware census (sum over each player's warehouses), built in
+ * one pass for callers that need every player's totals per tick (production's
+ * surplus gate, stats). Keyed by player index.
+ */
+export function warehouseWareCensus(world: World): Map<number, Record<WareType, number>> {
+  const census = new Map<number, Record<WareType, number>>();
+  for (const b of storeLive(world.buildings)) {
+    if (b.state !== 'working' || b.player < 0 || !isWarehouseBuilding(b)) continue;
+    let rec = census.get(b.player);
+    if (!rec) {
+      rec = zeroWares();
+      census.set(b.player, rec);
+    }
+    for (const w of WARE_TYPES) rec[w] += b.wareStock[w] ?? 0;
+  }
+  return census;
+}
+
+/**
+ * Draw up to `n` of a ware from a player's warehouses, debiting them in
+ * ascending building-id order (deterministic). Returns the amount actually
+ * drawn (may be < n when total stock is short).
+ */
+export function drawWareFromWarehouses(
+  world: World,
+  player: number,
+  ware: WareType,
+  n: number,
+): number {
+  let drawn = 0;
+  for (const b of storeLive(world.buildings)) {
+    if (drawn >= n) break;
+    if (b.player !== player || b.state !== 'working' || !isWarehouseBuilding(b)) continue;
+    const have = b.wareStock[ware] ?? 0;
+    const take = Math.min(have, n - drawn);
+    if (take > 0) {
+      b.wareStock[ware] = have - take;
+      drawn += take;
+    }
+  }
+  return drawn;
+}
+
+/**
+ * Credit `n` of a ware to a player's HQ warehouse (fallback: the lowest-id
+ * working warehouse when the HQ is gone). Used for refunds that must land
+ * somewhere a warehouse survives — e.g. a cancelled expedition kit.
+ */
+export function creditWareToHqStock(world: World, player: number, ware: WareType, n: number): void {
+  if (n <= 0) return;
+  const pl = world.players[player];
+  const hqId = pl?.hqBuildingId ?? -1;
+  const hq = hqId >= 0 ? world.buildings.items[hqId] : null;
+  if (hq && hq.state === 'working' && isWarehouseBuilding(hq)) {
+    hq.wareStock[ware] = (hq.wareStock[ware] ?? 0) + n;
+    return;
+  }
+  for (const b of storeLive(world.buildings)) {
+    if (b.player !== player || b.state !== 'working' || !isWarehouseBuilding(b)) continue;
+    b.wareStock[ware] = (b.wareStock[ware] ?? 0) + n;
+    return;
+  }
 }

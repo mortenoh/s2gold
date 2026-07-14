@@ -12,7 +12,15 @@ import { BUILDING, buildingDef, JOB, TICKS } from '../constants';
 import type { EventSink } from '../events';
 import type { Geometry } from '../geometry';
 import { findRoadWalkPath } from '../pathfinding';
-import { getBuilding, getFlag, storeFree, storeLive, type World } from '../world';
+import {
+  getBuilding,
+  getFlag,
+  isWarehouseBuilding,
+  storeFree,
+  storeLive,
+  zeroWares,
+  type World,
+} from '../world';
 import { beginWalk, spawnSettler, stepWalk, walkDone } from './movement';
 import { recalcTerritory } from './territory';
 import { ensureWorkerAvailable } from './recruit';
@@ -93,6 +101,9 @@ function completeBuilding(
   if (def) {
     b.inputStock = new Array<number>(def.inputs.length).fill(0);
   }
+  // A completed warehouse-class building (storehouse/harbor) opens its own
+  // ware inventory, initially empty — wares routed to it accumulate here.
+  if (isWarehouseBuilding(b)) b.wareStock = zeroWares();
   // Ensure a serving flag lookup stays valid.
   getFlag(world, b.flagId);
   // A completed harbor projects territory like an HQ-lite; claim it now
