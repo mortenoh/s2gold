@@ -54,20 +54,30 @@ the original; harvester trips out to a tree/field still free-walk. The
 mountain-meadow (0x12) build-quality fix also landed (it is buildable
 ground in every landscape, validated against the maps' own build layer).
 
-Open (terrain build-quality, both found while fixing 0x12; validated
-against the maps' own `build` layer):
+Landed (terrain build-quality follow-ups, both validated against the maps'
+own `build` layer across all 50 shipped maps, 940032 nodes):
 
-- Mountain _edges_ over-offer "Mines". `terrainMineable`
-  (`packages/engine/src/commands.ts`) checks only the node's own two
-  texture layers, so ~2.5% of nodes (real brown mountain-edge tiles) offer
-  a mine where the original's build layer marks them flag/nothing. The
-  original requires the surrounding triangles to be mountain, not just the
-  node's own textures. Renders brown, so it is a looseness rather than the
-  green-tile bug that was fixed; low visible impact.
-- Terrain `0x06` (shallow "buildable water") is castle-buildable in the
-  original (build layer: ~53% castle in greenland) but is in
-  `DEFAULT_IMPASSABLE` today, so we forbid building and walking on it.
-  Greenland-only, ~3400 nodes across the maps.
+- Mountain-edge over-offered "Mines" fixed. `terrainMineable`
+  (`packages/engine/src/commands.ts`) now requires all six triangles around
+  the node to be mountain (mirroring `terrainBuildable`) instead of only the
+  node's own two texture layers. Empirically this cut false mines from 23906
+  to 9057 (−62%) with zero false negatives — it never rejects a node the
+  build layer marks as mine. The ~9k residual is flag/nothing the build
+  layer derives from height/proximity that terrain ids cannot express. The
+  geologist survey (`systems/geologist.ts`) deliberately stays on the loose
+  any-triangle-mountain rule: mines draw ore from a radius, so ore under a
+  mountain-edge node is still mineable from a nearby interior node, and the
+  original marks ore across the whole mountain surface while a separate,
+  stricter check governs where a mine may sit.
+- Terrain `0x06` ("buildable water") reclassified as buildable, walkable
+  land. The original build layer marks it flag/house/castle (911 of 1862
+  own-layer nodes are castle-buildable, never mine) and it carries
+  subsurface well-water (never fish), so it is land that merely renders like
+  shallow water. It moved from `DEFAULT_IMPASSABLE` into `BUILDABLE_IDS` and
+  out of `NAVIGABLE_WATER_IDS` (ships must not sail it; it must not make
+  neighbours coastal). Greenland-only — the one shipped map that carries it
+  is maps3_omap00; winter/wasteland have zero 0x06 nodes, so the change is
+  inert there. The renderer's terrain tables are unchanged (visuals stay).
 
 ## C. Features (PLAN.md polish backlog, still open; audited 2026-07-12)
 

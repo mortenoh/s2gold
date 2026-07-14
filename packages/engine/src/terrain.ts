@@ -23,6 +23,12 @@
  * winter) is green, walkable, buildable ground in all three sets — the original
  * build-quality layer marks it flag/hut/castle (never mine), so it is grouped
  * with the meadow family, not the mountains.
+ *
+ * Greenland's 0x06 slot ("buildable water") is likewise buildable ground: it
+ * renders like shallow water but the original build layer marks it flag/house/
+ * castle (never mine) and it carries subsurface well-water (never fish), so it
+ * joins the meadow family and is kept out of the navigable-water set. It only
+ * occurs in greenland maps.
  */
 
 /** Low-6-bit mask isolating the terrain id from a texture byte (FACT). */
@@ -46,6 +52,12 @@ export const BUILDABLE_IDS: ReadonlySet<number> = new Set([
   0x0e, // steppe
   0x00, // savannah / taiga / dry steppe
   0x12, // mountain meadow / alpine pasture — green, walkable, buildable ground
+  0x06, // greenland "buildable water" — solid ground that renders like shallow
+  //      water. The original build layer marks it flag/house/castle (49% castle
+  //      across the shipped greenland maps, never mine), and it carries subsurface
+  //      well-water (never fish), so it is buildable land, not sailable water.
+  //      Greenland-only in the shipped maps; winter/wasteland carry no 0x06 node,
+  //      so this is inert there (validated against the maps' own build layer).
 ]);
 
 /** Mountain family — walkable and mineable, but only mines may be built. */
@@ -60,7 +72,8 @@ export const DEFAULT_IMPASSABLE: ReadonlySet<number> = new Set([
   0x02, // snow (winter) — impassable
   0x03, // swamp (greenland)
   0x05, // water
-  0x06, // shallow/buildable water — treated impassable for walking
+  // 0x06 (greenland "buildable water") is deliberately absent: it is walkable,
+  // buildable land, not a hazard (see BUILDABLE_IDS).
   0x10, // lava
   0x11, // lava (variant)
   0x13, // reef water
@@ -147,14 +160,15 @@ export function isMountainTexture(textureByte: number): boolean {
 // --- Water / seafaring classification (P7) --------------------------------
 
 /**
- * Navigable water terrain ids (greenland): open water (0x05) and shallow water
- * (0x06). Reef (0x13) and lava are impassable to ships and stay out of the set.
- * Ships path over nodes whose surrounding texture is navigable water; harbors
- * are land nodes adjacent to it.
+ * Navigable water terrain ids: open water (0x05) only. Reef (0x13) and lava are
+ * impassable to ships and stay out of the set. Greenland's 0x06 slot renders like
+ * shallow water but is buildable land in the original (see BUILDABLE_IDS), so it
+ * is deliberately excluded — ships must not sail it and it must not make adjacent
+ * land count as coast. Ships path over nodes whose surrounding texture is
+ * navigable water; harbors are land nodes adjacent to it.
  */
 export const NAVIGABLE_WATER_IDS: ReadonlySet<number> = new Set([
   0x05, // water
-  0x06, // shallow water
 ]);
 
 /**

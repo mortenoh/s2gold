@@ -180,7 +180,7 @@ export function pickBuildSite(
         break;
       case 'mine': {
         // Mines sit on the resource; require the subsurface nibble under the node.
-        if (!terrainMineable(world, node)) continue;
+        if (!terrainMineable(world, geom, node)) continue;
         if (resourceType(world.resource[node]) !== bias.resource) continue;
         if (resourceAmount(world.resource[node]) <= 0) continue;
         // canPlaceBuilding already rejected any node not owned by us (neutral and

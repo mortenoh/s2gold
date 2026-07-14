@@ -22,7 +22,19 @@ import { isMountainTexture, type TerrainRules } from '../terrain';
 import { storeFree, storeLive, type Settler, type World } from '../world';
 import { beginWalk, stepWalk, walkDone } from './movement';
 
-/** True when a node's terrain is mountain (where ore/signs live). */
+/**
+ * True when a node touches any mountain triangle (where ore/signs live).
+ *
+ * This deliberately stays loose (any triangle mountain), unlike mine PLACEMENT,
+ * which requires the full triangle fan to be mountain (see `terrainMineable`).
+ * The two answer different questions: the geologist reveals where mineable ore
+ * lies, and mines draw ore from a radius around themselves (see production.ts
+ * `nearestResource`), so ore under a mountain-EDGE node is still extractable by a
+ * mine built on a nearby interior node. Tightening this to the placement rule
+ * would hide real ore and mismatch the original, whose geologists mark ore across
+ * the whole mountain surface while a separate, stricter check governs where a mine
+ * building may actually sit.
+ */
 function isMountainNode(world: World, geom: Geometry, node: number): boolean {
   for (const tri of geom.trianglesAround(node)) {
     const tex = tri.layer === 1 ? world.terrain1[tri.node] : world.terrain2[tri.node];
