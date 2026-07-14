@@ -84,9 +84,8 @@ export const DEFAULT_IMPASSABLE: ReadonlySet<number> = new Set([
 
 /**
  * Impassable terrain ids (winter): the shared greenland hazards plus the frozen
- * slots. In winter the desert slots become ICE (0x04, 0x07) and the greenland
- * mountain-meadow slot becomes deep SNOW (0x12); all are unwalkable, matching the
- * ice floes (0x02, 0x03) already carried by the shared set.
+ * desert slots, which become ICE (0x04, 0x07) — unwalkable, matching the ice
+ * floes (0x02, 0x03) already carried by the shared set.
  */
 export const WINTER_IMPASSABLE: ReadonlySet<number> = new Set([
   ...DEFAULT_IMPASSABLE,
@@ -95,10 +94,9 @@ export const WINTER_IMPASSABLE: ReadonlySet<number> = new Set([
 ]);
 
 /**
- * Impassable terrain ids (wasteland): the shared greenland hazards plus the dark
- * MOOR that occupies the mountain-meadow slot (0x12). Wasteland lava rides the
- * shared flowing-lava ids (0x10, 0x11, 0x14-0x16); the desert slots (0x04, 0x07)
- * stay walkable sand, so they are deliberately absent here.
+ * Impassable terrain ids (wasteland): the shared greenland hazards only.
+ * Wasteland lava rides the shared flowing-lava ids (0x10, 0x11, 0x14-0x16); the
+ * desert slots (0x04, 0x07) stay walkable sand, so they are deliberately absent.
  */
 export const WASTELAND_IMPASSABLE: ReadonlySet<number> = new Set([...DEFAULT_IMPASSABLE]);
 
