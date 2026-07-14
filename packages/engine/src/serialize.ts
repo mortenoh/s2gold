@@ -77,6 +77,15 @@ const MIGRATIONS: Readonly<Record<number, (w: World) => void>> = {
       delete (player as { wares?: unknown }).wares;
     }
   },
+  // v3 -> v4: per-player nations. Nations are purely cosmetic (identical roster
+  // across all four peoples), so a v3 save — which predates the field — was, by
+  // definition, an all-Roman game. Default every player to 'romans'; nothing
+  // else changes and the hash of a re-serialized world stays stable.
+  3: (w) => {
+    for (const player of w.players ?? []) {
+      if (player) player.nation ??= 'romans';
+    }
+  },
 };
 
 /** Parse a serialized world, migrating older versions up to the current one. */

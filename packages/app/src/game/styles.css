@@ -90,6 +90,21 @@ body {
   max-width: 220px;
 }
 
+/* The local player's chosen people (cosmetic pill next to the map title). */
+.hud-top .nation-label {
+  flex-shrink: 0;
+  color: #d8c98a;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border: 1px solid #4a4a55;
+  border-radius: 4px;
+}
+.hud-top .nation-label:empty {
+  display: none;
+}
+
 .hud-top select,
 .hud-top button {
   background: #2a2a32;
@@ -1121,4 +1136,3 @@ body {
   border-radius: 4px;
   text-decoration: none;
 }
-

@@ -209,6 +209,8 @@ async function startChapter(btn: HTMLButtonElement, chapter: Chapter): Promise<v
   // Legacy fallback, used verbatim when the session API is unreachable so the
   // chapter still launches (the e2e suite asserts these /play URLs).
   const fallback = `/play/${chapter.mapName}?${params.toString()}`;
-  const id = await createSession({ map: chapter.mapName, ai, campaign: chapter.id });
+  // Campaign missions stay all-Roman (the Roman campaign is Roman), so nations
+  // is omitted (null) — no `?nations=` on the fallback URL either.
+  const id = await createSession({ map: chapter.mapName, ai, nations: null, campaign: chapter.id });
   window.location.assign(id ? `/game/${chapter.mapName}/${id}` : fallback);
 }

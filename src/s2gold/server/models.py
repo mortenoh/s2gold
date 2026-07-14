@@ -53,6 +53,10 @@ class SessionCreate(BaseModel):
 
     map: str
     ai: list[int] = []
+    # Per-slot nation codes ("rom"/"vik"/"nub"/"jap"), indexed by player slot.
+    # Optional: None (the default) means an all-Roman game, keeping backward
+    # compatibility with clients/sessions created before nations existed.
+    nations: list[str] | None = None
     campaign: int | None = None
 
 
@@ -62,6 +66,8 @@ class SessionMeta(BaseModel):
     id: str = Field(pattern=SAVE_ID_PATTERN)
     map: str
     ai: list[int]
+    # Slot-indexed nation codes; None on legacy sessions = all-Roman (see above).
+    nations: list[str] | None = None
     campaign: int | None
     tick: int = 0
     created_at: datetime

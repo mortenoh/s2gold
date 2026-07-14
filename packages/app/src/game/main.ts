@@ -19,7 +19,9 @@ import {
   type DynamicSprite,
   type LandscapeSet,
 } from '@s2gold/renderer';
+import type { Nation } from '@s2gold/engine';
 import { clear, el } from '../lib/dom';
+import { decodeNations, nationLabel } from '../lib/nations';
 import {
   loadMap,
   loadMapIndex,
@@ -131,6 +133,8 @@ interface S2Debug {
   players: number;
   /** Number of players driven by the computer opponent. */
   aiPlayers: number;
+  /** The chosen nation of a player slot (cosmetic; 'romans' by default). */
+  nationOf(player: number): string;
   /** Live building count for a player (HQ + sites + working). */
   buildingsOf(player: number): number;
   /** Toggle fog of war (default on for a new game). */
@@ -239,6 +243,13 @@ async function boot(): Promise<void> {
     attrs: { 'data-testid': 'zoom-toggle', type: 'button' },
   });
   const mapTitle = el('span', { class: 'map-title', attrs: { 'data-testid': 'map-title' } });
+  // Minimal in-game readout of the local player's chosen people (cosmetic).
+  // A follow-up phase maps nations to sprite archives; for now this is the only
+  // visible sign of a non-Roman choice.
+  const nationLabelEl = el('span', {
+    class: 'nation-label',
+    attrs: { 'data-testid': 'nation-label' },
+  });
   const fps = el('span', { class: 'fps', text: '-- fps', attrs: { 'data-testid': 'fps' } });
   const resources = el('span', { class: 'resources', attrs: { 'data-testid': 'resources' } });
   const tickLabel = el('span', { class: 'tick', attrs: { 'data-testid': 'tick-counter' } });
@@ -478,6 +489,7 @@ async function boot(): Promise<void> {
     { class: 'hud-top' },
     el('a', { class: 'hud-brand', href: '/', text: 's2gold' }),
     mapTitle,
+    nationLabelEl,
     pauseButton,
     speedSelect.element,
     menuButton,
@@ -614,7 +626,11 @@ async function boot(): Promise<void> {
     }
   }
 
-  async function switchMap(entry: MapIndexEntry, aiPlayers: readonly number[] = []): Promise<void> {
+  async function switchMap(
+    entry: MapIndexEntry,
+    aiPlayers: readonly number[] = [],
+    nations: readonly Nation[] = [],
+  ): Promise<void> {
     const gen = ++switchGen;
     delete document.body.dataset.mapReady;
     const map = await loadMap(entry);
@@ -650,8 +666,12 @@ async function boot(): Promise<void> {
     // enough players to cover the highest AI slot (human is always slot 0).
     const ai = aiPlayers.filter((n) => n > 0 && n < entry.players);
     const playerCount = ai.length > 0 ? Math.max(...ai) + 1 : undefined;
-    session = new GameSession(map.engineMap, GAME_SEED, playerCount, ai);
+    // Nations are slot-indexed (may be empty = all Roman); createWorld defaults
+    // any short/omitted slot to romans, so passing the parsed array as-is is safe.
+    session = new GameSession(map.engineMap, GAME_SEED, playerCount, ai, nations);
     session.fogEnabled = readFogPref();
+    // Show the local player's people (cosmetic label only for this phase).
+    nationLabelEl.textContent = nationLabel(session.localNation);
     overlayTick = -1; // new world: drop per-tick overlay caches
     // A fresh session runs at 1x unpaused: sync the HUD controls to it.
     setSpeed(1);
@@ -762,6 +782,7 @@ async function boot(): Promise<void> {
       suggestRoad: (a, b) => s.suggestRoad(a, b),
       players: s.playerCount,
       aiPlayers: s.aiPlayers.length,
+      nationOf: (player) => s.nationOf(player),
       buildingsOf: (player) => s.buildingsOf(player),
       setFog: (on) => {
         s.setFog(on);
@@ -1411,11 +1432,14 @@ async function boot(): Promise<void> {
     const ai = Array.isArray(remote.ai)
       ? remote.ai.filter((n) => Number.isInteger(n) && n > 0)
       : [];
+    // Session nations are stored as slot-indexed codes (null on legacy sessions
+    // = all Roman); decodeNations turns a code list back into a nation array.
+    const nations = decodeNations(Array.isArray(remote.nations) ? remote.nations.join(',') : null);
     setSpeed(1);
     try {
       // pickMap resolves the entry from remote.map (the /game pathname does not
       // match its /play route, so the second arg is used as the wanted name).
-      await switchMap(pickMap(mapIndex, remote.map), ai);
+      await switchMap(pickMap(mapIndex, remote.map), ai, nations);
     } catch (err) {
       console.error('initial map load failed', err);
       showMessage(
@@ -1461,9 +1485,11 @@ async function boot(): Promise<void> {
         .map((s) => Number.parseInt(s, 10))
         .filter((n) => Number.isInteger(n) && n > 0)
     : [];
+  // ?nations=rom,vik,... -> slot-indexed nations (absent = all Roman; old URLs stay valid).
+  const nations = decodeNations(params.get('nations'));
   setSpeed(1);
   try {
-    await switchMap(pickMap(index, query), aiPlayers);
+    await switchMap(pickMap(index, query), aiPlayers, nations);
   } catch (err) {
     console.error('initial map load failed', err);
     showMessage(

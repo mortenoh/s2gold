@@ -680,7 +680,6 @@ button.menu-entry:hover,
 .setup-slot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   font-size: 13px;
   color: var(--fg);
@@ -688,6 +687,8 @@ button.menu-entry:hover,
 
 .setup-slot-label {
   min-width: 70px;
+  /* Push the controls (People/None-Computer selectors) to the right as a group. */
+  margin-right: auto;
 }
 
 .setup-slot-fixed {
@@ -695,13 +696,19 @@ button.menu-entry:hover,
   font-weight: 600;
 }
 
-.setup-slot-select {
+.setup-slot-select,
+.setup-slot-nation {
   background: #14141a;
   color: #eee;
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 3px 7px;
   font-size: 12px;
+}
+
+/* A disabled nation picker (slot set to None) reads as inactive. */
+.setup-slot-nation:disabled {
+  opacity: 0.4;
 }
 
 .menu-note {

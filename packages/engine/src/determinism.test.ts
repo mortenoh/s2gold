@@ -101,7 +101,7 @@ describe('save migrations', () => {
     }
 
     const revived = deserializeWorld(JSON.stringify(raw));
-    expect(revived.version).toBe(3);
+    expect(revived.version).toBe(4);
     // Migrated fields exist and the world ticks without throwing (pre-fix a
     // v1 save crashed stats sampling on `for (const g of b.garrison)`).
     for (const b of revived.buildings.items) {
@@ -138,7 +138,7 @@ describe('save migrations', () => {
     }
 
     const revived = deserializeWorld(JSON.stringify(raw));
-    expect(revived.version).toBe(3);
+    expect(revived.version).toBe(4);
     // The whole v2 pool lands in the HQ's inventory; every other warehouse (none
     // here) would start empty. The aggregate equals the pre-migration pool.
     expect((revived.players[0] as { wares?: unknown }).wares).toBeUndefined();

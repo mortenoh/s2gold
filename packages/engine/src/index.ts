@@ -46,8 +46,10 @@ export function version(): string {
 // --- Re-exports (public API + supporting types) ---------------------------
 export {
   createWorld,
+  DEFAULT_NATION,
   isWarehouseBuilding,
   makeBuilding,
+  NATIONS,
   storeAlloc,
   warehouseTotals,
   warehouseWareTotal,
@@ -64,6 +66,7 @@ export type {
   Ship,
   ShipState,
   Expedition,
+  Nation,
   Player,
   MapJson,
   CreateWorldOptions,

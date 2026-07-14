@@ -115,9 +115,29 @@ own `build` layer across all 50 shipped maps, 940032 nodes):
   lacks them).
 - Original combat/sea sound-id verification — landed 2026-07-14 (see the
   paragraph below).
+- Multi-nation support — phase 1 (core + setup) landed 2026-07-14 (see the
+  paragraph below). The rendering follow-up (nation -> sprite archive) is
+  still pending; every nation draws with the Roman rom_z archive today.
 - Per-nation border stones and the Gold extra chains (vineyard/charburner)
-  are blocked: all players are Roman today and the extra-chain sprites do
-  not exist in the original assets - revisit with multi-nation support.
+  are blocked on the rendering follow-up: the field now records a player's
+  nation, but nothing maps it to graphics yet, and the extra-chain sprites do
+  not exist in the original assets - revisit alongside per-nation rendering.
+
+Landed 2026-07-14 (multi-nation core + setup, phase 1 of 2): the four S2
+peoples (romans/vikings/nubians/japanese) are now a first-class engine +
+setup concept. `Player.nation` rides on every player (COSMETIC — identical
+roster/economy across nations, so no simulation system branches on it);
+`createWorld` takes an optional slot-indexed `nations` array defaulting every
+player to Roman (deterministic — variety is a setup-UI choice, not an engine
+default). Serialization bumped to WORLD_VERSION 4 with a v3->v4 migration that
+defaults a pre-nations save to all-Roman. The free-play setup screen grows a
+per-slot people picker (human defaults Roman; AI slots default to a varied,
+reproducible vikings/nubians/japanese cycle), plumbed through a compact
+`?nations=rom,vik,...` URL query and the sessions API (`nations` field, null =
+all-Roman, backward-compatible with stored sessions); campaign missions stay
+all-Roman. A small HUD label shows the local player's people. DEFERRED to
+phase 2: mapping each nation to its building/flag/settler sprite archive
+(vik_z/afr_z/jap_z), per-nation border stones, and the winter W* variants.
 
 Landed 2026-07-14 (combat/sea sound-id verification): the eight previously
 guessed SOUND.LST ids in `packages/app/src/game/audio-map.ts` were checked

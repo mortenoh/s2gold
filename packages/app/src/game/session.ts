@@ -50,6 +50,7 @@ import {
   type Geometry,
   type MapJson,
   type MilitaryView,
+  type Nation,
   type Ship,
   type TerrainRules,
   type World,
@@ -205,8 +206,14 @@ export class GameSession {
   /** Sound cues emitted since the last drain (bounded to avoid unbounded growth). */
   private readonly soundCues: SoundCue[] = [];
 
-  constructor(map: MapJson, seed: number, players?: number, aiPlayers?: readonly number[]) {
-    this.world = createWorld(map, { seed, players });
+  constructor(
+    map: MapJson,
+    seed: number,
+    players?: number,
+    aiPlayers?: readonly number[],
+    nations?: readonly Nation[],
+  ) {
+    this.world = createWorld(map, { seed, players, nations });
     this.rules = rulesForLandscape(map.terrain ?? 0);
     this.geom = worldGeometry(this.world);
     this.visibility = new Uint8Array(this.world.width * this.world.height);
@@ -227,6 +234,16 @@ export class GameSession {
   /** Number of players seeded in this world. */
   get playerCount(): number {
     return this.world.players.length;
+  }
+
+  /** The {@link Nation} of a player slot (romans when the slot is absent). */
+  nationOf(player: number): Nation {
+    return this.world.players[player]?.nation ?? 'romans';
+  }
+
+  /** The local (human) player's nation. Cosmetic; drives the HUD label only. */
+  get localNation(): Nation {
+    return this.nationOf(this.localPlayer);
   }
 
   /** Player-0 build-material counts, summed across all warehouses (HUD readout). */
