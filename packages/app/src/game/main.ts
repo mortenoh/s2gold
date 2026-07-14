@@ -31,6 +31,7 @@ import {
 } from './map-loader';
 import { buildStaticObjects, objectAtlasForLandscape } from './map-objects';
 import { loadAtlas } from './sprite-atlas';
+import { makeWareIconSet, type WareIconSet } from './ware-icons';
 import { loadBobAtlas } from './bob-atlas';
 import { MinimapView } from './minimap-view';
 import { installHandCursor } from './cursor';
@@ -261,6 +262,48 @@ async function boot(): Promise<void> {
   });
   const fps = el('span', { class: 'fps', text: '-- fps', attrs: { 'data-testid': 'fps' } });
   const resources = el('span', { class: 'resources', attrs: { 'data-testid': 'resources' } });
+  // Live count cells when the ware pictographs are available (null = text mode).
+  let resourceCells: { trunk: HTMLElement; plank: HTMLElement; stone: HTMLElement } | null = null;
+  /**
+   * Rebuild the HUD resource readout as pictograph+count cells from a ware
+   * icon set, or fall back to the plain text readout (icons null / a sprite
+   * missing). Called on every map switch since the icons live in the current
+   * landscape's object atlas.
+   */
+  function buildResourceCells(icons: WareIconSet | null): void {
+    clear(resources);
+    resourceCells = null;
+    if (!icons) return;
+    const cells = {} as { trunk: HTMLElement; plank: HTMLElement; stone: HTMLElement };
+    for (const [ware, label] of [
+      ['trunk', 'Wood'],
+      ['plank', 'Boards'],
+      ['stone', 'Stone'],
+    ] as const) {
+      const icon = el('span', { class: 'resource-icon' });
+      if (!icons.apply(icon, ware)) {
+        clear(resources);
+        resourceCells = null;
+        return; // one missing sprite: keep the readable text readout
+      }
+      const count = el('span', {
+        class: 'resource-count',
+        attrs: { 'data-testid': `resource-${ware}` },
+      });
+      cells[ware] = count;
+      resources.append(
+        el(
+          'span',
+          { class: 'resource-cell', attrs: { title: label } },
+          // Fixed-size box centring the native-size sprite, so the three cells
+          // share one vertical axis regardless of each pictograph's height.
+          el('span', { class: 'resource-icon-box' }, icon),
+          count,
+        ),
+      );
+    }
+    resourceCells = cells;
+  }
   const tickLabel = el('span', { class: 'tick', attrs: { 'data-testid': 'tick-counter' } });
   const pauseButton = el('button', {
     text: 'Pause',
@@ -588,6 +631,9 @@ async function boot(): Promise<void> {
   // the GL renderer; the menu needs the raw LoadedAtlas). Seeded with the Roman
   // summer archive loaded at boot.
   const nationAtlasCache = new Map<string, LoadedAtlas>();
+  // Decoded landscape object atlases (map00/01/02), kept for the HUD ware
+  // pictographs (the GL renderer keeps its own registered copy).
+  const objectAtlasCache = new Map<string, LoadedAtlas>();
   // Per-player building/flag/border-stone archive resolver for the active map.
   // Each player's structures render from their own nation's archive; a nation
   // whose atlas failed to load falls back to the season-appropriate Roman archive
@@ -668,12 +714,22 @@ async function boot(): Promise<void> {
 
     landscape = map.terrain;
     const archive = objectAtlasForLandscape(map.terrain);
-    if (!sprites.hasAtlas(archive)) {
-      const loaded = await loadAtlas(archive);
+    let objAtlas = objectAtlasCache.get(archive) ?? null;
+    if (!objAtlas) {
+      objAtlas = await loadAtlas(archive);
       if (gen !== switchGen) return;
-      if (loaded) sprites.registerAtlas(loaded.meta, loaded.pages, loaded.pmaskPages);
+      if (objAtlas) {
+        objectAtlasCache.set(archive, objAtlas);
+        if (!sprites.hasAtlas(archive)) {
+          sprites.registerAtlas(objAtlas.meta, objAtlas.pages, objAtlas.pmaskPages);
+        }
+      }
     }
     objAtlasReady = sprites.hasAtlas(archive);
+    // The object archive also carries the original's small ware pictographs
+    // (2200 + GoodType id); dress the HUD resource readout with them. Falls
+    // back to the text readout when the atlas (or a sprite) is missing.
+    buildResourceCells(makeWareIconSet(objAtlas));
 
     // Computer opponents: keep only slot indices this map can seat, then seed
     // enough players to cover the highest AI slot (human is always slot 0).
@@ -1393,11 +1449,19 @@ async function boot(): Promise<void> {
   function updateHud(quads: number, drawCalls: number): void {
     if (!session) return;
     const inv = session.inventory;
-    // Fixed-width cells (white-space: pre in CSS) keep the bar from reflowing
-    // as counts grow.
-    // Build materials only (full inventory is the Goods panel). Names follow the
-    // original S2 UI: Wood (raw log), Boards (sawn), Stone.
-    resources.textContent = `Wood${pad4(inv.trunk)} Boards${pad4(inv.plank)} Stone${pad4(inv.stone)}`;
+    // Build materials only (full inventory is the Goods panel). With the ware
+    // pictographs available the readout is icon+count cells; otherwise the
+    // fixed-width text (white-space: pre) keeps the bar from reflowing. Names
+    // follow the original S2 UI: Wood (raw log), Boards (sawn), Stone.
+    if (resourceCells) {
+      // No space-padding here: the cells right-align into a fixed min-width via
+      // CSS, so the bar never reflows and the digits sit tight to their icon.
+      resourceCells.trunk.textContent = String(Math.min(inv.trunk, 9999));
+      resourceCells.plank.textContent = String(Math.min(inv.plank, 9999));
+      resourceCells.stone.textContent = String(Math.min(inv.stone, 9999));
+    } else {
+      resources.textContent = `Wood${pad4(inv.trunk)} Boards${pad4(inv.plank)} Stone${pad4(inv.stone)}`;
+    }
     if (showTick) tickLabel.textContent = `tick ${String(session.world.tick).padStart(7, ' ')}`;
     const dbg = window.__s2debug;
     if (dbg) {

@@ -90,13 +90,13 @@ body {
   max-width: 220px;
 }
 
-/* The local player's chosen people (cosmetic pill next to the map title). */
+/* The local player's chosen people (cosmetic pill next to the map title).
+   Matches the bar's standard 12px type — no uppercase/tracking so the bar
+   keeps one type style across its labels. */
 .hud-top .nation-label {
   flex-shrink: 0;
   color: #d8c98a;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 12px;
   padding: 2px 6px;
   border: 1px solid #4a4a55;
   border-radius: 4px;
@@ -269,6 +269,47 @@ body {
   font-weight: 600;
   /* Counts are padded into fixed-width cells; preserve the pad spaces. */
   white-space: pre;
+}
+
+/* Icon+count readout cells (used when the ware pictographs are available;
+   the text readout above is the fallback). The readout keeps the bar's
+   standard type (12px, gold, tabular digits) — only the labels became icons. */
+.hud-top .resources:has(.resource-cell) {
+  display: inline-flex;
+  align-items: center;
+  white-space: normal;
+}
+
+.resource-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.resource-cell + .resource-cell {
+  margin-left: 8px;
+}
+
+/* Fixed box centring the native-size sprite (the three pictographs are
+   12-17px tall), so icons and digits share one vertical axis. */
+.resource-icon-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.resource-icon {
+  display: inline-block;
+}
+
+/* Right-aligned fixed-width digits: no reflow as counts grow, no pad spaces. */
+.resource-count {
+  display: inline-block;
+  min-width: 4ch;
+  text-align: right;
 }
 
 /* Floating Settings panel: seldom-used controls anchored under the Settings
