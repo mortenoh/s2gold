@@ -24,18 +24,46 @@
  * are approximated by their one-shot production events (we only receive discrete
  * per-tick events, not the original's animation-frame sound triggers).
  *
- * Military cues (P4): the fetched RttR sources do not expose the exact SOUND.LST
- * indices `noFighting.cpp` / `nofCatapultMan.cpp` play, so the four military
- * clips below are DOCUMENTED CHOICES (same status as builder-hammer): each is a
- * plausible clip picked from the installed SOUND.LST set for its event, not a
- * researched constant. They keep the audio layer voiced for combat without
- * copying any code.
+ * Military cues (P4): melee combat IS a positioned world sound in the original.
+ * `nodeObjs/noFighting.cpp` plays a four-clip duel loop via
+ * `playNOSound(<index>, ...)` — 103 attack swing, 101 block/clash, 105 hit, 104
+ * death cry (numeric constants only; no code copied). Two of our military cues
+ * are now researched FACTS from those call sites:
  *
- * Seafaring cues (P7): likewise DOCUMENTED CHOICES. The fetched RttR ship sources
- * (`noShip.cpp`) do not expose a SOUND.LST index we could treat as a fact, so the
- * four sea events (ship built, expedition ready, expedition landed, ship arrived)
- * are voiced with plausible clips from the installed SOUND.LST set, chosen to be
- * distinct from the economy/military cues. No code was copied.
+ *   103  fight attack swing  noFighting.cpp playNOSound(103,...)  (FightStarted)
+ *   104  soldier death cry   noFighting.cpp playNOSound(104,...)  (SoldierDied)
+ *
+ * We emit one FightStarted per duel, so we collapse the loop to its leading
+ * attack swing (103) — the same one-shot-per-event simplification used for the
+ * continuous worker actions. The clips characterise as expected: 103 is a short
+ * bright swing/impact (0.17s), 104 is a longer low, noisy death groan (0.63s).
+ *
+ * The other two military cues have NO positioned world sound in the original:
+ * `nofCatapultMan.cpp` plays nothing (the catapult building only draws the arm
+ * on the roof, `buildings/nobUsual.cpp`), and building capture (`nofAttacker`)
+ * plays nothing — the original signals those via UI / postbox messages, not
+ * world SFX. We keep them voiced as DOCUMENTED CHOICES so combat feedback stays
+ * audible, each an installed SOUND.LST clip chosen to fit the event:
+ *
+ *   74  catapultFire      low ~150Hz release/boom (0.85s) — reads as a throw
+ *   87  buildingCaptured  short bright noise burst (0.16s) — a "taken" sting
+ *
+ * Seafaring cues (P7): also NO positioned world sound in the original.
+ * `nodeObjs/noShip.cpp` plays no `playNOSound`; ship/expedition events surface
+ * through UI / postbox messages, not world SFX. All four sea cues therefore
+ * remain DOCUMENTED CHOICES, voiced with distinct installed clips so the events
+ * are still audible on the map:
+ *
+ *   84  shipBuilt        mid, noisy (0.69s)     — construction-flavoured
+ *   66  expeditionReady  short high blip (0.08s) — a ready ping
+ *   90  expeditionLanded bright noise (0.28s)    — splash-flavoured
+ *   67  shipArrived      long low ~256Hz (1.06s) — horn/wash-flavoured
+ *
+ * Verified against Return-to-the-Roots `master` via the GitHub code-search API:
+ * `playNOSound` appears only in the worker `figures/nof*.cpp`, `noFighting.cpp`
+ * and `noFire.cpp` — never in the catapult, ship or attacker sources. The index
+ * space was sanity-checked against the known-good worker anchors (nofWoodcutter
+ * 53/85, nofStonemason 56) before trusting the combat numbers.
  */
 
 import type { GameEvent, World } from '@s2gold/engine';
@@ -49,12 +77,14 @@ export const SOUND = {
   foresterPlant: 57,
   foresterDig: 76,
   builderHammer: 78,
-  // Military (documented choices; see module header).
-  fightClash: 64,
-  soldierDied: 92,
+  // Military: fightClash/soldierDied are researched facts (noFighting.cpp);
+  // buildingCaptured/catapultFire are documented choices (no world SFX in the
+  // original). See module header.
+  fightClash: 103,
+  soldierDied: 104,
   buildingCaptured: 87,
   catapultFire: 74,
-  // Seafaring (documented choices; see module header).
+  // Seafaring (documented choices; no world SFX in the original — see header).
   shipBuilt: 84,
   expeditionReady: 66,
   expeditionLanded: 90,
