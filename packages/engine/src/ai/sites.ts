@@ -45,8 +45,30 @@ export function hqNodeOf(world: World, player: number): number {
 }
 
 /** Door-flag node of a building node (SE neighbour), matching the engine rule. */
-function doorFlagNode(geom: Geometry, node: number): number {
+export function doorFlagNode(geom: Geometry, node: number): number {
   return geom.neighbour(node, 'SE');
+}
+
+/**
+ * Road-connectivity budget for a candidate building `node`: the lattice distance
+ * from its door flag to the nearest existing flag of `player`, or -1 when that
+ * distance exceeds `maxRoadLength` or no walkable route to the nearest flag
+ * exists. Shared by every AI site picker (economy, frontier, and harbor) so the
+ * AI never commits to a road it cannot lay. Lower is nearer to the network.
+ */
+export function siteRoadDistance(
+  world: World,
+  geom: Geometry,
+  rules: TerrainRules,
+  player: number,
+  node: number,
+  maxRoadLength: number,
+): number {
+  const flagNode = doorFlagNode(geom, node);
+  const roadDist = nearestPlayerFlagDistance(world, geom, player, flagNode);
+  if (roadDist > maxRoadLength) return -1;
+  if (!nearestFlagWalkable(world, geom, rules, player, flagNode)) return -1;
+  return roadDist;
 }
 
 /** Distance from `node` to the nearest existing flag owned by `player` (Infinity if none). */
@@ -195,10 +217,8 @@ export function pickBuildSite(
 
     // Connectivity budget: the door flag must be within road reach of the network
     // and there must be a walkable route from it to the nearest existing flag.
-    const flagNode = doorFlagNode(geom, node);
-    const roadDist = nearestPlayerFlagDistance(world, geom, player, flagNode);
-    if (roadDist > maxRoadLength) continue;
-    if (!nearestFlagWalkable(world, geom, rules, player, flagNode)) continue;
+    const roadDist = siteRoadDistance(world, geom, rules, player, node, maxRoadLength);
+    if (roadDist < 0) continue;
 
     // Spacing bonus: prefer sites a little away from our own flags (tie-break).
     const spacing = roadDist;

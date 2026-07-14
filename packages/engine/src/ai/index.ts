@@ -33,6 +33,7 @@ import { storeLive, type World } from '../world';
 import { planCoins, pickAttackTarget } from './military';
 import { planNextBuilding } from './planner';
 import { countUnconnected, planRoads } from './roads';
+import { planSeafaring } from './seafaring';
 import { enemyReferenceNode } from './sites';
 import type { AiOptions, AiState } from './types';
 
@@ -42,6 +43,7 @@ export type { SiteBias } from './sites';
 export { pickAttackTarget, planCoins } from './military';
 export { planNextBuilding, militaryCount } from './planner';
 export { planRoads, flagsConnectedToHq, unconnectedBuildings, countUnconnected } from './roads';
+export { planSeafaring } from './seafaring';
 
 /** Default base cadence (ticks) between AI decision cycles. */
 const DEFAULT_INTERVAL = 12;
@@ -110,7 +112,17 @@ export function stepAi(
   const sites = mySiteCount(world, player.index);
   if (sites < MAX_CONCURRENT_SITES && countUnconnected(world, player.index) <= 1) {
     const build = planNextBuilding(world, geom, rules, state);
-    if (build) commands.push(build);
+    if (build) {
+      commands.push(build);
+    } else {
+      // Land expansion is exhausted this cycle (no military/economy site is
+      // road-connectable within budget): try to grow over water instead. Gated
+      // by the same construction throttle so a founded harbor/shipyard counts as
+      // this cycle's one placement, and only when the land planner yields — so
+      // seafaring is a strict fallback, never competing with land growth.
+      const sea = planSeafaring(world, geom, rules, state);
+      if (sea) commands.push(sea);
+    }
   }
 
   // 3. Military: frontline coin doctrine, then attack the weakest reachable enemy.
