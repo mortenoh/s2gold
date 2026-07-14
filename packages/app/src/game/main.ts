@@ -31,7 +31,7 @@ import {
 } from './map-loader';
 import { buildStaticObjects, objectAtlasForLandscape } from './map-objects';
 import { loadAtlas } from './sprite-atlas';
-import { makeWareIconSet, type WareIconSet } from './ware-icons';
+import { makeWareIconSet } from './ware-icons';
 import { loadBobAtlas } from './bob-atlas';
 import { MinimapView } from './minimap-view';
 import { installHandCursor } from './cursor';
@@ -58,6 +58,20 @@ import {
 import { Interaction } from './interaction';
 import { makeBuildIconSet, type BuildIconSet } from './build-icons';
 import type { LoadedAtlas } from './sprite-atlas';
+import { installCameraInput } from './camera-input';
+import { installDebugSurface, updateDebugCounters } from './debug-surface';
+import { ResourceReadout } from './resource-readout';
+import { startSessionPersistence } from './session-persistence';
+import { makeToast } from './toasts';
+import {
+  FPS_LS_KEY,
+  readFogPref,
+  readVisPref,
+  TICK_LS_KEY,
+  writeFogPref,
+  writeVisPref,
+} from './view-prefs';
+import { buildAudioControls } from './audio-controls';
 import { makeHudIconSet, iconifyHudButton, HUD_ICON, IO_ARCHIVE } from './hud-icons';
 import { MilitaryPanel } from './military-ui';
 import { HarborPanel } from './harbor-ui';
@@ -70,9 +84,6 @@ import { AudioEngine, positional } from './audio';
 import { CampaignController } from './campaign-ui';
 import { chapterById, type Chapter } from '../menu/campaign-data';
 import { getSession } from '../lib/sessions';
-
-/** World-px pan speed per second when holding an arrow key. */
-const KEY_PAN_SPEED = 600;
 
 /**
  * Milliseconds per flag/tree wave-animation frame. The original advances the
@@ -101,115 +112,9 @@ const SIGN_LEGEND: readonly (readonly [string, string])[] = [
 /** BOB archive keys registered once for the settler layers. */
 const JOBS_ARCHIVE = 'jobs';
 
-/** Debug counters + helpers exposed on window for e2e assertions. */
-interface S2Debug {
-  // P1 fields (kept for the P1 gate).
-  staticObjects: number;
-  trees: number;
-  granite: number;
-  spriteQuads: number;
-  spriteDrawCalls: number;
-  // P2 fields.
-  tick: number;
-  counters: Record<string, number>;
-  settlers: number;
-  flags: number;
-  buildings: number;
-  roads: number;
-  /** Live ship count (all players). */
-  ships: number;
-  /** Live working-harbor count for the local player. */
-  harbors: number;
-  /** Audio engine counters for e2e (context state + sfx buffer/voice tallies). */
-  audio: {
-    contextState: string;
-    sfxRequested: number;
-    buffersLoaded: number;
-    sfxPlayed: number;
-    voices: number;
-    muted: boolean;
-    musicPlaying: boolean;
-  };
-  /** HQ building node id for player 0 (-1 when none). */
-  hqNode: number;
-  /** Number of players seeded in the current world. */
-  players: number;
-  /** Number of players driven by the computer opponent. */
-  aiPlayers: number;
-  /** The chosen nation of a player slot (cosmetic; 'romans' by default). */
-  nationOf(player: number): string;
-  /**
-   * The building/flag/border-stone sprite archive a player's structures actually
-   * render from (e.g. 'vik_z' for a Viking on a summer map, 'wrom_z' for a Roman
-   * on winter). Reflects the missing-atlas fallback, so tests can assert a
-   * non-Roman player really draws from its own people's archive.
-   */
-  nationArchiveOf(player: number): string;
-  /** Live building count for a player (HQ + sites + working). */
-  buildingsOf(player: number): number;
-  /** Toggle fog of war (default on for a new game). */
-  setFog(on: boolean): void;
-  /** Total garrisoned soldiers at a military building node (-1 when not military). */
-  militaryTroops(node: number): number;
-  /** Cheat: place a fully-built, unoccupied military building for a player. */
-  debugSpawnMilitary(player: number, node: number, type: string): number;
-  /** Node id nearest a map (x, y) lattice coordinate. */
-  nodeOf(x: number, y: number): number;
-  /** The flag node (SE of a door node) that a building here would use. */
-  flagNodeOf(node: number): number;
-  /** True when player 0 may place a building of `type` on `node`. */
-  canBuild(node: number, type: string): boolean;
-  /** True when player 0 may place a flag on `node`. */
-  canFlag(node: number): boolean;
-  /** Client-space (CSS px) position of a node's ground anchor. */
-  nodeToScreen(node: number): { x: number; y: number };
-  /** Node path between two flag nodes over walkable ground, or null. */
-  suggestRoad(startNode: number, endNode: number): number[] | null;
-  /** Current road-build preview state (null when not in road mode). */
-  roadPreview(): { node: number; valid: boolean; hasPath: boolean } | null;
-  // Seafaring (P7).
-  /** Queue a prepareExpedition command at one of the local player's harbors. */
-  prepareExpedition(harborId: number): void;
-  /** Cheat: found a fully-working harbor for a player at a coastal node (-1 fail). */
-  debugSpawnHarbor(player: number, node: number): number;
-  /** Whether a node is a valid coastal harbor site, ignoring territory ownership. */
-  debugCanPlaceHarbor(node: number): boolean;
-  /** Cheat: dock an idle ship of a player at a harbor (-1 fail). */
-  debugSpawnShip(player: number, harborId: number): number;
-  /** Cheat: grant a player an expedition kit worth of boards/stones + a builder. */
-  debugGrantExpeditionSupplies(player: number): void;
-  /** Whether the docks of two coastal nodes are joined by an all-water route. */
-  debugWaterConnected(nodeA: number, nodeB: number): boolean;
-  /** The local player's working-harbor building id at a node, or -1. */
-  harborIdAt(node: number): number;
-  /** True when a ready expedition is prepared at a harbor. */
-  expeditionReady(harborId: number): boolean;
-  /** Center the camera on a lattice node (test helper for off-screen picking). */
-  centerNode(node: number): void;
-}
-
-declare global {
-  interface Window {
-    __s2debug?: S2Debug;
-  }
-}
-
 function showMessage(root: HTMLElement, testid: string, html: string): void {
   clear(root);
   root.append(el('div', { class: 'game-message', html, attrs: { 'data-testid': testid } }));
-}
-
-/**
- * True when a key event targets an editable field (text/number inputs, textarea,
- * select, or a contenteditable). Global game shortcuts (pan/zoom/pause) must skip
- * these so typing in the save-name and attack-count inputs is not swallowed.
- * Duck-typed on `tagName`/`isContentEditable` so it also holds up outside a DOM.
- */
-export function isEditableTarget(target: EventTarget | null): boolean {
-  const el = target as { tagName?: string; isContentEditable?: boolean } | null;
-  if (!el || typeof el.tagName !== 'string') return false;
-  const tag = el.tagName.toUpperCase();
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable === true;
 }
 
 async function boot(): Promise<void> {
@@ -261,49 +166,9 @@ async function boot(): Promise<void> {
     attrs: { 'data-testid': 'nation-label' },
   });
   const fps = el('span', { class: 'fps', text: '-- fps', attrs: { 'data-testid': 'fps' } });
-  const resources = el('span', { class: 'resources', attrs: { 'data-testid': 'resources' } });
-  // Live count cells when the ware pictographs are available (null = text mode).
-  let resourceCells: { trunk: HTMLElement; plank: HTMLElement; stone: HTMLElement } | null = null;
-  /**
-   * Rebuild the HUD resource readout as pictograph+count cells from a ware
-   * icon set, or fall back to the plain text readout (icons null / a sprite
-   * missing). Called on every map switch since the icons live in the current
-   * landscape's object atlas.
-   */
-  function buildResourceCells(icons: WareIconSet | null): void {
-    clear(resources);
-    resourceCells = null;
-    if (!icons) return;
-    const cells = {} as { trunk: HTMLElement; plank: HTMLElement; stone: HTMLElement };
-    for (const [ware, label] of [
-      ['trunk', 'Wood'],
-      ['plank', 'Boards'],
-      ['stone', 'Stone'],
-    ] as const) {
-      const icon = el('span', { class: 'resource-icon' });
-      if (!icons.apply(icon, ware)) {
-        clear(resources);
-        resourceCells = null;
-        return; // one missing sprite: keep the readable text readout
-      }
-      const count = el('span', {
-        class: 'resource-count',
-        attrs: { 'data-testid': `resource-${ware}` },
-      });
-      cells[ware] = count;
-      resources.append(
-        el(
-          'span',
-          { class: 'resource-cell', attrs: { title: label } },
-          // Fixed-size box centring the native-size sprite, so the three cells
-          // share one vertical axis regardless of each pictograph's height.
-          el('span', { class: 'resource-icon-box' }, icon),
-          count,
-        ),
-      );
-    }
-    resourceCells = cells;
-  }
+  // HUD build-material readout (Wood/Boards/Stone); rebuilt per map switch from
+  // the landscape's ware pictographs, falling back to fixed-width text.
+  const resources = new ResourceReadout();
   const tickLabel = el('span', { class: 'tick', attrs: { 'data-testid': 'tick-counter' } });
   const pauseButton = el('button', {
     text: 'Pause',
@@ -317,23 +182,6 @@ async function boot(): Promise<void> {
     text: 'Fog: on',
     attrs: { 'data-testid': 'fog-toggle', type: 'button', title: 'Toggle fog of war' },
   });
-  // The fog toggle is a view preference, persisted like the audio prefs so it
-  // survives a reload or loading a save (the save file holds only game state).
-  const FOG_LS_KEY = 's2gold.view.fog';
-  const readFogPref = (): boolean => {
-    try {
-      return localStorage.getItem(FOG_LS_KEY) !== '0';
-    } catch {
-      return true;
-    }
-  };
-  const writeFogPref = (on: boolean): void => {
-    try {
-      localStorage.setItem(FOG_LS_KEY, on ? '1' : '0');
-    } catch {
-      /* storage may be unavailable (private mode) — ignore. */
-    }
-  };
   const statsButton = el('button', {
     text: 'Stats',
     attrs: { 'data-testid': 'stats-toggle', type: 'button', title: 'In-game statistics' },
@@ -365,70 +213,8 @@ async function boot(): Promise<void> {
   audio.music.element.hidden = true;
   root.append(audio.music.element);
 
-  // --- Audio HUD controls (mute + SFX volume + music on/off + music volume) --
-  const muteButton = el('button', {
-    text: audio.isMuted ? 'Unmute' : 'Mute',
-    attrs: { 'data-testid': 'sfx-mute', type: 'button' },
-  });
-  const sfxVolume = el('input', {
-    class: 'vol',
-    attrs: {
-      'data-testid': 'sfx-volume',
-      type: 'range',
-      min: '0',
-      max: '100',
-      value: String(Math.round(audio.volume * 100)),
-      title: 'SFX volume',
-    },
-  });
-  const musicButton = el('button', {
-    text: audio.music.isEnabled ? 'Music: on' : 'Music: off',
-    attrs: { 'data-testid': 'music-toggle', type: 'button' },
-  });
-  const musicVolume = el('input', {
-    class: 'vol',
-    attrs: {
-      'data-testid': 'music-volume',
-      type: 'range',
-      min: '0',
-      max: '100',
-      value: String(Math.round(audio.music.volume * 100)),
-      title: 'Music volume',
-    },
-  });
-  const audioControls = el(
-    'span',
-    { class: 'audio-controls' },
-    el(
-      'span',
-      { class: 'audio-group' },
-      el('span', { class: 'audio-label', text: 'SFX' }),
-      muteButton,
-      sfxVolume,
-    ),
-    el(
-      'span',
-      { class: 'audio-group' },
-      el('span', { class: 'audio-label', text: 'Music' }),
-      musicButton,
-      musicVolume,
-    ),
-  );
-
-  muteButton.addEventListener('click', () => {
-    audio.setMuted(!audio.isMuted);
-    muteButton.textContent = audio.isMuted ? 'Unmute' : 'Mute';
-  });
-  sfxVolume.addEventListener('input', () => {
-    audio.setVolume(Number(sfxVolume.value) / 100);
-  });
-  musicButton.addEventListener('click', () => {
-    audio.music.setEnabled(!audio.music.isEnabled);
-    musicButton.textContent = audio.music.isEnabled ? 'Music: on' : 'Music: off';
-  });
-  musicVolume.addEventListener('input', () => {
-    audio.music.setVolume(Number(musicVolume.value) / 100);
-  });
+  // Audio HUD controls (mute + SFX volume + music on/off + music volume).
+  const audioControls = buildAudioControls(audio);
 
   // Autoplay policy: the AudioContext and music can only start after a gesture.
   // unlock() is idempotent, so leaving these attached costs nothing.
@@ -445,24 +231,7 @@ async function boot(): Promise<void> {
 
   // --- Debug-readout visibility (tick counter + FPS) ------------------------
   // Both live in the Settings panel as fog-style toggles and default off; the
-  // choice is persisted like the fog pref so it survives a reload. Read
-  // defensively — storage may be unavailable (private mode).
-  const TICK_LS_KEY = 's2gold.view.tick';
-  const FPS_LS_KEY = 's2gold.view.fps';
-  const readVisPref = (key: string): boolean => {
-    try {
-      return localStorage.getItem(key) === '1';
-    } catch {
-      return false;
-    }
-  };
-  const writeVisPref = (key: string, on: boolean): void => {
-    try {
-      localStorage.setItem(key, on ? '1' : '0');
-    } catch {
-      /* storage may be unavailable (private mode) — ignore. */
-    }
-  };
+  // choice is persisted like the fog pref so it survives a reload.
   let showTick = readVisPref(TICK_LS_KEY);
   let showFps = readVisPref(FPS_LS_KEY);
   // When hidden the elements are removed from layout (not just blanked) so they
@@ -549,7 +318,7 @@ async function boot(): Promise<void> {
     goodsButton,
     zoomButton,
     settingsButton,
-    resources,
+    resources.element,
     tickLabel,
     fps,
   );
@@ -729,7 +498,7 @@ async function boot(): Promise<void> {
     // The object archive also carries the original's small ware pictographs
     // (2200 + GoodType id); dress the HUD resource readout with them. Falls
     // back to the text readout when the atlas (or a sprite) is missing.
-    buildResourceCells(makeWareIconSet(objAtlas));
+    resources.build(makeWareIconSet(objAtlas));
 
     // Computer opponents: keep only slot indices this map can seat, then seed
     // enough players to cover the highest AI slot (human is always slot 0).
@@ -869,59 +638,26 @@ async function boot(): Promise<void> {
   function installDebug(): void {
     if (!session) return;
     const s = session;
-    window.__s2debug = {
-      staticObjects: 0,
-      trees: 0,
-      granite: 0,
-      spriteQuads: 0,
-      spriteDrawCalls: 0,
-      tick: 0,
-      counters: { ...s.counters },
-      settlers: 0,
-      flags: 0,
-      buildings: 0,
-      roads: 0,
-      ships: 0,
-      harbors: 0,
-      audio: audio.debug(),
-      hqNode: hqNode(),
-      nodeOf: (x, y) => s.geom.index(x, y),
-      flagNodeOf: (node) => s.geom.neighbour(node, 'SE'),
-      canBuild: (node, type) =>
-        s.canBuild(node, type as Parameters<GameSession['placeBuilding']>[1]),
-      canFlag: (node) => s.canFlag(node),
+    installDebugSurface({
+      session: s,
+      audio,
+      hqNode,
+      nationArchiveFor: (player) => nationArchiveFor(player),
       nodeToScreen,
-      suggestRoad: (a, b) => s.suggestRoad(a, b),
-      players: s.playerCount,
-      aiPlayers: s.aiPlayers.length,
-      nationOf: (player) => s.nationOf(player),
-      nationArchiveOf: (player) => nationArchiveFor(player),
-      buildingsOf: (player) => s.buildingsOf(player),
       setFog: (on) => {
         s.setFog(on);
         writeFogPref(on);
         applyFog();
       },
-      militaryTroops: (node) => s.militaryAt(node)?.troops ?? -1,
-      debugSpawnMilitary: (player, node, type) =>
-        s.debugSpawnMilitary(player, node, type as Parameters<GameSession['placeBuilding']>[1]),
       roadPreview: () => {
         const rp = interaction.roadPreview;
         return rp ? { node: rp.node, valid: rp.valid, hasPath: rp.path !== null } : null;
       },
-      prepareExpedition: (harborId) => s.prepareExpedition(harborId),
-      debugSpawnHarbor: (player, node) => s.debugSpawnHarbor(player, node),
-      debugCanPlaceHarbor: (node) => s.debugCanPlaceHarbor(node),
-      debugSpawnShip: (player, harborId) => s.debugSpawnShip(player, harborId),
-      debugGrantExpeditionSupplies: (player) => s.debugGrantExpeditionSupplies(player),
-      debugWaterConnected: (nodeA, nodeB) => s.debugWaterConnected(nodeA, nodeB),
-      harborIdAt: (node) => s.harborAt(node)?.id ?? -1,
-      expeditionReady: (harborId) => s.expeditionAt(harborId)?.ready ?? false,
       centerNode: (node) => {
         const a = nodeAnchor(s.world, node);
         camera.centerOn(a.x, a.y, canvas.width, canvas.height);
       },
-    };
+    });
     rebuildStatics();
   }
 
@@ -992,70 +728,12 @@ async function boot(): Promise<void> {
 
   // --- Camera controls (wheel zoom, drag, arrows) ---------------------------
 
-  let draggedFar = false;
-  canvas.addEventListener(
-    'wheel',
-    (ev) => {
-      ev.preventDefault();
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      const sx = (ev.clientX - rect.left) * dpr;
-      const sy = (ev.clientY - rect.top) * dpr;
-      const deltaPx = ev.deltaMode === 1 ? ev.deltaY * 16 : ev.deltaY;
-      camera.zoomAt(camera.zoom * Math.exp(-deltaPx * 0.001), sx, sy);
-      setHudLabel(zoomButton, zoomLabel());
-    },
-    { passive: false },
-  );
-
-  let dragging = false;
-  let lastX = 0;
-  let lastY = 0;
-  let dragTotal = 0;
-  canvas.addEventListener('pointerdown', (ev) => {
-    dragging = true;
-    dragTotal = 0;
-    draggedFar = false;
-    lastX = ev.clientX;
-    lastY = ev.clientY;
-    canvas.classList.add('dragging');
-    canvas.setPointerCapture(ev.pointerId);
+  const cameraInput = installCameraInput({
+    canvas,
+    camera: () => camera,
+    onZoomChanged: () => setHudLabel(zoomButton, zoomLabel()),
+    onTogglePause: () => setPaused(!(session?.paused ?? false)),
   });
-  canvas.addEventListener('pointermove', (ev) => {
-    if (!dragging) return;
-    const dpr = window.devicePixelRatio || 1;
-    dragTotal += Math.abs(lastX - ev.clientX) + Math.abs(lastY - ev.clientY);
-    if (dragTotal > 6) draggedFar = true;
-    camera.panScreen((lastX - ev.clientX) * dpr, (lastY - ev.clientY) * dpr);
-    lastX = ev.clientX;
-    lastY = ev.clientY;
-  });
-  canvas.addEventListener('pointerup', (ev) => {
-    dragging = false;
-    canvas.classList.remove('dragging');
-    canvas.releasePointerCapture(ev.pointerId);
-  });
-
-  const held = new Set<string>();
-  const panKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
-  window.addEventListener('keydown', (ev) => {
-    if (isEditableTarget(ev.target)) return;
-    if (panKeys.includes(ev.key)) {
-      held.add(ev.key);
-      ev.preventDefault();
-    } else if (ev.key === 'z' || ev.key === 'Z') {
-      camera.toggleZoom(canvas.width, canvas.height);
-      setHudLabel(zoomButton, zoomLabel());
-    } else if (ev.key === ' ') {
-      setPaused(!(session?.paused ?? false));
-      ev.preventDefault();
-    }
-  });
-  // keyup is unconditional (no editable-target guard): a pan key held while the
-  // game had focus and released after focus moved into an input must still clear,
-  // or the camera would keep panning. Removing a key never in the set is a no-op.
-  window.addEventListener('keyup', (ev) => held.delete(ev.key));
-  window.addEventListener('blur', () => held.clear());
 
   // --- Interaction ----------------------------------------------------------
 
@@ -1095,7 +773,7 @@ async function boot(): Promise<void> {
       status.textContent = text;
       status.hidden = text.length === 0;
     },
-    suppressClick: () => draggedFar,
+    suppressClick: () => cameraInput.draggedFar(),
     openMilitary: (node, x, y) => military.openAt(node, x, y),
     closeMilitary: () => military.close(),
     openHarbor: (node, x, y) => harbor.openAt(node, x, y),
@@ -1119,39 +797,11 @@ async function boot(): Promise<void> {
 
   // Brief feedback toast (reuses the .status-toast look, offset below the road
   // hint so the two never overlap). Auto-dismisses; only the latest is shown.
-  let saveToastEl: HTMLElement | null = null;
-  let saveToastTimer = 0;
-  function saveToast(text: string): void {
-    if (saveToastEl) saveToastEl.remove();
-    const toast = el('div', { class: 'status-toast save-toast', text });
-    gameRoot.append(toast);
-    saveToastEl = toast;
-    window.clearTimeout(saveToastTimer);
-    saveToastTimer = window.setTimeout(() => {
-      toast.remove();
-      if (saveToastEl === toast) saveToastEl = null;
-    }, 2200);
-  }
+  const saveToast = makeToast(gameRoot, { className: 'save-toast', ms: 2200 });
 
   // Seafaring notifications (expedition ready / landed) float as their own toast,
   // slightly higher than the save toast so the two never overlap.
-  let seaToastEl: HTMLElement | null = null;
-  let seaToastTimer = 0;
-  function seaToast(text: string): void {
-    if (seaToastEl) seaToastEl.remove();
-    const toast = el('div', {
-      class: 'status-toast sea-toast',
-      text,
-      attrs: { 'data-testid': 'sea-toast' },
-    });
-    gameRoot.append(toast);
-    seaToastEl = toast;
-    window.clearTimeout(seaToastTimer);
-    seaToastTimer = window.setTimeout(() => {
-      toast.remove();
-      if (seaToastEl === toast) seaToastEl = null;
-    }, 3000);
-  }
+  const seaToast = makeToast(gameRoot, { className: 'sea-toast', ms: 3000, testid: 'sea-toast' });
 
   // Menu/Stats/Goods share the anchored-panel mechanics with Settings. The
   // panels can also close themselves (close button, load-and-close), so they
@@ -1269,16 +919,7 @@ async function boot(): Promise<void> {
     const dt = Math.min(100, now - lastFrame);
     lastFrame = now;
 
-    if (held.size > 0) {
-      const dist = (KEY_PAN_SPEED * dt) / 1000;
-      let dx = 0;
-      let dy = 0;
-      if (held.has('ArrowLeft')) dx -= dist;
-      if (held.has('ArrowRight')) dx += dist;
-      if (held.has('ArrowUp')) dy -= dist;
-      if (held.has('ArrowDown')) dy += dist;
-      camera.panWorld(dx, dy);
-    }
+    cameraInput.panHeld(dt);
 
     let alpha = 0;
     if (session) alpha = session.update(dt);
@@ -1437,47 +1078,12 @@ async function boot(): Promise<void> {
     requestAnimationFrame(frame);
   }
 
-  function countLive<T>(store: { items: (T | null)[] }): number {
-    let n = 0;
-    for (const it of store.items) if (it) n++;
-    return n;
-  }
-
-  /** Right-align a count into a fixed 4-char cell so the bar never reflows. */
-  const pad4 = (n: number): string => String(Math.min(n, 9999)).padStart(4, ' ');
-
   function updateHud(quads: number, drawCalls: number): void {
     if (!session) return;
-    const inv = session.inventory;
-    // Build materials only (full inventory is the Goods panel). With the ware
-    // pictographs available the readout is icon+count cells; otherwise the
-    // fixed-width text (white-space: pre) keeps the bar from reflowing. Names
-    // follow the original S2 UI: Wood (raw log), Boards (sawn), Stone.
-    if (resourceCells) {
-      // No space-padding here: the cells right-align into a fixed min-width via
-      // CSS, so the bar never reflows and the digits sit tight to their icon.
-      resourceCells.trunk.textContent = String(Math.min(inv.trunk, 9999));
-      resourceCells.plank.textContent = String(Math.min(inv.plank, 9999));
-      resourceCells.stone.textContent = String(Math.min(inv.stone, 9999));
-    } else {
-      resources.textContent = `Wood${pad4(inv.trunk)} Boards${pad4(inv.plank)} Stone${pad4(inv.stone)}`;
-    }
+    // Build materials only (full inventory is the Goods panel).
+    resources.update(session.inventory);
     if (showTick) tickLabel.textContent = `tick ${String(session.world.tick).padStart(7, ' ')}`;
-    const dbg = window.__s2debug;
-    if (dbg) {
-      dbg.spriteQuads = quads;
-      dbg.spriteDrawCalls = drawCalls;
-      dbg.tick = session.world.tick;
-      dbg.counters = { ...session.counters };
-      dbg.settlers = countLive(session.world.settlers);
-      dbg.flags = countLive(session.world.flags);
-      dbg.buildings = countLive(session.world.buildings);
-      dbg.roads = countLive(session.world.roads);
-      dbg.ships = countLive(session.world.ships);
-      dbg.harbors = session.harbors().length;
-      dbg.audio = audio.debug();
-      dbg.hqNode = hqNode();
-    }
+    updateDebugCounters(session, audio, hqNode, { quads, drawCalls });
   }
 
   /** Wire the Objectives panel + win-condition tracking for a chapter. */
@@ -1490,49 +1096,6 @@ async function boot(): Promise<void> {
     // campaign button stays with the main controls rather than trailing them.
     hudTop.insertBefore(campaign.button, tickLabel);
     campaign.start();
-  }
-
-  /**
-   * Persist the live world to the server session every 10s, and once more on
-   * hide/close (keepalive) so a refresh or tab close captures the latest state.
-   * Fire-and-forget: errors (offline, 413 too-large, ...) are ignored. Only ever
-   * armed in session mode, so legacy /play games persist nothing here.
-   */
-  function startSessionPersistence(id: string): void {
-    const url = `/api/sessions/${id}`;
-    const snapshot = (): string | null =>
-      session ? JSON.stringify({ tick: session.world.tick, data: session.serialize() }) : null;
-    window.setInterval(() => {
-      const body = snapshot();
-      if (!body) return;
-      void fetch(url, {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body,
-      }).catch(() => {
-        /* best-effort autosave; ignore transient failures */
-      });
-    }, 10_000);
-    // A refresh/close won't await a normal fetch, so keepalive lets the browser
-    // flush the final snapshot after the page is already going away.
-    const flush = (): void => {
-      const body = snapshot();
-      if (!body) return;
-      try {
-        void fetch(url, {
-          method: 'PUT',
-          headers: { 'content-type': 'application/json' },
-          body,
-          keepalive: true,
-        });
-      } catch {
-        /* keepalive may reject an oversized body; nothing to do */
-      }
-    };
-    window.addEventListener('pagehide', flush);
-    window.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') flush();
-    });
   }
 
   /**
@@ -1586,7 +1149,9 @@ async function boot(): Promise<void> {
     }
     const chapter = remote.campaign != null ? chapterById(remote.campaign) : undefined;
     if (chapter) startCampaign(chapter);
-    startSessionPersistence(id);
+    startSessionPersistence(id, () =>
+      session ? JSON.stringify({ tick: session.world.tick, data: session.serialize() }) : null,
+    );
   }
 
   // Session mode is selected purely by the pathname; the legacy query-param
