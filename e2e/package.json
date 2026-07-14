@@ -6,6 +6,7 @@
   "scripts": {
     "e2e": "playwright test",
     "e2e:install": "playwright install chromium",
+    "guide:shots": "playwright test --config=guide-shots.config.ts",
     "lint": "eslint ."
   },
   "devDependencies": {
