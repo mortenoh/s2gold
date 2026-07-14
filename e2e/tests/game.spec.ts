@@ -849,6 +849,7 @@ interface S2Ai {
   players: number;
   buildingsOf(player: number): number;
   nationOf(player: number): string;
+  nationArchiveOf(player: number): string;
 }
 
 /** Distinct RGB colors in a named 2D canvas (0 when absent/blank). */
@@ -901,6 +902,18 @@ test('P6: setup selects a computer opponent that seeds and expands', async ({ pa
   });
   expect(nations, 'human Roman, opponent Japanese').toEqual(['romans', 'japanese']);
   await expect(page.getByTestId('nation-label')).toHaveText('Romans');
+
+  // Multi-nation rendering (phase 2): each player's buildings/flags/border stones
+  // draw from THAT player's own nation archive. maps4_map02 is a WINTER map, so the
+  // archives are the W* twins — the Roman player renders from wrom_z and the
+  // Japanese AI from wjap_z (distinct pagoda buildings), proving the per-player
+  // resolver and the season swap both fire. This is the testable proxy for the
+  // screenshot check that the AI's settlement visibly differs from the Roman one.
+  const archives = await page.evaluate(() => {
+    const dbg = (window as unknown as { __s2debug: S2Ai }).__s2debug;
+    return [dbg.nationArchiveOf(0), dbg.nationArchiveOf(1)];
+  });
+  expect(archives, 'winter Roman vs winter Japanese archives').toEqual(['wrom_z', 'wjap_z']);
 
   // Run fast and watch the computer player build beyond its starting HQ.
   await disableFog(page);

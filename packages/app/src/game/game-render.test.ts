@@ -11,9 +11,11 @@ import {
 import { describe, expect, it } from 'vitest';
 import {
   borderStoneSprites,
+  buildDynamics,
   BUILDING_ARCHIVE,
   WINTER_BUILDING_ARCHIVE,
   buildingArchiveForLandscape,
+  nationBuildingArchive,
   donkeySprite,
   HELPER_BOB_ID,
   JOB_BOB_ID,
@@ -25,6 +27,7 @@ import {
   workerIsIndoors,
   workSprite,
 } from './game-render';
+import type { BobAtlas } from './bob-atlas';
 
 /** jobs.bob has 93 job entries; a job id must land inside that range. */
 const JOBS_BOB_JOB_COUNT = 93;
@@ -133,6 +136,96 @@ describe('buildingArchiveForLandscape', () => {
   it('swaps to the winter W* nation archive only for winter maps', () => {
     expect(buildingArchiveForLandscape(2)).toBe(WINTER_BUILDING_ARCHIVE);
     expect(WINTER_BUILDING_ARCHIVE).toBe('wrom_z');
+  });
+});
+
+describe('nationBuildingArchive', () => {
+  it('maps each people to its MBOB archive prefix on summer maps', () => {
+    // Nubians use the original "afr" (African) building family, not "nub".
+    expect(nationBuildingArchive('romans', 0)).toBe('rom_z');
+    expect(nationBuildingArchive('vikings', 0)).toBe('vik_z');
+    expect(nationBuildingArchive('nubians', 0)).toBe('afr_z');
+    expect(nationBuildingArchive('japanese', 0)).toBe('jap_z');
+    // Wasteland (landscape 1) stays on the summer archive like greenland.
+    expect(nationBuildingArchive('vikings', 1)).toBe('vik_z');
+  });
+
+  it('uses the W* winter twin only on winter maps (landscape 2)', () => {
+    expect(nationBuildingArchive('romans', 2)).toBe('wrom_z');
+    expect(nationBuildingArchive('vikings', 2)).toBe('wvik_z');
+    expect(nationBuildingArchive('nubians', 2)).toBe('wafr_z');
+    expect(nationBuildingArchive('japanese', 2)).toBe('wjap_z');
+  });
+
+  it('agrees with buildingArchiveForLandscape for the Roman default', () => {
+    for (const ls of [0, 1, 2]) {
+      expect(nationBuildingArchive('romans', ls)).toBe(buildingArchiveForLandscape(ls));
+    }
+  });
+});
+
+/**
+ * Minimal world with one finished HQ per player, for asserting buildDynamics
+ * routes each owner's building sprite through its own nation archive. Only the
+ * fields buildDynamics touches for the buildings/flags pass are populated.
+ */
+function twoPlayerWorld(): World {
+  const b = (node: number, player: number) => ({
+    node,
+    player,
+    state: 'working' as const,
+    type: 'headquarters' as const,
+    flagId: -1,
+  });
+  return {
+    width: 4,
+    height: 1,
+    heightMap: new Uint8Array(4),
+    tick: 0,
+    buildings: { items: [b(0, 0), b(1, 1)] },
+    saplings: [],
+    flags: { items: [{ id: 0, node: 2, player: 1, wares: [] }] },
+    settlers: { items: [] },
+    wares: { items: [] },
+    ships: { items: [] },
+  } as unknown as World;
+}
+
+describe('buildDynamics per-nation archive selection', () => {
+  const anim = { waveFrame: 0, walkFrame: 0, alpha: 0 };
+  const atlases = {
+    carrier: {} as unknown as BobAtlas,
+    jobs: null,
+    // Player 0 Roman, player 1 Viking — the resolver the app builds per switch.
+    nationArchiveFor: (p: number) => (p === 1 ? 'vik_z' : 'rom_z'),
+    objectArchive: 'mapbobs',
+    workAvailable: false,
+  };
+
+  it('draws each player HQ from its own nation archive at the same sprite index', () => {
+    const world = twoPlayerWorld();
+    const dyn = buildDynamics(world, {} as unknown as Geometry, atlases, anim);
+    const b0 = dyn.find((s) => s.player === 0 && s.spriteIndex === 250);
+    const b1 = dyn.find((s) => s.player === 1 && s.spriteIndex === 250);
+    expect(b0?.archive).toBe('rom_z');
+    expect(b1?.archive).toBe('vik_z'); // Viking HQ, parity-identical index 250
+  });
+
+  it('draws a flag from its owner nation archive (flags are per-people in S2)', () => {
+    const world = twoPlayerWorld();
+    const dyn = buildDynamics(world, {} as unknown as Geometry, atlases, anim);
+    // The flag lives at index 100 (FLAG_SPRITE_BASE); its owner is player 1.
+    const flag = dyn.find((s) => s.player === 1 && s.spriteIndex === 100);
+    expect(flag?.archive).toBe('vik_z');
+  });
+
+  it('falls back to Roman when the resolver returns the Roman archive', () => {
+    const world = twoPlayerWorld();
+    const romanOnly = { ...atlases, nationArchiveFor: () => 'rom_z' };
+    const dyn = buildDynamics(world, {} as unknown as Geometry, romanOnly, anim);
+    for (const s of dyn.filter((d) => d.spriteIndex === 250 || d.spriteIndex === 100)) {
+      expect(s.archive).toBe('rom_z');
+    }
   });
 });
 

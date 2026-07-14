@@ -109,19 +109,19 @@ own `build` layer across all 50 shipped maps, 940032 nodes):
   simplified single-node construction model, stays on the walk-cycle
   fallback. The hunter is an in-building generator (SIMPLIFIED, no
   outdoor game hunt) so it never draws an outdoor action loop.
-- Per-nation border-stone sprites (single fixed sprite today).
+- Per-nation border-stone sprites — landed 2026-07-14 (multi-nation phase 2;
+  each people's boundary-stone sprite at archive index 0/1, player-colour base).
 - AI: seafaring — landed 2026-07-14 (see the model paragraph below).
 - Gold-edition extra chains: vineyard/winery, charburner (`BUILDING_DEFS`
   lacks them).
 - Original combat/sea sound-id verification — landed 2026-07-14 (see the
   paragraph below).
-- Multi-nation support — phase 1 (core + setup) landed 2026-07-14 (see the
-  paragraph below). The rendering follow-up (nation -> sprite archive) is
-  still pending; every nation draws with the Roman rom_z archive today.
-- Per-nation border stones and the Gold extra chains (vineyard/charburner)
-  are blocked on the rendering follow-up: the field now records a player's
-  nation, but nothing maps it to graphics yet, and the extra-chain sprites do
-  not exist in the original assets - revisit alongside per-nation rendering.
+- Multi-nation support — phase 1 (core + setup) AND phase 2 (rendering) both
+  landed 2026-07-14 (see the two paragraphs below). Each player's buildings,
+  flags, and border stones now draw from their own people's sprite archive.
+- Gold extra chains (vineyard/charburner) are still blocked: the extra-chain
+  building sprites do not exist in the original assets (`BUILDING_DEFS` lacks
+  the buildings too), independent of nation rendering.
 
 Landed 2026-07-14 (multi-nation core + setup, phase 1 of 2): the four S2
 peoples (romans/vikings/nubians/japanese) are now a first-class engine +
@@ -138,6 +138,32 @@ all-Roman, backward-compatible with stored sessions); campaign missions stay
 all-Roman. A small HUD label shows the local player's people. DEFERRED to
 phase 2: mapping each nation to its building/flag/settler sprite archive
 (vik_z/afr_z/jap_z), per-nation border stones, and the winter W* variants.
+
+Landed 2026-07-14 (multi-nation rendering, phase 2 of 2): each player's
+buildings, construction sites, flags, and border stones now render from THEIR
+nation's MBOB archive instead of everyone sharing rom_z. `nationBuildingArchive`
+maps a people + landscape to its archive — romans->rom_z, vikings->vik_z,
+nubians->afr_z (the original names the Nubian building family "afr"/African),
+japanese->jap_z, with the W* winter twin on winter maps (wvik_z, ...). VERIFIED
+sprite-index parity before wiring: the four summer archives cover every index we
+render at the SAME index (border stone 0/1, flags 100..117, buildings 250+5*id
+and their +2/+3 construction frames — the only shared gap is id-16's site shadow
+333, absent from rom_z too), confirmed by decoding all four atlas.json index sets
+and by cropping index 250/335/415/100/0 from each (distinct per-people HQ, hut,
+sawmill, flag, and boundary stone in each style). `buildDynamics` takes a
+per-player `nationArchiveFor(player)` resolver; `borderStoneSprites` is called
+per player with its owner's archive. `main.ts` loads ONLY the archives the seated
+players need (their nations + the current season's variant), in parallel and
+non-fatal, falling back to the season-appropriate Roman archive when a nation
+atlas is missing (never boots all eight). The build-menu icons crop from the
+LOCAL player's nation atlas, so the menu previews the buildings you will place.
+`__s2debug.nationArchiveOf(player)` exposes the resolved archive for tests.
+CAVEAT: settler WORK animations still come from the Roman-only cbob_rom_bobs
+(the only converted work-anim archive), so non-Roman workers keep Roman
+work/walk figures for now; only the static building/flag/border layers are
+per-nation. The `_y` MBOB archives turned out to be a pixel-identical subset of
+the `_z` set (same sprites, same anchors, missing only the highest building
+indices 465..535) — redundant for rendering, so we use `_z` exclusively.
 
 Landed 2026-07-14 (combat/sea sound-id verification): the eight previously
 guessed SOUND.LST ids in `packages/app/src/game/audio-map.ts` were checked
