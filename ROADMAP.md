@@ -71,11 +71,18 @@ against the maps' own `build` layer):
 
 ## C. Features (PLAN.md polish backlog, still open; audited 2026-07-12)
 
-- Sprite-based in-game UI: the statue frame, bottom HUD, hand cursor, and
-  window chrome (title bars/borders/body on all panels + the build menu)
-  have landed. Remaining: swap the build menu's text categories for the
-  original's building-icon grid, and use the real icon sprites on the HUD
-  bar buttons.
+- Sprite-based in-game UI: landed in full 2026-07-14 - the build menu's
+  category flyouts are a grid of real building sprites (cropped from the
+  loaded rom_z atlas, text fallback when assets are missing), and the six
+  HUD bar buttons carry original io_dat icons (Pause hourglass, Game save
+  monitor, Stats chart, Goods shelf, Zoom magnifier, Settings cog).
+  Mute/Music stay text: io_dat has no faithful speaker/note glyph.
+- Work animations for the remaining outdoor jobs (e.g. the hunter): the
+  five main jobs (woodcutter, stonemason, forester, fisher, farmer) play
+  their real CBOB action loops; jobs without decoded frame ranges in
+  `WORK_ANIM` (game-render.ts) still use the walk-cycle-in-place fallback.
+  Needs empirical frame-range decoding in cbob_rom_bobs, same method as
+  the existing five.
 - Per-nation border-stone sprites (single fixed sprite today).
 - AI: seafaring (no ship/harbor references in `packages/engine/src/ai/`).
 - Storehouse-local inventories (`Player.wares` is one global pool).
