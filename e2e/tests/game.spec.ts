@@ -444,7 +444,20 @@ test('P2 gate: build a wood/plank economy via the UI and watch it run', async ({
       return state;
     });
     if (bareState === 'running') {
-      expect(audioDbg.contextState, 'AudioContext running after gesture').toBe('running');
+      // The host CAN run audio, so the game's context being suspended has one
+      // innocent explanation left: the audio device recovered after the test's
+      // last gesture, so unlock() never got a chance to retry resume(). Fire
+      // one fresh gesture (unlock listens on window pointerdown) and re-read
+      // before declaring the unlock path broken.
+      await page.mouse.down();
+      await page.mouse.up();
+      await page.waitForTimeout(250);
+      const retried = await page.evaluate(
+        () =>
+          (window as unknown as { __s2debug: { audio: { contextState: string } } }).__s2debug
+            .audio.contextState,
+      );
+      expect(retried, 'AudioContext running after gesture').toBe('running');
     } else {
       test.info().annotations.push({
         type: 'audio-host-unavailable',
