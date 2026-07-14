@@ -144,6 +144,86 @@ export function makeTwoIslandMap(): MapJson {
   };
 }
 
+/**
+ * Coast-expansion fixture for the AI seafaring drive: a big home island whose
+ * HQ sits fully INLAND (its starting territory disc touches no coast at all),
+ * plus an unowned island across the water. The AI must grow its territory (a
+ * chain of occupied guardhouses) out to a shore before it can found a harbor —
+ * the exact case the shipped island maps present and the two-island fixture does
+ * not (there the HQ disc already pokes onto the far island, so no expansion is
+ * exercised).
+ *
+ * Layout (40x32): home island cols 12..36, rows 4..28 (HQ at (24,16), ≥12 nodes
+ * from every shore — the disc has radius ~9, so no owned node is coastal); target
+ * island cols 3..8, rows 12..22, separated by a water channel (cols 9..11) and
+ * reachable across one connected sea. A tree block + granite pile near the HQ
+ * sustain the plank/stone chain through the guardhouse chain, harbor and ship.
+ */
+export const EXPANSION_ISLAND = {
+  width: 40,
+  height: 32,
+  hq: { x: 24, y: 16 },
+  /** Cols spanning the target (colonisable) island. */
+  targetCols: { min: 3, max: 8 },
+} as const;
+
+/** Build the {@link EXPANSION_ISLAND} map. */
+export function makeExpansionIslandMap(): MapJson {
+  const { width, height } = EXPANSION_ISLAND;
+  const size = width * height;
+  const WATER = 0x05;
+  const MEADOW = 0x08;
+  const TREE = 0xc4; // OBJ_TYPE.treeMin (harvestable tree)
+  const GRANITE = 0xcc; // OBJ_TYPE.graniteMin
+  const t1 = new Array<number>(size).fill(WATER);
+  const t2 = new Array<number>(size).fill(WATER);
+  const zero = new Array<number>(size).fill(0);
+  const objType = new Array<number>(size).fill(0);
+  const objIndex = new Array<number>(size).fill(0);
+  const idx = (x: number, y: number): number => y * width + x;
+  const setLand = (x0: number, x1: number, y0: number, y1: number): void => {
+    for (let y = y0; y <= y1; y++)
+      for (let x = x0; x <= x1; x++) {
+        t1[idx(x, y)] = MEADOW;
+        t2[idx(x, y)] = MEADOW;
+      }
+  };
+  setLand(12, 36, 4, 28); // home island
+  setLand(3, 8, 12, 22); // target island (unowned)
+  // Tree block + granite near the HQ (clear of the HQ node) so the wood/stone
+  // chain sustains the build-out; deterministic fixed positions.
+  const tree = (x: number, y: number): void => {
+    objType[idx(x, y)] = TREE;
+    objIndex[idx(x, y)] = 0x30;
+  };
+  for (let y = 20; y <= 24; y++) for (let x = 20; x <= 28; x++) tree(x, y);
+  for (let y = 11; y <= 13; y++)
+    for (let x = 26; x <= 28; x++) {
+      objType[idx(x, y)] = GRANITE;
+      objIndex[idx(x, y)] = 0x06;
+    }
+  const layers: Record<string, string> = {
+    texture1: encodeBase64(t1),
+    texture2: encodeBase64(t2),
+    height: encodeBase64(zero),
+    object_type: encodeBase64(objType),
+    object_index: encodeBase64(objIndex),
+    resources: encodeBase64(zero),
+    owner: encodeBase64(zero),
+  };
+  return {
+    title: 'expansion-island',
+    width,
+    height,
+    terrain: 0,
+    players: 1,
+    hq_x: [EXPANSION_ISLAND.hq.x, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff],
+    hq_y: [EXPANSION_ISLAND.hq.y, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff],
+    encoding: 'base64',
+    layers,
+  };
+}
+
 /** Nodes chosen for the demo buildings. */
 export interface DemoLayout {
   hqNode: number;

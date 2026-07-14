@@ -165,17 +165,46 @@ the nearest warehouse; this completes the mechanic for human players too
 (previously only the debug `debugGrantExpeditionSupplies` hook could fill a kit).
 Proven end-to-end by `ai/ai-seafaring.test.ts` on `makeTwoIslandMap` (an AI
 colonises a second island autonomously; a run-twice determinism check).
-KNOWN LIMITATION / follow-up: the cascade assumes the AI already OWNS a
-road-connectable, BUILDABLE coastal launch site facing an unowned island. On the
-shipped 128²-scale sea maps it usually does not — the land planner only pushes
-military toward a nearby ENEMY, so when the enemy is across water the AI places
-no frontier military, its territory stays the HQ disc, and it never reaches a
-buildable shore (many shore tiles are also non-buildable rock/beach). A
-coast-directed general-expansion drive (claim territory toward the nearest
-target-bearing shore, independent of an enemy) is the separable next step; it was
-prototyped and deliberately NOT shipped because it could not complete a
-colonisation on any shipped map within a bounded budget (occupation / road-reach
-long-tail over 60+ nodes) and would have been half-working.
+Landed 2026-07-14 (AI coast-directed expansion — the seafaring follow-up):
+the cascade now FIRES on the real shipped sea maps, not just the two-island
+fixture. Two changes, empirically driven by instrumenting a headless run over all
+50 shipped maps:
+
+- Bug fix (`ai/seafaring.ts` `analyzeSea`): the colonisation-target filter was
+  inverted. `ownerPlayer(owner) !== OWNER_NONE` compares `ownerPlayer` (which
+  returns -1 for unowned) against `OWNER_NONE` (0), so it KEPT only the AI's own
+  coast and dropped every genuinely unowned island — targets were empty on every
+  real map. The two-island test passed only by accident (the HQ disc pokes onto
+  island B, so B's harbor spot counted as "owned coast"). Corrected to
+  `world.owner[n] !== OWNER_NONE`. This alone lets the AI colonise from a coastal
+  HQ (5 shipped maps where the HQ disc already touches a target-facing shore).
+- Coast-directed expansion (`ai/sites.ts` new `coast` SiteBias +
+  `ai/seafaring.ts`): a standing "grow toward the sea" drive. When the land
+  planner is exhausted and the AI owns no harbor-capable coast, it places a cheap
+  guardhouse at the frontier node nearest the nearest home-island shore that could
+  host a harbor facing an unowned island (the objective), stepping the territory
+  out one militaryRadius at a time — the ORIGINAL game expands aggressively by
+  default, and reaching a coast needs a SEQUENCE of occupied, road-connected
+  buildings, not one long road (the failed prototype's mistake). It runs strictly
+  AFTER economy goals (never crowding the plank/stone/soldier chain it depends on),
+  scans a bounded frontier disc, and is capped (`COAST_EXPANSION_MAX_MILITARY = 8`,
+  ~50 nodes) so an out-of-reach shore stops the drive instead of sprawling. On
+  inland-HQ maps the same drive runs from a cheap `hasNavigableWater` gate.
+
+Empirical bottleneck story: over the 50 maps, 5 are colonisable from the starting
+disc (bug fix suffices), 17 need expansion (home shore 9–61 nodes out; 14 of them
+≤40, i.e. 1–5 guardhouse steps), and 28 have no reachable target (correctly
+inert). One further real bug surfaced and was fixed: on many coasts the reachable
+shore is mostly non-buildable rock/beach, so the single buildable node went to the
+harbor and NO owned coast could host the shipyard — the cascade dead-ended at
+"harbor but never a ship". Step 4 now keeps expanding along the coast when a
+harbor exists but no shipyard site is ownable, claiming another buildable shore
+node for the yard. Proven by the new `ai/ai-coastal-expansion.test.ts` (inland-HQ
+AI on `makeExpansionIslandMap` expands to a shore, founds a harbor, builds a ship,
+and colonises the far island; run-twice determinism) and a live 50× soak on
+`maps_miss203` (the AI grew territory, founded a harbor, built ships, and landed
+two expeditions by tick ~41k). Fully deterministic (sorted scans, lowest-id
+tie-breaks, no RNG).
 
 Landed since the PLAN.md backlog was written: donkey roads + road upgrade,
 geologists, ground ware-stack sprites, soldier rank overlays + fight

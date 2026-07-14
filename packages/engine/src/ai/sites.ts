@@ -34,7 +34,12 @@ export type SiteBias =
   | { kind: 'nearTrees' }
   | { kind: 'nearGranite' }
   | { kind: 'mine'; resource: number }
-  | { kind: 'frontier'; enemyNode: number };
+  | { kind: 'frontier'; enemyNode: number }
+  // Coast-directed expansion (seafaring.ts): grow territory toward `objective`, a
+  // fixed coastal harbor-capable node on our own island. Scored exactly like
+  // 'frontier' but aimed at the shore instead of an enemy, so each placed military
+  // building steps the frontier toward the sea. Never a planner (enemy) goal.
+  | { kind: 'coast'; objective: number };
 
 /** The HQ node of a player, or -1 when it has none. */
 export function hqNodeOf(world: World, player: number): number {
@@ -212,6 +217,11 @@ export function pickBuildSite(
       }
       case 'frontier':
         score = geom.distance(bias.enemyNode, node);
+        break;
+      case 'coast':
+        // Prefer the buildable frontier node nearest the objective shore, so the
+        // military disc it will project reaches furthest toward the sea.
+        score = geom.distance(bias.objective, node);
         break;
     }
 

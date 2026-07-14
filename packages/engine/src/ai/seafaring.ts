@@ -27,9 +27,27 @@ import { findWaterPath } from '../pathfinding';
 import { hasHarborFlag, type TerrainRules } from '../terrain';
 import { harborDockNode, isCoastalLand, isWaterNode } from '../water';
 import { storeLive, type Building, type Ship, type World } from '../world';
+import { militaryCount } from './planner';
 import { flagsConnectedToHq } from './roads';
-import { hqNodeOf, siteRoadDistance } from './sites';
+import { hqNodeOf, pickBuildSite, siteRoadDistance } from './sites';
 import type { AiState } from './types';
+
+/**
+ * How far the coast-expansion scan reaches around the frontier node it centres on
+ * (matches the planner's FRONTIER_SCAN_RADIUS — the same stepwise reach as an
+ * enemy-directed push). Bounded so no cycle does a full-map site scan.
+ */
+const COAST_SCAN_RADIUS = 24;
+
+/**
+ * Cap on military buildings the coast drive chains toward the sea. Territory grows
+ * ~one militaryRadius (guardhouse = 9) per occupied building, so 8 reaches a shore
+ * ~50 nodes from the HQ disc — enough for all but the very furthest shipped-map
+ * coasts. It bounds the sprawl (and board/stone/soldier spend) on a map whose
+ * shore is simply out of reach: the drive stops instead of building forever.
+ * Empirically most shipped sea maps need a coast only 9-40 nodes out (1-5 steps).
+ */
+const COAST_EXPANSION_MAX_MILITARY = 8;
 
 /** Connected-component labelling of the lattice under a membership predicate. */
 interface Components {
@@ -103,7 +121,7 @@ function analyzeSea(world: World, geom: Geometry, player: number): SeaMap {
   const targets: number[] = [];
   for (let n = 0; n < geom.size; n++) {
     if (isWaterNode(world, n)) continue;
-    if (ownerPlayer(world.owner[n]) !== OWNER_NONE) continue; // must be unclaimed by anyone
+    if (world.owner[n] !== OWNER_NONE) continue; // must be unclaimed by anyone
     if (!isCoastalLand(world, geom, n)) continue;
     if (!spotFree(world, geom, n, player)) continue;
     targets.push(n);
@@ -214,6 +232,104 @@ function pickShipyardSite(
 }
 
 /**
+ * The nearest home-island coastal node (ownership IGNORED) that could host a
+ * harbor opening a real sea crossing to an unowned landmass — the shore the AI
+ * grows its territory toward when it does not YET own a harbor-capable coast.
+ *
+ * "Home island" is the land component the HQ sits on, so expansion stays a walk
+ * over our own landmass (never an impossible push across water). Nearest to the
+ * HQ (shortest chain of military buildings), lowest node id tie-break — fully
+ * deterministic. -1 when our island has no target-facing shore (a single-continent
+ * or genuinely landlocked map), which makes the whole coast drive a no-op there.
+ */
+function pickCoastObjective(
+  world: World,
+  geom: Geometry,
+  rules: TerrainRules,
+  sea: SeaMap,
+  hq: number,
+): number {
+  const homeLand = sea.land.comp[hq];
+  let best = -1;
+  let bestDist = Infinity;
+  for (let n = 0; n < geom.size; n++) {
+    if (sea.land.comp[n] !== homeLand) continue; // must be reachable over our own land
+    if (!isCoastalLand(world, geom, n)) continue;
+    // Ownership ignored: we do not own this shore yet — that is the whole point.
+    if (!canPlaceHarbor(world, geom, rules, n)) continue;
+    if (pickTarget(world, geom, sea, n) < 0) continue; // must open a real sea crossing
+    const d = geom.distance(hq, n);
+    if (d < bestDist || (d === bestDist && (best < 0 || n < best))) {
+      best = n;
+      bestDist = d;
+    }
+  }
+  return best;
+}
+
+/** Our own land node nearest `target` (the frontier point we push out from). -1 none. */
+function ownedNodeNearest(world: World, geom: Geometry, player: number, target: number): number {
+  let best = -1;
+  let bestDist = Infinity;
+  for (let n = 0; n < geom.size; n++) {
+    if (ownerPlayer(world.owner[n]) !== player) continue;
+    if (isWaterNode(world, n)) continue;
+    const d = geom.distance(target, n);
+    if (d < bestDist || (d === bestDist && (best < 0 || n < best))) {
+      best = n;
+      bestDist = d;
+    }
+  }
+  return best;
+}
+
+/**
+ * Coast-directed expansion: when we own no harbor-capable coast yet but our island
+ * DOES have a shore that could reach an unowned island, place one frontier military
+ * building (a cheap guardhouse) that steps the territory toward that shore. Returns
+ * null when there is nothing to expand toward or the chain has hit its cap.
+ *
+ * This is the standing "expand toward the sea" drive that lets the seafaring
+ * cascade fire on real island maps where the HQ starts inland: the original S2 AI
+ * expands aggressively by default, and reaching a coast 60 nodes away needs a
+ * SEQUENCE of occupied, road-connected buildings (each extends the frontier a
+ * bounded amount) — not one long road. It runs only once land + economy expansion
+ * is exhausted (the caller gate) and only until a harbor is foundable, so it never
+ * crowds out the economy that recruits the very soldiers it needs.
+ */
+function planCoastExpansion(
+  world: World,
+  geom: Geometry,
+  rules: TerrainRules,
+  sea: SeaMap,
+  state: AiState,
+  hq: number,
+): CommandInput | null {
+  const player = state.playerId;
+  // Bounded chain: stop growing military toward an unreachable shore.
+  if (militaryCount(world, player) >= COAST_EXPANSION_MAX_MILITARY) return null;
+  const objective = pickCoastObjective(world, geom, rules, sea, hq);
+  if (objective < 0) return null;
+  // Centre the (bounded) frontier scan on our own land nearest the shore, so the
+  // scan window follows the frontier outward as the territory grows toward it.
+  const center = ownedNodeNearest(world, geom, player, objective);
+  if (center < 0) return null;
+  const node = pickBuildSite(
+    world,
+    geom,
+    rules,
+    player,
+    BUILDING.guardhouse,
+    { kind: 'coast', objective },
+    center,
+    COAST_SCAN_RADIUS,
+    state.maxRoadLength,
+  );
+  if (node < 0) return null;
+  return { player, type: 'placeBuilding', node, buildingType: BUILDING.guardhouse };
+}
+
+/**
  * One seafaring decision for `player`, or null when there is nothing to do (no
  * coast, no reachable unowned land, or waiting on the economy/a voyage). Emits at
  * most one command; the priority cascade both drives the expedition forward and
@@ -251,11 +367,8 @@ export function planSeafaring(
   const readyExp = world.expeditions.find((e) => e.player === player && e.ready);
   const preparingExp = world.expeditions.find((e) => e.player === player && !e.ready);
 
-  // Cheap gate before any component labelling: if we hold no sea asset yet, only
-  // bother analysing the sea when we actually own coast. On a land map (or before
-  // the frontier reaches the shore) this is a single early-outing scan and the
-  // costly analyzeSea never runs. Once seafaring is under way the asset checks
-  // above already prove we are on a sea map, so the guard is skipped.
+  // Cheap gate before any component labelling. Once seafaring is under way the
+  // asset checks above already prove we are on a sea map, so the guard is skipped.
   const seafaring =
     workingHarbors.length > 0 ||
     harborSite ||
@@ -263,7 +376,16 @@ export function planSeafaring(
     shipCount > 0 ||
     !!readyExp ||
     !!preparingExp;
-  if (!seafaring && !ownsCoast(world, geom, player)) return null;
+  if (!seafaring && !ownsCoast(world, geom, player)) {
+    // We hold no sea asset and own no coast. We are still relevant only on a sea
+    // map whose shore our territory has not reached yet (an inland-HQ start): grow
+    // toward it. A pure land map has no navigable water and short-circuits here, so
+    // the costly analyzeSea never runs off a land game. hasNavigableWater early-outs
+    // on the first water node, so a sea map pays only a tiny scan.
+    if (!hasNavigableWater(world, geom)) return null;
+    const sea = analyzeSea(world, geom, player);
+    return planCoastExpansion(world, geom, rules, sea, state, hq);
+  }
 
   // 1. Launch a ready expedition: pick a fresh sea target each cycle (so a spot
   //    claimed during assembly is abandoned for another), validate the water
@@ -297,8 +419,12 @@ export function planSeafaring(
     const sea = analyzeSea(world, geom, player);
     if (sea.targets.length === 0) return null;
     const node = pickHarborSite(world, geom, rules, sea, player, hq, state.maxRoadLength);
-    if (node < 0) return null; // no owned, connectable, target-facing coast yet
-    return { player, type: 'placeBuilding', node, buildingType: BUILDING.harbor };
+    if (node >= 0) return { player, type: 'placeBuilding', node, buildingType: BUILDING.harbor };
+    // No owned, connectable, target-facing coast yet: expand the territory one
+    // step toward the nearest shore that could host such a harbor. Over successive
+    // cycles this walks the frontier to the sea, at which point the branch above
+    // founds the harbor and the drive stops.
+    return planCoastExpansion(world, geom, rules, sea, state, hq);
   }
 
   // 4. Build a shipyard to produce our one ship (kept to a single yard/ship: one
@@ -313,8 +439,14 @@ export function planSeafaring(
       workingHarbors[0],
       state.maxRoadLength,
     );
-    if (node < 0) return null;
-    return { player, type: 'placeBuilding', node, buildingType: BUILDING.shipyard };
+    if (node >= 0) return { player, type: 'placeBuilding', node, buildingType: BUILDING.shipyard };
+    // We own a harbor but no owned coast can host a shipyard yet — the reachable
+    // shore is often mostly non-buildable rock/beach, and the single buildable spot
+    // went to the harbor. Keep expanding along the coast to claim another buildable
+    // shore node for the yard (bounded by the coast-drive cap). Without this the
+    // cascade dead-ends at "harbor but never a ship" on such coasts.
+    const sea = analyzeSea(world, geom, player);
+    return planCoastExpansion(world, geom, rules, sea, state, hq);
   }
 
   // 5. Prepare an expedition once a ship is idle at a harbor that (a) is wired to
@@ -341,6 +473,12 @@ function idleHomedShip(world: World, harborId: number): Ship | null {
     if (s.homeHarborId === harborId && s.state === 'idle' && s.cargo.length === 0) return s;
   }
   return null;
+}
+
+/** True when the map has any navigable-water node (early-outs on the first). */
+function hasNavigableWater(world: World, geom: Geometry): boolean {
+  for (let n = 0; n < geom.size; n++) if (isWaterNode(world, n)) return true;
+  return false;
 }
 
 /** True when `player` owns at least one coastal land node (early-outs on the first). */
