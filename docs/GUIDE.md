@@ -281,8 +281,34 @@ fisheries/hunters) running _before_ the mines, or they starve.
 | **Metalworks**   | 2 boards, 2 stone | Tools            | Iron + Boards          |
 | **Armory**       | 2 boards, 2 stone | Swords & shields | Iron + Coal            |
 
-The metalworks makes the **tools** new workers need (axes, saws, pickaxes,
-scythes and so on); the armory alternates swords and shields to arm soldiers.
+The metalworks makes the **tools** new workers need; the armory alternates
+swords and shields to arm soldiers.
+
+### Workers and tools
+
+Every new worker is recruited from a **Helper plus that profession's tool**
+(drawn from your warehouse stock). Your headquarters starts with a spread of
+tools; once a tool runs out, no more of that worker can be recruited until the
+metalworks makes another — which is why a settlement without a metalworks
+eventually stalls when, say, the last axe is gone.
+
+| Tool            | Recruits                         |
+| --------------- | -------------------------------- |
+| **Hammer**      | Builder, armorer, shipwright     |
+| **Axe**         | Woodcutter                       |
+| **Saw**         | Sawmill worker                   |
+| **Pick axe**    | Stonemason and all miners        |
+| **Shovel**      | Forester                         |
+| **Scythe**      | Farmer                           |
+| **Rod & line**  | Fisher                           |
+| **Bow**         | Hunter                           |
+| **Cleaver**     | Butcher (slaughterhouse)         |
+| **Rolling pin** | Baker                            |
+| **Crucible**    | Iron smelter worker, mint worker |
+| **Tongs**       | Metalworks worker                |
+
+Carriers, millers, brewers, pig breeders, donkey breeders and well workers need
+no tool — just a free Helper.
 
 ### Gold and coins
 
@@ -291,8 +317,12 @@ scythes and so on); the armory alternates swords and shields to arm soldiers.
 | **Gold mine** | 4 boards          | Gold  | A gold deposit + food |
 | **Mint**      | 2 boards, 2 stone | Coins | Gold + Coal           |
 
-Coins are what promote your soldiers (see [Military](#military)), so a gold →
-mint chain underpins a strong army.
+Gold is not money in Settlers II — its one purpose is **soldier promotion**.
+The mint melts gold with coal into **coins**; coins are carried to your military
+buildings, and each coin consumed there promotes a garrisoned soldier one rank
+(see [Military](#military)). Higher-rank soldiers hit harder and survive longer,
+so two equal-size garrisons are not equal at all: the one backed by a gold →
+mint chain wins. That is the whole reason to hunt gold deposits.
 
 ### Warehouses and where your stock lives
 
@@ -409,12 +439,18 @@ grow a colony from. The computer opponents do this too, so watch the coasts.
 
 ### Roman Campaign
 
-The Roman Campaign is ten linear chapters (I–X). Selecting a chapter opens its
-**briefing**; playing it runs the mission on its map with an in-game
-**Objectives** panel you can open at any time. Each chapter has a clear goal —
-build up an economy (chapter I asks for ten buildings), hold a share of the land,
-or defeat every enemy — and a **Victory** overlay records your progress when you
-meet it.
+The Roman Campaign is ten linear chapters (I–X) telling the game's story: a
+Roman expedition is **shipwrecked on unknown shores**, and you lead the
+survivors — the briefings are entries from the **diary of Octavius**, your
+expedition's chronicler, picking up "on the fourth day after the shipwreck" and
+following the castaways as they settle strange islands, cross the seas, and run
+into rival peoples on the way home.
+
+Selecting a chapter opens its **briefing** (the diary pages plus the mission
+goal); playing it runs the mission on its map with an in-game **Objectives**
+panel you can open at any time. Each chapter has a clear goal — build up an
+economy (chapter I asks for ten buildings), hold a share of the land, or defeat
+every enemy — and a **Victory** overlay records your progress when you meet it.
 
 Chapters unlock in order: chapter I is always open, and finishing one unlocks the
 next. Completed chapters stay **replayable**, and your progress is remembered
@@ -422,7 +458,10 @@ between visits.
 
 ### World Campaign
 
-The World Campaign is eighteen conquest missions chosen from a world map.
+The World Campaign is the Gold Edition's second campaign: eighteen standalone
+conquest missions chosen from a world map, with no diary story — each drops you
+onto a contested map against computer opponents, and the goal is always the
+same: **defeat every rival**.
 
 ![The World Campaign globe: a green marble backdrop with a colour-keyed world map, the Europe continent highlighted and marked with an X, "Start game: 1" and "Return" buttons, and a numbered mission strip 1–18 below](guide-shots/03-world-globe.png)
 
