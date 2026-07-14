@@ -36,3 +36,6 @@ saves/
 
 # Server-side game sessions
 sessions/
+
+# Guide screenshots (contain original game art; generated via `pnpm guide:shots`)
+docs/guide-shots/

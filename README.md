@@ -13,6 +13,7 @@ This extracts the installer locally (innoextract) and converts all graphics, sou
 music, maps and texts into web-native assets under `packages/app/public/assets/`
 (git-ignored). Then `make dev` serves the game.
 
+- How to play: `docs/GUIDE.md` (new-player guide; screenshots via `pnpm guide:shots`)
 - Feasibility study: `docs/FEASIBILITY.md`
 - Implementation plan: `docs/PLAN.md`
 - Open work (features, bugs, polish): `ROADMAP.md`

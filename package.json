@@ -16,6 +16,7 @@
     "format:check": "prettier --check .",
     "e2e": "pnpm --filter e2e run e2e",
     "e2e:install": "pnpm --filter e2e run e2e:install",
+    "guide:shots": "pnpm --filter e2e run guide:shots",
     "test:e2e": "pnpm --filter e2e run e2e"
   },
   "devDependencies": {
