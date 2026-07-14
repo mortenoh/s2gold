@@ -94,7 +94,7 @@ async def test_sessions_crud_roundtrip(client: AsyncClient):
 
     created = await client.post(
         "/api/sessions",
-        json={"map": "maps_miss200", "ai": [2, 3], "campaign": 5},
+        json={"map": "maps_miss200", "ai": [2, 3], "nations": ["rom", "rom", "vik"], "campaign": 5},
     )
     assert created.status_code == 200
     body = created.json()
@@ -102,6 +102,7 @@ async def test_sessions_crud_roundtrip(client: AsyncClient):
     assert session_id
     assert body["map"] == "maps_miss200"
     assert body["ai"] == [2, 3]
+    assert body["nations"] == ["rom", "rom", "vik"]
     assert body["campaign"] == 5
     assert body["tick"] == 0
     assert body["data"] is None
@@ -126,6 +127,7 @@ async def test_sessions_crud_roundtrip(client: AsyncClient):
     # Snapshot preserves the original session metadata.
     assert after["map"] == "maps_miss200"
     assert after["ai"] == [2, 3]
+    assert after["nations"] == ["rom", "rom", "vik"]
     assert after["campaign"] == 5
 
     listed = (await client.get("/api/sessions")).json()
@@ -142,7 +144,27 @@ async def test_session_defaults(client: AsyncClient):
     assert created.status_code == 200
     body = created.json()
     assert body["ai"] == []
+    # Nations is optional and defaults to None (an all-Roman game), keeping
+    # backward compatibility with clients that predate the field.
+    assert body["nations"] is None
     assert body["campaign"] is None
+
+
+async def test_legacy_session_without_nations_loads(client: AsyncClient, app: FastAPI):
+    """A session file stored before the nations field existed still loads (nations=None)."""
+    root: Path = app.state.session_store.root
+    root.mkdir(parents=True, exist_ok=True)
+    # A pre-nations record: no "nations" key at all.
+    (root / "legacy1.json").write_text(
+        '{"id": "legacy1", "map": "m", "ai": [1], "campaign": null, "tick": 3, '
+        '"data": null, "created_at": "2020-01-01T00:00:00Z", '
+        '"updated_at": "2020-01-01T00:00:00Z"}'
+    )
+    fetched = await client.get("/api/sessions/legacy1")
+    assert fetched.status_code == 200
+    body = fetched.json()
+    assert body["ai"] == [1]
+    assert body["nations"] is None
 
 
 async def test_session_not_found(client: AsyncClient):

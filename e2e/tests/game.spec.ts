@@ -454,8 +454,8 @@ test('P2 gate: build a wood/plank economy via the UI and watch it run', async ({
       await page.waitForTimeout(250);
       const retried = await page.evaluate(
         () =>
-          (window as unknown as { __s2debug: { audio: { contextState: string } } }).__s2debug
-            .audio.contextState,
+          (window as unknown as { __s2debug: { audio: { contextState: string } } }).__s2debug.audio
+            .contextState,
       );
       expect(retried, 'AudioContext running after gesture').toBe('running');
     } else {
@@ -848,6 +848,7 @@ interface S2Ai {
   aiPlayers: number;
   players: number;
   buildingsOf(player: number): number;
+  nationOf(player: number): string;
 }
 
 /** Distinct RGB colors in a named 2D canvas (0 when absent/blank). */
@@ -876,10 +877,13 @@ test('P6: setup selects a computer opponent that seeds and expands', async ({ pa
   await expect(page.getByTestId('setup-panel')).toBeVisible();
   await page.locator('[data-testid="map-item"][data-map="maps4_map02"]').click();
   await expect(page.getByTestId('ai-slot-1')).toHaveValue('ai');
+  // Pick a nation for the computer opponent (slot 1). The human (slot 0) stays
+  // Roman, so the encoded URL is rom,jap.
+  await page.getByTestId('nation-slot-1').selectOption('japanese');
 
-  // Start -> lands on the game page for the chosen map with the AI query.
+  // Start -> lands on the game page for the chosen map with the AI + nations query.
   await page.getByTestId('start-game').click();
-  await expect(page).toHaveURL(/\/play\/maps4_map02\?ai=1$/);
+  await expect(page).toHaveURL(/\/play\/maps4_map02\?ai=1&nations=rom,jap$/);
   await expect(page.locator('body[data-map-ready]')).toBeAttached({ timeout: 15_000 });
   await expect(page.locator('body')).toHaveAttribute('data-map-ready', 'maps4_map02');
 
@@ -888,6 +892,15 @@ test('P6: setup selects a computer opponent that seeds and expands', async ({ pa
     () => (window as unknown as { __s2debug: S2Ai }).__s2debug.aiPlayers,
   );
   expect(aiCount, 'at least one AI player seeded').toBeGreaterThanOrEqual(1);
+
+  // The chosen nations flowed into the world: human Roman, opponent Japanese,
+  // and the HUD shows the local player's people.
+  const nations = await page.evaluate(() => {
+    const dbg = (window as unknown as { __s2debug: S2Ai }).__s2debug;
+    return [dbg.nationOf(0), dbg.nationOf(1)];
+  });
+  expect(nations, 'human Roman, opponent Japanese').toEqual(['romans', 'japanese']);
+  await expect(page.getByTestId('nation-label')).toHaveText('Romans');
 
   // Run fast and watch the computer player build beyond its starting HQ.
   await disableFog(page);

@@ -18,6 +18,12 @@ export interface SessionMeta {
   id: string;
   map: string;
   ai: number[];
+  /**
+   * Per-slot nation codes (`rom`/`vik`/`nub`/`jap`, {@link ./nations}), indexed
+   * by player slot. Optional/null on legacy sessions created before nations
+   * existed — a null/absent value means an all-Roman game.
+   */
+  nations: string[] | null;
   campaign: number | null;
   tick: number;
   created_at: string;
@@ -33,6 +39,8 @@ export interface Session extends SessionMeta {
 export interface CreateSessionBody {
   map: string;
   ai: number[];
+  /** Per-slot nation codes ({@link SessionMeta.nations}); null = all-Roman. */
+  nations: string[] | null;
   campaign: number | null;
 }
 

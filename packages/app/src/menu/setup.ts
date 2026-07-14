@@ -8,8 +8,16 @@
  * backdrop sits behind, with a dark fallback.
  */
 
+import { NATIONS, type Nation } from '@s2gold/engine';
 import { clear, el } from '../lib/dom';
 import { assetUrl, fetchJson } from '../lib/manifest';
+import {
+  defaultAiNation,
+  encodeNations,
+  isAllRoman,
+  NATION_CODES,
+  nationLabel,
+} from '../lib/nations';
 import { createSession } from '../lib/sessions';
 import { BitmapFont } from '../ui/font';
 import { fontHeading } from '../ui/widgets';
@@ -157,12 +165,28 @@ export async function renderSetup(root: HTMLElement): Promise<void> {
   let previewToken = 0;
 
   /**
+   * A per-slot nation picker (Romans / Vikings / Nubians / Japanese). Nations are
+   * cosmetic in S2, so this only records which people a slot plays; it is a plain
+   * keyboard-accessible <select> matching the None/Computer selector's style.
+   */
+  const makeNationSelect = (defaultNation: Nation, slot: number): HTMLSelectElement => {
+    const sel = el('select', {
+      class: 'setup-slot-nation',
+      attrs: { 'data-testid': `nation-slot-${slot}`, 'data-nation-slot': String(slot) },
+    }) as HTMLSelectElement;
+    for (const n of NATIONS)
+      sel.append(el('option', { text: nationLabel(n), attrs: { value: n } }));
+    sel.value = defaultNation;
+    return sel;
+  };
+
+  /**
    * (Re)build the per-slot player selectors for a map. Slot 0 is always the
    * human (fixed label); `opponents` lists the non-human slots that own a real
    * HQ (see {@link opponentSlots}), each choosing None or Computer, defaulting
-   * slot 1 to Computer and the rest to None. Maps with no opponent HQ (solo
-   * maps, or campaign maps whose extra player slots have no start position) get
-   * no selectors.
+   * slot 1 to Computer and the rest to None. Every row also carries a nation
+   * picker. Maps with no opponent HQ (solo maps, or campaign maps whose extra
+   * player slots have no start position) get no selectors.
    */
   const buildSlots = (opponents: number[]): void => {
     clear(slotsHost);
@@ -174,9 +198,11 @@ export async function renderSetup(root: HTMLElement): Promise<void> {
         { class: 'setup-slot', attrs: { 'data-testid': 'ai-slot-0' } },
         el('span', { class: 'setup-slot-label', text: 'Player 1' }),
         el('span', { class: 'setup-slot-fixed', text: 'Human (you)' }),
+        // The human always defaults to Roman; the picker lets them switch people.
+        makeNationSelect('romans', 0),
       ),
     );
-    for (const p of opponents) {
+    opponents.forEach((p, ordinal) => {
       const sel = el('select', {
         class: 'setup-slot-select',
         attrs: { 'data-testid': `ai-slot-${p}`, 'data-slot': String(p) },
@@ -186,24 +212,60 @@ export async function renderSetup(root: HTMLElement): Promise<void> {
         el('option', { text: 'Computer', attrs: { value: 'ai' } }),
       );
       sel.value = p === 1 ? 'ai' : 'none';
+      // Opponents default to a varied, reproducible people (vikings, nubians,
+      // japanese, wrapping) — mirrors the original's opponent variety. The picker
+      // is only meaningful while the slot is a Computer, so it disables with None.
+      const nationSel = makeNationSelect(defaultAiNation(ordinal), p);
+      nationSel.disabled = sel.value !== 'ai';
+      sel.addEventListener('change', () => {
+        nationSel.disabled = sel.value !== 'ai';
+      });
       slotsHost.append(
         el(
           'div',
           { class: 'setup-slot' },
           el('span', { class: 'setup-slot-label', text: `Player ${p + 1}` }),
           sel,
+          nationSel,
         ),
       );
-    }
+    });
   };
 
   /** Comma-joined AI slot indices from the current selectors (empty when none). */
   const collectAi = (): string => {
     const ids: number[] = [];
-    for (const sel of Array.from(slotsHost.querySelectorAll<HTMLSelectElement>('select'))) {
+    for (const sel of Array.from(
+      slotsHost.querySelectorAll<HTMLSelectElement>('.setup-slot-select'),
+    )) {
       if (sel.value === 'ai') ids.push(Number(sel.dataset.slot));
     }
     return ids.join(',');
+  };
+
+  /**
+   * Slot-indexed nations from the current pickers: index 0 = the human, each
+   * enabled Computer slot = its chosen people, and any gap defaults to romans.
+   * The array is truncated to the highest active slot so a solo/all-human setup
+   * yields just `[human]`. Used to encode `?nations=` and the session payload.
+   */
+  const collectNations = (): Nation[] => {
+    const bySlot = new Map<number, Nation>();
+    const nation0 = slotsHost.querySelector<HTMLSelectElement>('[data-nation-slot="0"]');
+    bySlot.set(0, (nation0?.value as Nation) ?? 'romans');
+    let maxSlot = 0;
+    for (const sel of Array.from(
+      slotsHost.querySelectorAll<HTMLSelectElement>('.setup-slot-select'),
+    )) {
+      if (sel.value !== 'ai') continue;
+      const p = Number(sel.dataset.slot);
+      const nat = slotsHost.querySelector<HTMLSelectElement>(`[data-nation-slot="${p}"]`);
+      bySlot.set(p, (nat?.value as Nation) ?? 'romans');
+      maxSlot = Math.max(maxSlot, p);
+    }
+    const out: Nation[] = [];
+    for (let i = 0; i <= maxSlot; i++) out.push(bySlot.get(i) ?? 'romans');
+    return out;
   };
 
   const select = async (entry: MapIndexEntry, item: HTMLElement): Promise<void> => {
@@ -282,11 +344,19 @@ export async function renderSetup(root: HTMLElement): Promise<void> {
     // collectAi() yields a comma string ("1,3"); the session API wants numbers.
     const aiStr = collectAi();
     const ai = aiStr ? aiStr.split(',').map(Number) : [];
+    // Nations ride along only when at least one slot is non-Roman, so an
+    // all-Roman game keeps a clean URL/payload and old links stay valid (an
+    // absent `nations` means all-Roman at boot).
+    const nations = collectNations();
+    const nationCodes = isAllRoman(nations) ? null : nations.map((n) => NATION_CODES[n]);
     // Legacy fallback URL, used verbatim when the session API is unreachable
     // (e.g. the plain Vite dev server) so a new game still launches.
-    const fallback = `/play/${map}${aiStr ? `?ai=${aiStr}` : ''}`;
+    const query: string[] = [];
+    if (aiStr) query.push(`ai=${aiStr}`);
+    if (nationCodes) query.push(`nations=${encodeNations(nations)}`);
+    const fallback = `/play/${map}${query.length > 0 ? `?${query.join('&')}` : ''}`;
     startBtn.disabled = true;
-    void createSession({ map, ai, campaign: null }).then((id) => {
+    void createSession({ map, ai, nations: nationCodes, campaign: null }).then((id) => {
       window.location.assign(id ? `/game/${map}/${id}` : fallback);
     });
   });

@@ -56,8 +56,9 @@ test('free play flows to setup, lists maps, and starts a game', async ({ page })
   await start.click();
 
   // Landed on the game page for the chosen map, with the canvas present. A
-  // multi-player map defaults slot 1 to Computer, so the URL may carry ?ai=…
-  await expect(page).toHaveURL(new RegExp(`/play/${mapName}(\\?ai=[0-9,]+)?$`));
+  // multi-player map defaults slot 1 to Computer (and a non-Roman nation), so the
+  // URL may carry ?ai=… and, when any slot is non-Roman, &nations=…
+  await expect(page).toHaveURL(new RegExp(`/play/${mapName}(\\?ai=[0-9,]+(&nations=[a-z,]+)?)?$`));
   await expect(page.getByTestId('game-canvas')).toBeVisible({ timeout: 15_000 });
 
   expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);

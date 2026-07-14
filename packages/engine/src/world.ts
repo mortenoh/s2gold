@@ -30,7 +30,23 @@ import { seedRng, type RngState } from './rng';
 import { recalcTerritory } from './systems/territory';
 
 /** Format version for serialized worlds. */
-export const WORLD_VERSION = 3;
+export const WORLD_VERSION = 4;
+
+/**
+ * The four playable peoples of Settlers II. In the original these are purely
+ * COSMETIC: every nation shares an identical building roster, economy, worker
+ * and soldier set — only the building/flag/settler GRAPHICS differ (each nation
+ * has its own sprite archive). The simulation therefore treats {@link Nation} as
+ * a label that rides on {@link Player} and feeds serialization/rendering only; no
+ * system reads it to alter behaviour, so mixing nations never changes the sim.
+ */
+export type Nation = 'romans' | 'vikings' | 'nubians' | 'japanese';
+
+/** All nations in canonical order (index doubles as the original's people id). */
+export const NATIONS: readonly Nation[] = ['romans', 'vikings', 'nubians', 'japanese'];
+
+/** Default nation when none is specified (Roman everywhere, per createWorld). */
+export const DEFAULT_NATION: Nation = 'romans';
 
 /** A stored ware token. */
 export interface Ware {
@@ -249,6 +265,13 @@ export type SettlerState =
 /** Per-player state and warehouse inventory. */
 export interface Player {
   index: number;
+  /**
+   * This player's people ({@link Nation}). COSMETIC only — identical roster and
+   * economy across all four nations, so no system branches on it; it exists so a
+   * save records the chosen people and the renderer can pick the right sprite
+   * archive (a follow-up phase). Defaults to 'romans'.
+   */
+  nation: Nation;
   hqBuildingId: number;
   /**
    * Job type -> idle worker count available for dispatch/recruitment.
@@ -375,6 +398,15 @@ export interface CreateWorldOptions {
   seed: number;
   /** Number of players to seed with an HQ (defaults to those with a valid hq). */
   players?: number;
+  /**
+   * Per-player {@link Nation}, indexed by player slot. Any slot left short or
+   * undefined defaults to 'romans'. DESIGN: the original assigns distinct
+   * nations to AI opponents by default, but the engine deliberately does NOT —
+   * it keeps world seeding simple and deterministic by defaulting every player
+   * to Roman unless the caller states otherwise. Nation variety is a setup-UI
+   * concern (the free-play screen picks a varied default and passes it here).
+   */
+  nations?: readonly Nation[];
 }
 
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -483,6 +515,7 @@ export function createWorld(map: MapJson, options: CreateWorldOptions): World {
     const hy = map.hq_y[p];
     const player: Player = {
       index: p,
+      nation: options.nations?.[p] ?? DEFAULT_NATION,
       hqBuildingId: -1,
       workers: { ...zeroWorkers(), ...HQ_START_WORKERS },
       donkeys: 0,
