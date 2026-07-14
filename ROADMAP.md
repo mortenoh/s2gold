@@ -299,6 +299,21 @@ BuildingPanel base class for the military/harbor panels, the makeBuilding
 factory + exported storeAlloc, dead-export deletion, shared e2e helpers,
 core.write_json in the maps/terrain converters, and the __s2debug trim.
 
+Landed 2026-07-15 (full-review sweep): execDemolish now returns a producing
+building's worker to the player's idle pool instead of deleting the settler
+(the profession and its tool survive a demolish; regression test in
+review-fixes.test.ts, and the deliberate loss of stored wares is documented
+in place). game/main.ts shrank 1641 -> 1206 lines by extracting focused,
+behavior-preserving modules — camera-input (incl. isEditableTarget),
+debug-surface (__s2debug install + per-frame counters), resource-readout,
+audio-controls, session-persistence, toasts, view-prefs — with the full e2e
+suite green before and after. Build-menu grid cells carry full
+"Name (cost)" aria-labels (the visible text is cost-only). Stale doc claims
+were corrected: PLAN.md's repo layout (src/s2gold pipeline, no packages/ui)
+and the OGG/WebM asset formats in PLAN/FEASIBILITY (actual outputs are
+MP3 music, MP4 intro, WAV sfx), plus a legend in CONSTANTS.md marking the
+starred buildings as out-of-scope 10th-Anniversary/RttR addon content.
+
 ## E. Infra
 
 - GitHub Actions is configured but blocked on winterop-com org billing;

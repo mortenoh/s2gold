@@ -89,6 +89,12 @@ ware the building can stock (default 6); `useOneWareEach=true` means one of _eac
 input is consumed per cycle, `false` means it consumes one unit of whichever listed input
 it currently has most of (used by mines: any one food type).
 
+Entries marked `*` are NOT in the 1996 Gold Edition this project targets — they are
+The Settlers II: 10th Anniversary (2006) / RttR addon content that shares the RttR
+enum. They are documented here only so the id column matches the RttR source tables;
+s2gold does not implement them (ROADMAP.md, "Gold-edition extra chains", closed
+2026-07-14).
+
 | id  | Building        | Boards | Stones | Size    | Worker (Job)  | Produces              | Consumes (per cycle) | spaces | oneEach |
 | --- | --------------- | :----: | :----: | ------- | ------------- | --------------------- | -------------------- | :----: | :-----: |
 | 0   | Headquarters    |   0    |   0    | Castle  | —             | (storehouse+military) | —                    |   —    |    —    |
@@ -132,8 +138,9 @@ it currently has most of (used by mines: any one food type).
 | 38  | Donkey breeding |   3    |   3    | Castle  | DonkeyBreeder | PackDonkey (job)      | Grain, Water         |   6    |  true   |
 | 39  | Harbor building |   4    |   6    | Harbor  | —             | (harbor/storage)      | —                    |   —    |    —    |
 
-\* Gold-edition buildings (Skinner, Vineyard, Winery, Temple, Tannery, Leatherworks,
-Charburner). \*\* Armory alternates producing Sword and Shield each cycle (see §5).
+\* 10th-Anniversary / RttR addon buildings (Skinner, Vineyard, Winery, Temple,
+Tannery, Leatherworks, Charburner) — out of scope, see the note above the table.
+\*\* Armory alternates producing Sword and Shield each cycle (see §5).
 \*\*\* Metalworks output ware is whichever tool the player's tool-priority currently
 selects; `BLD_WORK_DESC` lists Tongs only as the enum placeholder (see §7 tool production).
 
