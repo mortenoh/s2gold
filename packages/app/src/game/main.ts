@@ -52,6 +52,7 @@ import {
   WORK_ARCHIVE,
 } from './game-render';
 import { Interaction } from './interaction';
+import { makeBuildIconSet } from './build-icons';
 import { MilitaryPanel } from './military-ui';
 import { HarborPanel } from './harbor-ui';
 import { SaveMenu } from './save-ui';
@@ -923,6 +924,9 @@ async function boot(): Promise<void> {
       return session;
     },
     camera: () => camera,
+    // Build-menu building icons cropped from the (already-loaded) rom_z atlas;
+    // null when the atlas is missing, and the menu falls back to text rows.
+    buildIcons: makeBuildIconSet(romanAtlas),
     onStatus: (text) => {
       status.textContent = text;
       status.hidden = text.length === 0;

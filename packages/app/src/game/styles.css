@@ -371,6 +371,41 @@ body {
   min-width: 170px;
 }
 
+/* Build submenu as an icon grid (the original build window shows buildings as
+   pictures): fixed-width cells wrap into rows, overriding the flex column. */
+.ctx-menu.ctx-submenu-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 58px);
+  gap: 4px;
+  min-width: 0;
+}
+
+.ctx-menu button.ctx-grid-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  width: 58px;
+  height: 66px;
+  padding: 4px 2px;
+  text-align: center;
+}
+
+.ctx-grid-icon {
+  display: block;
+  flex: 0 0 auto;
+  /* Sized inline per sprite (aspect-correct crop); this reserves the row. */
+  margin-top: auto;
+}
+
+.ctx-grid-cost {
+  font-size: 9px;
+  line-height: 1;
+  color: #cbb;
+  white-space: nowrap;
+}
+
 /* A category flyout trigger: label on the left, arrow on the right. */
 .ctx-menu button.ctx-cat-trigger {
   display: flex;
