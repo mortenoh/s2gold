@@ -100,13 +100,33 @@ own `build` layer across all 50 shipped maps, 940032 nodes):
   outdoor game hunt) so it never draws an outdoor action loop.
 - Per-nation border-stone sprites (single fixed sprite today).
 - AI: seafaring (no ship/harbor references in `packages/engine/src/ai/`).
-- Storehouse-local inventories (`Player.wares` is one global pool).
 - Gold-edition extra chains: vineyard/winery, charburner (`BUILDING_DEFS`
   lacks them).
 - Original combat/sea sound-id verification.
 - Per-nation border stones and the Gold extra chains (vineyard/charburner)
   are blocked: all players are Roman today and the extra-chain sprites do
   not exist in the original assets - revisit with multi-nation support.
+
+Landed 2026-07-14 (storehouse-local inventories, WORLD_VERSION 3): wares no
+longer live in a single `Player.wares` pool — each warehouse-class building
+(HQ, storehouse, harbor) carries its own `Building.wareStock`, and stock is
+stored into and drawn from a SPECIFIC warehouse. Dispatch became a pull model
+(`systems/dispatch.ts`): for each needer it draws the ware from the NEAREST
+road-connected warehouse that has it in stock (distance via the memoised
+flag-route cost `WareRoutePlan.cost`, tie-broken by lowest warehouse id), and a
+warehouse cut off from the road network supplies nothing. Deliveries physically
+credit the warehouse they were routed to (dispatch + the carrier warehouse
+door). Settlers/soldiers/donkeys stay a player-global pool (a long-standing,
+documented simplification — the original stores civilians in warehouses too),
+but the tools/beer/sword/shield those recruits spend are now drawn from
+warehouse stock (aggregate, debited nearest-id-first) so the two models stay
+consistent. Expedition kits draw from the assembling harbor's own stock. The
+app's HUD Goods button + Stats/AI still read the aggregate SUM over warehouses
+(`warehouseTotals`), while clicking a warehouse shows THAT building's own
+inventory (`session.warehouseGoodsAt`). A v2->v3 save migration dumps the old
+global pool into the HQ's inventory. Production's surplus gate and the
+`transitCensus` are unchanged in spirit; per-tick cost stays bounded by reusing
+the existing flag-graph route memo (no per-ware full A*).
 
 Landed since the PLAN.md backlog was written: donkey roads + road upgrade,
 geologists, ground ware-stack sprites, soldier rank overlays + fight
