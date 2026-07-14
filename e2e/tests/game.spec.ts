@@ -421,7 +421,37 @@ test('P2 gate: build a wood/plank economy via the UI and watch it run', async ({
         }
       ).__s2debug.audio,
   );
-  expect(audioDbg.contextState, 'AudioContext running after gesture').toBe('running');
+  if (audioDbg.contextState !== 'running') {
+    // The game's context can sit "suspended" for a host-side reason: when the
+    // machine's audio device is unavailable (in a call, device switching, some
+    // CI runners) Chromium cannot start ANY context. Distinguish that from a
+    // real unlock bug by probing a bare context: if the bare one cannot run
+    // either, audio is host-unavailable and the state assertion is meaningless
+    // here (the sfx-pipeline assertions below still run); if the bare one runs
+    // while the game's does not, the game's unlock is broken - fail.
+    const bareState = await page.evaluate(async () => {
+      const ctx = new AudioContext();
+      try {
+        await Promise.race([
+          ctx.resume(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+        ]);
+      } catch {
+        /* keep whatever state we ended in */
+      }
+      const state = ctx.state;
+      void ctx.close();
+      return state;
+    });
+    if (bareState === 'running') {
+      expect(audioDbg.contextState, 'AudioContext running after gesture').toBe('running');
+    } else {
+      test.info().annotations.push({
+        type: 'audio-host-unavailable',
+        description: `game context ${audioDbg.contextState}, bare probe ${bareState}`,
+      });
+    }
+  }
   expect(audioDbg.sfxRequested, 'an SFX buffer was requested during play').toBeGreaterThanOrEqual(
     1,
   );
