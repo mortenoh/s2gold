@@ -101,7 +101,7 @@ async function loadFont(): Promise<BitmapFont | null> {
 function campaignHeading(font: BitmapFont | null, text: string): HTMLElement {
   return font
     ? fontHeading(font, text, { scale: 2, color: GOLD, testid: 'campaign-heading' })
-    : el('h1', { text, attrs: { 'data-testid': 'campaign-heading' } });
+    : el('h1', { text, attrs: { 'data-testid': 'campaign-heading', 'aria-label': text } });
 }
 
 /**

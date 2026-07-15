@@ -69,6 +69,11 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
+      # tauri::generate_context! requires frontendDist to exist at compile
+      # time; an empty placeholder satisfies it without building the frontend.
+      - name: Placeholder frontend dist
+        run: mkdir -p packages/app/dist && touch packages/app/dist/index.html
+
       - name: Format check
         run: cargo fmt --check
 

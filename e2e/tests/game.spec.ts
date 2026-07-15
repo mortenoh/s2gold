@@ -669,6 +669,7 @@ test('P4: save appears in the load list and can be deleted', async ({ page }) =>
 });
 
 test('save trays: eleven fixed slots, save into one, load and delete it', async ({ page }) => {
+  test.skip(!(await assetsPresent(page)), 'converted assets not installed');
   await page.goto('/game.html?map=maps_miss200');
   await expect(page.locator('body[data-map-ready]')).toBeAttached({ timeout: 15_000 });
   test.skip(!(await savesApiUp(page)), 'saves API not reachable (server offline)');

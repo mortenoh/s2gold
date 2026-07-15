@@ -112,7 +112,8 @@ test('credits screen pages through the original credit banks', async ({ page }) 
   // With converted assets the banks yield named pages; Next advances.
   const hasAssets = await (async () => {
     const res = await page.request.get('/assets/texts/eng/txt2_credit01.json');
-    return res.ok();
+    // Vite answers missing files with the SPA index.html fallback (200, html).
+    return res.ok() && (res.headers()['content-type'] ?? '').includes('json');
   })();
   if (hasAssets) {
     await expect(page.getByTestId('credits-name')).toBeVisible();
