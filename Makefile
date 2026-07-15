@@ -1,8 +1,9 @@
 # s2gold — developer entry points.
-# Asset pipeline is Python (uv); web app + tests are pnpm workspaces.
+# Asset pipeline is Python (uv); web app + tests are pnpm workspaces;
+# server + desktop shell are Rust (cargo).
 
 .DEFAULT_GOAL := help
-.PHONY: help install doctor dev serve build test lint e2e e2e-install clean
+.PHONY: help install doctor dev serve build test lint e2e e2e-install desktop desktop-build clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -20,21 +21,24 @@ doctor: ## Check external tool dependencies for the asset pipeline
 dev: ## Start the Vite dev server for the web app
 	pnpm --filter app dev
 
-serve: ## Build the frontend and run the FastAPI server (app + assets + /api)
+serve: ## Build the frontend and run the Rust server (app + assets + /api)
 	pnpm -r build
-	uv run uvicorn s2gold.server.app:app --host 127.0.0.1 --port 8000
+	cargo run -p s2gold-server --release
 
 build: ## Build all workspace packages
 	pnpm -r build
 
-test: ## Run pipeline (pytest) and workspace (vitest) unit tests
+test: ## Run pipeline (pytest), workspace (vitest) and server (cargo) tests
 	uv run pytest -q
 	pnpm -r test
+	cargo test -p s2gold-server
 
-lint: ## Lint Python (ruff + mypy) and TypeScript (eslint)
+lint: ## Lint Python (ruff + mypy), TypeScript (eslint) and Rust (fmt + clippy)
 	uv run ruff check src tests
 	uv run mypy src
 	pnpm -r lint
+	cargo fmt --all --check
+	cargo clippy --workspace --all-targets -- -D warnings
 
 e2e: ## Run Playwright end-to-end tests
 	pnpm --filter e2e run e2e
@@ -42,6 +46,14 @@ e2e: ## Run Playwright end-to-end tests
 e2e-install: ## Install the Chromium browser Playwright needs
 	pnpm --filter e2e run e2e:install
 
+desktop: ## Run the Tauri desktop shell (dev)
+	pnpm -r build
+	cd crates/desktop && pnpm exec tauri dev
+
+desktop-build: ## Build the desktop app bundle
+	pnpm -r build
+	cd crates/desktop && pnpm exec tauri build
+
 clean: ## Remove build outputs and node_modules
 	rm -rf node_modules packages/*/node_modules e2e/node_modules \
-		packages/app/dist e2e/playwright-report e2e/test-results
+		packages/app/dist e2e/playwright-report e2e/test-results target
