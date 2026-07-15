@@ -37,7 +37,13 @@ impl Default for Settings {
 
 impl Settings {
     pub fn from_env() -> Self {
-        let mut settings = Self::default();
+        Self::default().with_env_overrides()
+    }
+
+    /// Apply S2GOLD_* environment overrides on top of these settings, so
+    /// embedders (the desktop shell) can supply different defaults.
+    pub fn with_env_overrides(self) -> Self {
+        let mut settings = self;
         if let Ok(v) = env::var("S2GOLD_HOST") {
             settings.host = v;
         }
