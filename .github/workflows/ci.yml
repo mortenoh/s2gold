@@ -48,6 +48,29 @@ jobs:
       - name: Pytest
         run: uv run pytest -q
 
+  rust:
+    name: Rust lint + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Format check
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace
+
   frontend:
     name: Frontend lint + build + tests
     runs-on: ubuntu-latest
