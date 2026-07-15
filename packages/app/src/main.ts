@@ -1,7 +1,7 @@
 /**
  * Menu entry point. The title screen ("/") and free-play setup ("/setup") are
  * served by this single Vite entry (index.html); the Vite dev middleware and
- * the FastAPI server both rewrite "/setup" to it. Which screen renders is
+ * the Rust server both rewrite "/setup" to it. Which screen renders is
  * decided from the pathname; navigation between them uses ordinary links so
  * each screen is a real, shareable URL.
  */

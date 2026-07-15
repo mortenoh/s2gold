@@ -534,7 +534,7 @@ test('save and load trays', async ({ page }) => {
   await waitForMap(page, 'maps_miss200');
   await page.getByTestId('menu-toggle').click();
   await expect(page.getByTestId('save-panel')).toBeVisible();
-  // With the FastAPI server running, the eleven trays list; without it, the
+  // With the API server running, the eleven trays list; without it, the
   // panel shows the Save row + an "unavailable" note. Either way this captures
   // the Game (save/load) panel the guide references.
   const savesUp = await page.request

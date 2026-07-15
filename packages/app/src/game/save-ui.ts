@@ -5,14 +5,14 @@
  * tick loop keeps running and the camera is untouched.
  *
  * The API is optional: in dev it is reached through the Vite proxy to the
- * FastAPI server, and when that server is down every call fails fast and the UI
+ * Rust server, and when that server is down every call fails fast and the UI
  * degrades to a disabled Save button plus an "unavailable" note (no crashes).
  */
 
 import { el } from '../lib/dom';
 import type { GameSession } from './session';
 
-/** Server SaveMeta (metadata only; matches the FastAPI model). */
+/** Server SaveMeta (metadata only; matches the server model). */
 interface SaveMeta {
   id: string;
   name: string;

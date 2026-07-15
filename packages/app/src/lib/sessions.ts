@@ -13,7 +13,7 @@
 const API_BASE = '/api/sessions';
 const REQUEST_TIMEOUT_MS = 2000;
 
-/** Session metadata (no world snapshot); matches the FastAPI SessionMeta model. */
+/** Session metadata (no world snapshot); matches the server SessionMeta model. */
 export interface SessionMeta {
   id: string;
   map: string;

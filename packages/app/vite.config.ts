@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 
 /**
- * Clean URLs in dev, matching the FastAPI server's production routes:
+ * Clean URLs in dev, matching the Rust server's production routes:
  * /play and /play/<map> serve game.html, /game/<map>/<session-id> (and the
  * shorter /game, /game/<map>) also serve game.html, /inspector serves
  * inspector.html, /setup serves the menu entry (index.html) which routes on the
@@ -40,7 +40,7 @@ function cleanUrls(): Plugin {
 }
 
 /**
- * Proxy the save-game API to the FastAPI server so both dev and preview hit the
+ * Proxy the save-game API to the Rust server so both dev and preview hit the
  * same `/api/*` routes the production server serves. Only `/api` is forwarded;
  * everything else is served by Vite. When the API server is down the proxy
  * fails the request (ECONNREFUSED) and the UI degrades to "saves unavailable".
@@ -67,7 +67,7 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
-    // Keep build chunks off /assets, which the FastAPI server reserves for the
+    // Keep build chunks off /assets, which the Rust server reserves for the
     // converted game art (public/assets). Emitting to dist/app/ avoids the mount
     // collision that otherwise 404s the app bundle in production.
     assetsDir: 'app',
