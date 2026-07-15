@@ -352,7 +352,10 @@ test('a click while a menu is open only dismisses it; the next click opens a fre
   // comfortably above the bottom HUD bar.
   const mb = await box(menu);
   const clear = (p: { x: number; y: number }): boolean =>
-    (p.x < mb.x - 20 || p.x > mb.x + mb.width + 20 || p.y < mb.y - 20 || p.y > mb.y + mb.height + 20) &&
+    (p.x < mb.x - 20 ||
+      p.x > mb.x + mb.width + 20 ||
+      p.y < mb.y - 20 ||
+      p.y > mb.y + mb.height + 20) &&
     p.y < 640;
   const sb = screens.find((p) => clear(p));
   expect(sb, 'a second site sits clear of the open menu').toBeTruthy();

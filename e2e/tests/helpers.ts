@@ -6,7 +6,10 @@ import type { ConsoleMessage, Page } from '@playwright/test';
  */
 export async function assetsPresent(page: Page): Promise<boolean> {
   const res = await page.request.get('/assets/maps/index.json');
-  return res.ok();
+  // The Vite dev server answers missing files with the SPA index.html fallback
+  // (status 200, text/html) — require real JSON or the guard false-positives
+  // on runners without assets and the tests run instead of skipping.
+  return res.ok() && (res.headers()['content-type'] ?? '').includes('json');
 }
 
 /**

@@ -882,9 +882,8 @@ async function boot(): Promise<void> {
   // In the desktop shell (Tauri) the F and Q keys go through the app's native
   // commands: WKWebView does not support the HTML Fullscreen API here, and only
   // the shell can quit the process. Browsers use the web equivalents.
-  const tauri = (
-    window as { __TAURI__?: { core: { invoke: (cmd: string) => Promise<unknown> } } }
-  ).__TAURI__;
+  const tauri = (window as { __TAURI__?: { core: { invoke: (cmd: string) => Promise<unknown> } } })
+    .__TAURI__;
   const plainKey = (ev: KeyboardEvent): boolean =>
     !ev.metaKey && !ev.ctrlKey && !ev.altKey && !isEditableTarget(ev.target);
   window.addEventListener('keydown', (ev) => {
