@@ -1177,3 +1177,24 @@ body {
   border-radius: 4px;
   text-decoration: none;
 }
+
+/* Fast tooltip (replaces native title bubbles; see tooltip.ts). */
+.ui-tooltip {
+  position: fixed;
+  z-index: 100;
+  max-width: 280px;
+  padding: 4px 8px;
+  background: rgba(20, 20, 24, 0.96);
+  color: #eee;
+  border: 1px solid #4a4a55;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  font-size: 12px;
+  line-height: 1.35;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.ui-tooltip-visible {
+  opacity: 1;
+}

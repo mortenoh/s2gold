@@ -524,6 +524,8 @@ in-game **Settings** panel.)
 | **Z**                                  | Toggle 1× / 2× zoom                                      |
 | **Space**                              | Pause / resume                                           |
 | **Esc** or **right-click**             | Cancel road mode / close a menu                          |
+| **F**                                  | Toggle fullscreen                                        |
+| **Q**                                  | Quit (desktop app; the session autosaves)                |
 | **F5**                                 | Quicksave                                                |
 | **F9**                                 | Quickload                                                |
 

@@ -9,6 +9,21 @@ use std::path::PathBuf;
 use s2gold_server::{Settings, build_router, serve};
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
+/// Toggle native window fullscreen. Invoked by the frontend's F key; the HTML
+/// Fullscreen API is not available in WKWebView here, so the desktop uses the
+/// window itself (same effect as the traffic-light zoom button).
+#[tauri::command]
+fn toggle_fullscreen(window: tauri::WebviewWindow) {
+    let fullscreen = window.is_fullscreen().unwrap_or(false);
+    let _ = window.set_fullscreen(!fullscreen);
+}
+
+/// Quit the app. Invoked by the frontend's Q key.
+#[tauri::command]
+fn quit(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
 /// Desktop defaults: the database lives in the per-user app data directory;
 /// the frontend dist, converted assets, and one-time legacy migration sources
 /// come from the repo this binary was built in (personal-use app — the 75 MB
@@ -34,6 +49,7 @@ fn desktop_settings(app: &tauri::AppHandle) -> Settings {
 
 fn main() {
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![toggle_fullscreen, quit])
         .setup(|app| {
             let settings = desktop_settings(app.handle());
             let listener = tauri::async_runtime::block_on(tokio::net::TcpListener::bind((
@@ -47,7 +63,10 @@ fn main() {
                     eprintln!("server error: {err}");
                 }
             });
-            let url = format!("http://127.0.0.1:{port}/")
+            // Start path override for debugging (e.g. /play/<map> to land
+            // straight in the game).
+            let start_path = std::env::var("S2GOLD_START_PATH").unwrap_or_else(|_| "/".to_string());
+            let url = format!("http://127.0.0.1:{port}{start_path}")
                 .parse()
                 .expect("localhost URL is valid");
             println!("s2gold-desktop serving on {url}");

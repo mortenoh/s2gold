@@ -3,7 +3,7 @@
 # server + desktop shell are Rust (cargo).
 
 .DEFAULT_GOAL := help
-.PHONY: help install doctor dev serve build test lint e2e e2e-install desktop desktop-build clean
+.PHONY: help install doctor dev serve build test lint e2e e2e-install desktop desktop-app desktop-build clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -50,7 +50,11 @@ desktop: ## Run the Tauri desktop shell (dev)
 	pnpm -r build
 	cd crates/desktop && pnpm exec tauri dev
 
-desktop-build: ## Build the desktop app bundle
+desktop-app: ## Build the final macOS .app bundle only (target/release/bundle/macos/)
+	pnpm -r build
+	cd crates/desktop && pnpm exec tauri build --bundles app
+
+desktop-build: ## Build all desktop bundles (.app + .dmg)
 	pnpm -r build
 	cd crates/desktop && pnpm exec tauri build
 

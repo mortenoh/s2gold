@@ -1,7 +1,10 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "No IPC: the window loads the embedded localhost server as an external URL.",
+  "description": "The window loads the embedded localhost server; IPC is limited to the app's own fullscreen/quit commands.",
   "windows": ["main"],
-  "permissions": []
+  "remote": {
+    "urls": ["http://127.0.0.1:*"]
+  },
+  "permissions": ["core:default", "allow-toggle-fullscreen", "allow-quit"]
 }
