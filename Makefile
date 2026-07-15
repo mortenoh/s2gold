@@ -3,7 +3,7 @@
 # server + desktop shell are Rust (cargo).
 
 .DEFAULT_GOAL := help
-.PHONY: help install doctor dev serve build test lint e2e e2e-install desktop desktop-app desktop-build clean
+.PHONY: help install doctor dev serve build test lint e2e e2e-install desktop desktop-app desktop-build desktop-zip clean
 
 # Local-only secrets for desktop notarization (Apple ID, app-specific
 # password, team id) live in a gitignored .env at the repo root — plain
@@ -78,9 +78,24 @@ desktop-app: ## Build the final signed macOS .app bundle only (target/release/bu
 	pnpm -r build
 	$(call tauri_build_signed,--bundles app)
 
-desktop-build: ## Build all desktop bundles, signed (.app + .dmg)
+# Zip the built .app with ditto (a plain zip would break the signature).
+define zip_app
+	@mkdir -p target/release/bundle/zip
+	@VERSION=$$(sed -n 's/.*"version": "\([^"]*\)".*/\1/p' crates/desktop/tauri.conf.json | head -1); \
+	ARCH=$$(uname -m | sed 's/arm64/aarch64/'); \
+	OUT="target/release/bundle/zip/s2gold_$${VERSION}_$${ARCH}.app.zip"; \
+	rm -f "$$OUT"; \
+	ditto -c -k --keepParent target/release/bundle/macos/s2gold.app "$$OUT"; \
+	echo ">>> $$OUT"
+endef
+
+desktop-build: ## Build all desktop bundles, signed (.app + .dmg + .zip)
 	pnpm -r build
 	$(call tauri_build_signed,)
+	$(call zip_app)
+
+desktop-zip: desktop-app ## Build the signed .app and zip it for distribution
+	$(call zip_app)
 
 clean: ## Remove build outputs and node_modules
 	rm -rf node_modules packages/*/node_modules e2e/node_modules \
