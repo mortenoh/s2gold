@@ -129,6 +129,21 @@ export function worldGeometry(world: World): Geometry {
   return new Geometry(world.width, world.height);
 }
 
+/**
+ * Execute queued commands without advancing the tick; returns emitted events.
+ * tickWorld runs due commands before any simulation, so draining them early —
+ * same tick, same canonical order, world untouched in between — is
+ * deterministically identical to leaving them for the next tick. The app uses
+ * this to apply orders issued while paused instead of silently deferring them
+ * until the game resumes.
+ */
+export function drainCommands(world: World, rules: TerrainRules = GREENLAND_RULES): GameEvent[] {
+  const geom = worldGeometry(world);
+  const events = new EventSink();
+  runDueCommands(world, geom, rules, events);
+  return events.drain();
+}
+
 /** Advance the simulation exactly one game frame; returns emitted events. */
 export function tickWorld(world: World, rules: TerrainRules = GREENLAND_RULES): GameEvent[] {
   const geom = worldGeometry(world);
