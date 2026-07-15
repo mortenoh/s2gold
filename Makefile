@@ -5,6 +5,30 @@
 .DEFAULT_GOAL := help
 .PHONY: help install doctor dev serve build test lint e2e e2e-install desktop desktop-app desktop-build clean
 
+# Local-only secrets for desktop notarization (Apple ID, app-specific
+# password, team id) live in a gitignored .env at the repo root — plain
+# KEY=value lines, see .env.example. Absent .env is fine: the app is then
+# signed (when a Developer ID is in the keychain) but not notarized.
+ifneq (,$(wildcard .env))
+include .env
+export APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID APPLE_SIGNING_IDENTITY
+endif
+
+# Sign with a Developer ID when one is available: honour a pre-set
+# APPLE_SIGNING_IDENTITY, else sniff the login keychain; with no cert fall
+# back to an ad-hoc (unsigned) build. $(1) = extra tauri build args.
+define tauri_build_signed
+	cd crates/desktop && \
+	  SIGN_ID="$${APPLE_SIGNING_IDENTITY:-$$(security find-identity -v -p codesigning 2>/dev/null | sed -n 's/.*"\(Developer ID Application: [^"]*\)".*/\1/p' | head -1)}"; \
+	  if [ -n "$$SIGN_ID" ]; then \
+	    echo ">>> Signing as: $$SIGN_ID"; \
+	    APPLE_SIGNING_IDENTITY="$$SIGN_ID" pnpm exec tauri build $(1); \
+	  else \
+	    echo ">>> No Developer ID in keychain — ad-hoc (unsigned) build"; \
+	    pnpm exec tauri build $(1); \
+	  fi
+endef
+
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -50,13 +74,13 @@ desktop: ## Run the Tauri desktop shell (dev)
 	pnpm -r build
 	cd crates/desktop && pnpm exec tauri dev
 
-desktop-app: ## Build the final macOS .app bundle only (target/release/bundle/macos/)
+desktop-app: ## Build the final signed macOS .app bundle only (target/release/bundle/macos/)
 	pnpm -r build
-	cd crates/desktop && pnpm exec tauri build --bundles app
+	$(call tauri_build_signed,--bundles app)
 
-desktop-build: ## Build all desktop bundles (.app + .dmg)
+desktop-build: ## Build all desktop bundles, signed (.app + .dmg)
 	pnpm -r build
-	cd crates/desktop && pnpm exec tauri build
+	$(call tauri_build_signed,)
 
 clean: ## Remove build outputs and node_modules
 	rm -rf node_modules packages/*/node_modules e2e/node_modules \

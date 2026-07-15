@@ -35,6 +35,9 @@ coverage/
 e2e/test-results/
 e2e/playwright-report/
 
+# Local desktop-signing secrets (see .env.example)
+.env
+
 # Claude Code runtime state
 .claude/
 .playwright-mcp/
