@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "s2gold",
+  "version": "0.1.0",
+  "identifier": "com.winterop.s2gold",
+  "build": {
+    "frontendDist": "../../packages/app/dist"
+  },
+  "app": {
+    "windows": [],
+    "withGlobalTauri": true,
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"],
+    "icon": ["icons/icon.icns"]
+  }
+}

@@ -5,8 +5,10 @@ import {
   canPlaceBuilding,
   canPlaceFlag,
   createWorld,
+  drainCommands,
   flagAt,
   GREENLAND_RULES,
+  hashWorld,
   ownerPlayer,
   OWNER_NONE,
   terrainBuildable,
@@ -334,5 +336,34 @@ describe('freeing a mid-carry carrier does not orphan its ware', () => {
     const w = world.wares.items[wareId];
     if (w) expect(w.loc).not.toBe('carried');
     expect(orphanCarriedWares(world)).toBe(0);
+  });
+});
+
+describe('drainCommands (paused-order execution)', () => {
+  it('executes queued commands without advancing the tick', () => {
+    const world = createWorld(makeFlatMap(16, 16, 1, 1), { seed: 1, players: 1 });
+    const geom = worldGeometry(world);
+    const node = geom.index(6, 8);
+    applyCommand(world, { player: 0, type: 'placeFlag', node });
+    const tickBefore = world.tick;
+    const events = drainCommands(world);
+    expect(world.tick).toBe(tickBefore);
+    expect(flagAt(world, node)).not.toBeNull();
+    expect(events.some((e) => e.type === 'FlagPlaced')).toBe(true);
+    expect(world.commands).toHaveLength(0);
+  });
+
+  it('drain-then-tick hashes identically to leaving commands for the tick', () => {
+    const make = () => createWorld(makeFlatMap(16, 16, 1, 1), { seed: 7, players: 1 });
+    const a = make();
+    const b = make();
+    const geom = worldGeometry(a);
+    const node = geom.index(6, 8);
+    applyCommand(a, { player: 0, type: 'placeFlag', node });
+    applyCommand(b, { player: 0, type: 'placeFlag', node });
+    drainCommands(a); // a executes the order "while paused"...
+    tickWorld(a); // ...then resumes
+    tickWorld(b); // b runs the order inside the tick as usual
+    expect(hashWorld(a)).toBe(hashWorld(b));
   });
 });

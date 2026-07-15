@@ -27,6 +27,7 @@ import {
   harborDockNode,
   harborsOf,
   makeBuilding,
+  drainCommands,
   militaryView,
   storeAlloc,
   ownerAt,
@@ -276,6 +277,12 @@ export class GameSession {
         steps++;
       }
       if (steps >= MAX_STEPS_PER_UPDATE) this.acc = 0;
+    } else if (this.world.commands.length > 0) {
+      // Orders issued while paused (place building/flag, demolish, ...) still
+      // execute immediately — deterministically identical to the next tick,
+      // which would run them first anyway — so the player sees the site or
+      // flag appear instead of a silent nothing until resume.
+      for (const e of drainCommands(this.world, this.rules)) this.record(e);
     }
     return this.paused ? 0 : Math.min(1, this.acc / interval);
   }

@@ -35,6 +35,7 @@ import { makeWareIconSet } from './ware-icons';
 import { loadBobAtlas } from './bob-atlas';
 import { MinimapView } from './minimap-view';
 import { installHandCursor } from './cursor';
+import { installTooltips } from './tooltip';
 import { GameSession, SPEEDS, type Speed } from './session';
 import {
   buildDynamics,
@@ -58,7 +59,7 @@ import {
 import { Interaction } from './interaction';
 import { makeBuildIconSet, type BuildIconSet } from './build-icons';
 import type { LoadedAtlas } from './sprite-atlas';
-import { installCameraInput } from './camera-input';
+import { installCameraInput, isEditableTarget } from './camera-input';
 import { installDebugSurface, updateDebugCounters } from './debug-surface';
 import { ResourceReadout } from './resource-readout';
 import { startSessionPersistence } from './session-persistence';
@@ -127,6 +128,7 @@ async function boot(): Promise<void> {
   // Original pointing-hand cursor over the map (cosmetic; absent without the ui
   // assets, where the CSS falls back to grab). Fire-and-forget: never blocks boot.
   void installHandCursor();
+  installTooltips();
 
   const index = await loadMapIndex();
   if (!index) {
@@ -877,6 +879,14 @@ async function boot(): Promise<void> {
     close: () => goodsPanel.close(),
     element: () => goodsPanel.element,
   });
+  // In the desktop shell (Tauri) the F and Q keys go through the app's native
+  // commands: WKWebView does not support the HTML Fullscreen API here, and only
+  // the shell can quit the process. Browsers use the web equivalents.
+  const tauri = (
+    window as { __TAURI__?: { core: { invoke: (cmd: string) => Promise<unknown> } } }
+  ).__TAURI__;
+  const plainKey = (ev: KeyboardEvent): boolean =>
+    !ev.metaKey && !ev.ctrlKey && !ev.altKey && !isEditableTarget(ev.target);
   window.addEventListener('keydown', (ev) => {
     if (ev.key === 'F5') {
       ev.preventDefault();
@@ -884,6 +894,16 @@ async function boot(): Promise<void> {
     } else if (ev.key === 'F9') {
       ev.preventDefault();
       void saveMenu.quickload();
+    } else if ((ev.key === 'f' || ev.key === 'F') && plainKey(ev)) {
+      ev.preventDefault();
+      if (tauri) void tauri.core.invoke('toggle_fullscreen');
+      else if (document.fullscreenElement) void document.exitFullscreen();
+      else void document.documentElement.requestFullscreen();
+    } else if ((ev.key === 'q' || ev.key === 'Q') && plainKey(ev)) {
+      ev.preventDefault();
+      // The live world persists via session autosave, so quitting is safe.
+      if (tauri) void tauri.core.invoke('quit');
+      else window.close(); // no-op in a user-opened browser tab
     }
   });
 

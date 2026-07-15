@@ -1,0 +1,15 @@
+[package]
+name = "s2gold-desktop"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Tauri desktop shell for s2gold: embeds the server on a random localhost port"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+s2gold-server = { path = "../server" }
+tauri = { version = "2", features = [] }
+tokio = { version = "1", features = ["net"] }
