@@ -57,9 +57,12 @@ s2gold/
                          gouraud, palette readers
     convert/             converters (palettes, terrain, pics, graphics, ui, bobs,
                          fonts, maps, texts, audio, video) + atlas packer
-    server/              FastAPI app: built frontend, /assets, /api (saves, sessions)
   tests/                 pytest golden tests (asset-dependent ones skip if no
                          extracted data)
+  crates/
+    server/              Rust axum server: built frontend, /assets, /api (saves,
+                         sessions in a turso/SQLite database)
+    desktop/             Tauri shell embedding the server on a localhost port
   packages/
     engine/              deterministic sim: map, pathfinding, economy, military; zero DOM
     renderer/            WebGL2 terrain + sprites + minimap
@@ -118,7 +121,8 @@ Subcommands for dev: `s2gold inspect <file>`, `s2gold convert <category>`, `s2go
 All planned phases P0 through P7 are implemented and gate-verified: asset pipeline
 (`make install`), terrain renderer, playable economy with build UI and carriers,
 full production chains through coins, positional sound + music, military
-(territory, combat, catapults, fog of war), save/load via the FastAPI server,
+(territory, combat, catapults, fog of war), save/load via the persistence server
+(FastAPI originally; ported to Rust/axum 2026-07-15),
 title/setup/campaign menus with original art, deterministic AI opponents with an
 in-game statistics panel, seafaring (harbors, ships, expeditions) with its browser
 UI, the Roman campaign with briefings/objectives/victory flow, and the intro video.

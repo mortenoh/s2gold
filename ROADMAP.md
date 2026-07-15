@@ -334,3 +334,29 @@ starred buildings as out-of-scope 10th-Anniversary/RttR addon content.
   every job passes locally.
 - The engine determinism gate runs on the synthetic flat map in CI; the
   real-map variant needs locally converted assets.
+
+## F. Platform: Rust server + desktop app (landed 2026-07-15)
+
+The Python FastAPI persistence server was ported to Rust/axum
+(`crates/server`) with the same routes and JSON wire format — the frontend
+did not change. Storage moved from JSON-file-per-record to a single
+SQLite-format database via the turso crate; on first startup any legacy
+`saves/`/`sessions/` JSON files are imported losslessly (timestamps
+byte-exact, pre-nations sessions supported) and left untouched on disk, and
+the behavioral test suite (`crates/server/tests/api.rs`) ports the full
+pytest coverage plus migration cases. A Tauri v2 desktop shell
+(`crates/desktop`) embeds that server on a random localhost port and points
+its webview at it — no IPC surface beyond two app commands
+(toggle_fullscreen, quit) that the game's F/Q keys invoke, declared in the
+build-script app manifest because the webview is a remote (localhost)
+origin. Packaging: `make desktop-app` (signed `.app`), `make desktop-build`
+(signed `.app` + `.dmg` + ditto-zipped `.app`); signing auto-discovers the
+keychain Developer ID, notarization reads Apple credentials from a
+gitignored `.env` (see `.env.example`).
+
+Same-day gameplay/UX fixes that fell out of desktop testing: orders issued
+while paused (place building/flag, demolish) now execute immediately via
+`drainCommands` — deterministically identical, hash-equality engine test —
+instead of silently waiting for resume; and a delegated fast-tooltip layer
+(`game/tooltip.ts`) adopts `title` attributes into a styled tip after 150ms
+instead of the ~1s native bubble, copying text to `aria-label` when absent.
