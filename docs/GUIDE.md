@@ -77,10 +77,10 @@ Choosing **Unlimited play** opens the setup screen.
 ### Server games vs. the /play fallback
 
 How the game is launched depends on whether the small bundled game server (a
-FastAPI app) is running:
+Rust axum app) is running:
 
 - **With the server** (`make serve`, which builds the app and runs
-  `uvicorn s2gold.server.app:app` on port 8000): starting a game creates a
+  the Rust server on port 8000): starting a game creates a
   **server session** at a clean URL like `/game/<map>/<id>`. That URL is
   **shareable and refreshable** — the world autosaves to the server every few
   seconds, so reloading the tab (or reopening the link) restores your game.
