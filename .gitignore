@@ -18,6 +18,13 @@ assets-cache/
 packages/app/public/assets/
 docs/reference-study/
 
+# Rust
+/target/
+crates/desktop/gen/
+
+# Persistence database (JSON originals in saves/ and sessions/ migrate into it)
+/s2gold.db*
+
 # Node
 node_modules/
 coverage/
