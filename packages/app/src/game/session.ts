@@ -869,6 +869,16 @@ export class GameSession {
     applyCommand(this.world, { type: 'setToolPriority', player: this.localPlayer, tools });
   }
 
+  /** Free-play cheat state of the local player (Settings panel). */
+  cheatUnlimited(): boolean {
+    return this.world.players[this.localPlayer]?.cheatUnlimited ?? false;
+  }
+
+  /** Free-play cheat: keep the local player's stocks topped up. */
+  setCheatUnlimited(enabled: boolean): void {
+    applyCommand(this.world, { type: 'cheatUnlimited', player: this.localPlayer, enabled });
+  }
+
   /** Building window: stop or resume an own production building. */
   toggleProduction(buildingId: number, stopped: boolean): void {
     applyCommand(this.world, {

@@ -89,6 +89,15 @@ times (0 = never made). Both re-render from the engine on a short interval
 since commands apply on the next tick. `__s2debug.priorities()` exposes the
 state; `e2e/tests/priority-windows.spec.ts` covers both windows.
 
+Landed 2026-09-07: the unlimited-resources cheat for unlimited play. The
+Settings panel's Cheats row (hidden in campaign chapters) toggles
+`Player.cheatUnlimited` (WORLD_VERSION 6, v5->v6 migration) through the
+`cheatUnlimited` command; `systems/cheats.ts` then tops every ware in the
+player's working warehouses, the Helper pool, idle privates and donkeys up
+to a floor each tick (99 wares / 99 helpers / 30 privates / 20 donkeys),
+never taking anything away. Deterministic and per player. Covered by
+`engine/src/cheats.test.ts` and `e2e/tests/cheats.spec.ts`.
+
 
 Landed 2026-07-12: builder-to-site and settler-to-building travel is now
 road-constrained (`findRoadWalkPath` over the flag/road graph). A building

@@ -16,7 +16,6 @@ import {
 } from './index';
 import { makeFlatMap } from './harness';
 import { claimArea, connectToHq, grantWarehouse, spawnBuilding } from './harness-economy';
-import { WORLD_VERSION } from './world';
 
 function planksMade(world: ReturnType<typeof createWorld>, ticks: number): number {
   let n = 0;
@@ -76,11 +75,12 @@ describe('stop production', () => {
     expect(loaded.buildings.items[saw.id]?.productionStopped).toBe(true);
 
     // A v4 save (no field) loads with every building running.
+    // (WORLD_VERSION keeps moving; 4 is fixed to the version before the field.)
     const legacy = JSON.parse(serializeWorld(world)) as {
       version: number;
       buildings: { items: ({ productionStopped?: boolean } | null)[] };
     };
-    legacy.version = WORLD_VERSION - 1;
+    legacy.version = 4; // the last version without the field
     for (const b of legacy.buildings.items) if (b) delete b.productionStopped;
     const migrated = deserializeWorld(JSON.stringify(legacy));
     expect(migrated.buildings.items[saw.id]?.productionStopped).toBe(false);

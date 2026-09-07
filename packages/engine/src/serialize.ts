@@ -93,6 +93,12 @@ const MIGRATIONS: Readonly<Record<number, (w: World) => void>> = {
       if (b) b.productionStopped ??= false;
     }
   },
+  // v5 -> v6: the unlimited-resources cheat flag; older saves never cheated.
+  5: (w) => {
+    for (const p of w.players ?? []) {
+      if (p) p.cheatUnlimited ??= false;
+    }
+  },
 };
 
 /** Parse a serialized world, migrating older versions up to the current one. */

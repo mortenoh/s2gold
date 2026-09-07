@@ -12,6 +12,7 @@ import { EventSink, type GameEvent } from './events';
 import { Geometry } from './geometry';
 import { GREENLAND_RULES, type TerrainRules } from './terrain';
 import { runCarriers } from './systems/carriers';
+import { runCheats } from './systems/cheats';
 import { runConstruction } from './systems/construction';
 import { runGeologists } from './systems/geologist';
 import { runPopulation } from './systems/recruit';
@@ -149,6 +150,7 @@ export function tickWorld(world: World, rules: TerrainRules = GREENLAND_RULES): 
   const geom = worldGeometry(world);
   const events = new EventSink();
   runDueCommands(world, geom, rules, events); // 1. commands
+  runCheats(world); // 1a. free-play unlimited-resources cheat (no-op unless enabled)
   runPopulation(world); // 1b. HQ population growth (tops up the Helper pool)
   runConstruction(world, geom, events); // 2. construction (+ builder steps)
   runProduction(world, geom, rules, events); // 3. production (+ worker steps)

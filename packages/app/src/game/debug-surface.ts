@@ -56,6 +56,8 @@ export interface S2Debug {
   buildingsOf(player: number): number;
   /** Transport order + tool weights of the local player. */
   priorities(): { transport: readonly string[]; toolWeights: Readonly<Record<string, number>> };
+  /** Free-play cheat state of the local player. */
+  cheatUnlimited(): boolean;
   /** Toggle fog of war (default on for a new game). */
   setFog(on: boolean): void;
   /** Total garrisoned soldiers at a military building node (-1 when not military). */
@@ -152,6 +154,7 @@ export function installDebugSurface(deps: DebugSurfaceDeps): void {
     nationArchiveOf: (player) => deps.nationArchiveFor(player),
     buildingsOf: (player) => s.buildingsOf(player),
     priorities: () => s.priorities(),
+    cheatUnlimited: () => s.cheatUnlimited(),
     setFog: deps.setFog,
     militaryTroops: (node) => s.militaryAt(node)?.troops ?? -1,
     debugSpawnMilitary: (player, node, type) =>

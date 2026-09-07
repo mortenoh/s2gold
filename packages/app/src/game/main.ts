@@ -290,6 +290,32 @@ async function boot(): Promise<void> {
     applyFpsVis();
     applyFpsToggle();
   });
+  // Free-play cheats (hidden in campaign chapters: see startCampaign).
+  const cheatToggle = el('button', {
+    text: 'Unlimited resources: off',
+    attrs: {
+      'data-testid': 'cheat-unlimited',
+      type: 'button',
+      title: 'Keep every ware, helper and soldier stocked (free play only)',
+    },
+  });
+  const applyCheatToggle = (): void => {
+    const on = session?.cheatUnlimited() ?? false;
+    cheatToggle.textContent = on ? 'Unlimited resources: on' : 'Unlimited resources: off';
+    cheatToggle.classList.toggle('active', on);
+  };
+  cheatToggle.addEventListener('click', () => {
+    if (!session) return;
+    session.setCheatUnlimited(!session.cheatUnlimited());
+    // The command applies on the next tick; reflect it once it has.
+    window.setTimeout(applyCheatToggle, 150);
+  });
+  const cheatRow = el(
+    'div',
+    { class: 'settings-row', attrs: { 'data-testid': 'cheat-row' } },
+    el('span', { class: 'settings-label', text: 'Cheats' }),
+    cheatToggle,
+  );
   const settingsPanel = el(
     'div',
     { class: 'settings-panel', attrs: { 'data-testid': 'settings-panel' } },
@@ -300,6 +326,7 @@ async function boot(): Promise<void> {
       mapSelect.element,
     ),
     el('div', { class: 'settings-row' }, fogButton, tickToggle, fpsToggle),
+    cheatRow,
     audioControls,
   );
   settingsPanel.hidden = true;
@@ -855,6 +882,7 @@ async function boot(): Promise<void> {
    */
   function resyncAfterLoad(): void {
     overlayKey = '';
+    applyCheatToggle();
     if (session) {
       prevExpReady = session.counters.expeditionsReady;
       prevExpLanded = session.counters.expeditionsLanded;
@@ -1176,6 +1204,9 @@ async function boot(): Promise<void> {
   /** Wire the Objectives panel + win-condition tracking for a chapter. */
   function startCampaign(chapter: Chapter): void {
     document.title = `s2gold — ${chapter.title}`;
+    // Cheats are for unlimited play only. (The row's flex display would
+    // override the hidden attribute, so set the style directly.)
+    cheatRow.style.display = 'none';
     const campaign = new CampaignController({ root: gameRoot, session: () => session, chapter });
     activeCampaign = campaign;
     activeChapterMap = chapter.mapName;
@@ -1278,6 +1309,7 @@ async function boot(): Promise<void> {
 
   // Resume last game (title menu): load the newest save for this map.
   if (params.get('resume') === '1') void saveMenu.quickload();
+  applyCheatToggle();
   // Load game (title menu list): load one specific save into this map.
   const saveParam = params.get('save');
   if (saveParam) void saveMenu.loadById(saveParam);

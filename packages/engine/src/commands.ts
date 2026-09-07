@@ -109,6 +109,14 @@ export type Command =
       enabled: boolean;
     }
   | {
+      // Free-play cheat: keep the player's warehouses and pools topped up.
+      tick: number;
+      player: number;
+      seq: number;
+      type: 'cheatUnlimited';
+      enabled: boolean;
+    }
+  | {
       // Building window: stop/resume a production building (S2 "stop
       // production"). Ignored for warehouses, the HQ and military buildings.
       tick: number;
@@ -229,6 +237,11 @@ function executeCommand(
       if (b && b.player === cmd.player && buildingDef(b.type)?.kind === 'military') {
         b.coinsEnabled = cmd.enabled;
       }
+      break;
+    }
+    case 'cheatUnlimited': {
+      const pl = world.players[cmd.player];
+      if (pl) pl.cheatUnlimited = cmd.enabled;
       break;
     }
     case 'toggleProduction': {

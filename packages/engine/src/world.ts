@@ -30,7 +30,7 @@ import { seedRng, type RngState } from './rng';
 import { recalcTerritory } from './systems/territory';
 
 /** Format version for serialized worlds. */
-export const WORLD_VERSION = 5;
+export const WORLD_VERSION = 6;
 
 /**
  * The four playable peoples of Settlers II. In the original these are purely
@@ -311,6 +311,12 @@ export interface Player {
    * Recruited privates land in slot 0; occupation draws from the weak end.
    */
   soldiers: number[];
+  /**
+   * Unlimited-resources cheat (free play only, set through the Settings
+   * panel): every tick the player's warehouses, Helper pool, idle privates and
+   * donkeys are topped up to the cheat floor (systems/cheats.ts).
+   */
+  cheatUnlimited: boolean;
   /** Ticks until the next soldier is recruited (-1 = idle). MILITARY.md §6. */
   recruitTimer: number;
 }
@@ -530,6 +536,7 @@ export function createWorld(map: MapJson, options: CreateWorldOptions): World {
       toolCycle: 0,
       transportPriority: { ...DEFAULT_TRANSPORT_PRIORITY },
       soldiers: [...HQ_START_SOLDIERS],
+      cheatUnlimited: false,
       recruitTimer: -1,
     };
     world.players.push(player);
