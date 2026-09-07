@@ -379,14 +379,21 @@ from a source tree that has already run `make install`.
 
 Steps, in order of payoff:
 
-1. Bundle the frontend. Embed `packages/app/dist` into the binary
-   (`include_dir!`/`rust-embed` served by axum, or Tauri resources) so the
-   app no longer needs the repo at runtime. The server already serves
-   `dist/app/`; only the root path changes.
-2. Move runtime data under the OS app-data directory. Assets go to
-   `<app_data>/assets`, the database is already there. Drop the legacy
-   `saves/`/`sessions/` import for the desktop build (or point it at the
-   same app-data dir).
+1. LANDED 2026-09-07: bundle the frontend. The server crate gained an
+   `embed-frontend` feature (`rust-embed`, `crates/server/src/embedded.rs`)
+   that compiles `packages/app/dist` into the binary and serves it with the
+   same clean-URL table as the on-disk mount; `Settings.embedded_frontend`
+   selects it and the desktop crate enables the feature. Release builds carry
+   the files, debug builds read them from disk per request. Verified: the
+   release binary started from `/tmp` serves `/`, `/setup`, `/game/..`, the
+   hashed `/app/*.js` bundle and `/api/*` with no repo checkout.
+2. LANDED 2026-09-07: runtime data under the OS app-data directory
+   (`~/Library/Application Support/com.winterop.s2gold` on macOS):
+   `s2gold.db`, `assets/`, and the (normally empty) `legacy/saves|sessions`
+   import sources. Debug builds fall back to the repo's converted asset tree
+   when app data holds no `assets/manifest.json`, so `make desktop` still
+   works from a checkout; release builds show the missing-assets state until
+   step 3 lands.
 3. First-run setup screen (the "no assets" state). When `<app_data>/assets/
    manifest.json` is missing, the webview shows a native file picker
    (tauri-plugin-dialog) for `setup_the_settlers_2_gold_*.exe`, then runs

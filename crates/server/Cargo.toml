@@ -23,6 +23,15 @@ tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "net", "s
 tower-http = { version = "0.7.0", features = ["fs"] }
 turso = "0.7.0"
 uuid = { version = "1.23.5", features = ["v4"] }
+rust-embed = { version = "8.12.0", optional = true }
+mime_guess = { version = "2.0.5", optional = true }
+
+[features]
+default = []
+# Compile packages/app/dist into the binary and serve it from memory (the
+# desktop shell). Build the frontend first: the folder must exist at compile
+# time (release builds embed it; debug builds read it from disk on request).
+embed-frontend = ["dep:rust-embed", "dep:mime_guess"]
 
 [dev-dependencies]
 axum-test = "21.0.0"

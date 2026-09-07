@@ -10,7 +10,11 @@ pub struct Settings {
     pub host: String,
     pub port: u16,
     pub assets_dir: PathBuf,
+    /// On-disk frontend build; ignored when `embedded_frontend` is set.
     pub frontend_dist: PathBuf,
+    /// Serve the frontend compiled into the binary (feature `embed-frontend`)
+    /// instead of `frontend_dist`. Set by the desktop shell.
+    pub embedded_frontend: bool,
     pub db_path: PathBuf,
     /// One-time migration source: pre-database JSON save files.
     pub legacy_saves_dir: PathBuf,
@@ -27,6 +31,7 @@ impl Default for Settings {
             port: 8000,
             assets_dir: PathBuf::from("packages/app/public/assets"),
             frontend_dist: PathBuf::from("packages/app/dist"),
+            embedded_frontend: false,
             db_path: PathBuf::from("s2gold.db"),
             legacy_saves_dir: PathBuf::from("saves"),
             legacy_sessions_dir: PathBuf::from("sessions"),

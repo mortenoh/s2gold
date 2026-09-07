@@ -24,24 +24,38 @@ fn quit(app: tauri::AppHandle) {
     app.exit(0);
 }
 
-/// Desktop defaults: the database lives in the per-user app data directory;
-/// the frontend dist, converted assets, and one-time legacy migration sources
-/// come from the repo this binary was built in (personal-use app — the 75 MB
-/// git-ignored asset tree is not bundled). S2GOLD_* env vars override any field.
+/// Desktop defaults: everything lives under the per-user app data directory
+/// (`<app_data>/s2gold.db`, `<app_data>/assets`), and the frontend is compiled
+/// into the binary (server feature `embed-frontend`), so the built app runs
+/// without the source tree. The bundle itself carries no game data: the
+/// converted assets are produced on this machine from the user's own GOG
+/// installer. Debug builds fall back to the repo's converted asset tree when
+/// app data has none yet, so `make desktop` keeps working from a checkout.
+/// S2GOLD_* env vars override any field.
 fn desktop_settings(app: &tauri::AppHandle) -> Settings {
-    let repo_root = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."));
     let app_data = app
         .path()
         .app_data_dir()
         .expect("app data directory is available");
+    let mut assets_dir = app_data.join("assets");
+    if cfg!(debug_assertions) && !assets_dir.join("manifest.json").is_file() {
+        let repo_assets = PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../packages/app/public/assets"
+        ));
+        if repo_assets.join("manifest.json").is_file() {
+            assets_dir = repo_assets;
+        }
+    }
     Settings {
         host: "127.0.0.1".to_string(),
         port: 0,
-        assets_dir: repo_root.join("packages/app/public/assets"),
-        frontend_dist: repo_root.join("packages/app/dist"),
+        assets_dir,
+        frontend_dist: PathBuf::new(),
+        embedded_frontend: true,
         db_path: app_data.join("s2gold.db"),
-        legacy_saves_dir: repo_root.join("saves"),
-        legacy_sessions_dir: repo_root.join("sessions"),
+        legacy_saves_dir: app_data.join("legacy/saves"),
+        legacy_sessions_dir: app_data.join("legacy/sessions"),
         max_save_bytes: 32 * 1024 * 1024,
     }
     .with_env_overrides()

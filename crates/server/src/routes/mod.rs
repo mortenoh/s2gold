@@ -56,7 +56,19 @@ pub async fn build_router(settings: &Settings) -> Result<Router, StoreError> {
     if settings.assets_dir.is_dir() {
         router = router.nest_service("/assets", ServeDir::new(&settings.assets_dir));
     }
-    if settings.frontend_dist.is_dir() {
+    if settings.embedded_frontend {
+        #[cfg(feature = "embed-frontend")]
+        {
+            router = crate::embedded::mount_frontend(router);
+        }
+        #[cfg(not(feature = "embed-frontend"))]
+        {
+            eprintln!(
+                "embedded_frontend requested but the server was built without the \
+                 embed-frontend feature; serving nothing at /"
+            );
+        }
+    } else if settings.frontend_dist.is_dir() {
         let dist = &settings.frontend_dist;
         let game = ServeFile::new(dist.join("game.html"));
         let index = ServeFile::new(dist.join("index.html"));

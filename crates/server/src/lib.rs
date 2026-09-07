@@ -6,6 +6,8 @@
 //! only. Consumed by the standalone bin and by the Tauri desktop shell, which
 //! embeds the same router on a random localhost port.
 
+#[cfg(feature = "embed-frontend")]
+mod embedded;
 mod error;
 mod models;
 mod routes;

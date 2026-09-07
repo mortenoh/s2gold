@@ -10,6 +10,6 @@ description = "Tauri desktop shell for s2gold: embeds the server on a random loc
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-s2gold-server = { path = "../server" }
+s2gold-server = { path = "../server", features = ["embed-frontend"] }
 tauri = { version = "2", features = [] }
 tokio = { version = "1", features = ["net"] }

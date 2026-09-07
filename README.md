@@ -22,8 +22,9 @@ music, maps and texts into web-native assets under `packages/app/public/assets/`
 - Server (app + assets + saves/sessions API): Rust (axum + turso) under `crates/server/`,
   run via `make serve`; saves live in a single database (`s2gold.db`), and any
   pre-database JSON files in `saves/`/`sessions/` are imported on first startup
-- Desktop app: Tauri shell under `crates/desktop/` embedding the same server,
-  run via `make desktop`
+- Desktop app: Tauri shell under `crates/desktop/` embedding the same server
+  with the frontend compiled in; saves and converted assets live under the OS
+  app-data directory. Run via `make desktop`, bundle via `make desktop-app`
 
 Requirements: `uv`, `pnpm`, `cargo`, `innoextract` (required), `fluidsynth` + `ffmpeg`
 (optional, for music/intro video conversion).

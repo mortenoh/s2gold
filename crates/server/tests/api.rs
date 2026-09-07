@@ -28,6 +28,7 @@ fn settings_for(root: PathBuf, max_save_bytes: usize) -> Settings {
         port: 0,
         assets_dir: root.join("missing-assets"),
         frontend_dist: root.join("missing-dist"),
+        embedded_frontend: false,
         db_path: root.join("s2gold.db"),
         legacy_saves_dir: root.join("saves"),
         legacy_sessions_dir: root.join("sessions"),
@@ -398,4 +399,38 @@ async fn migration_runs_once_and_leaves_originals_untouched() {
     let server = TestServer::new(router);
     assert_eq!(server.get("/api/sessions").await.json::<Value>(), json!([]));
     assert_eq!(server.get("/api/sessions/legacy1").await.status_code(), 404);
+}
+
+/// With `embed-frontend`, the compiled-in dist serves the entry pages and the
+/// clean URLs even when no dist directory exists on disk.
+#[cfg(feature = "embed-frontend")]
+#[tokio::test]
+async fn embedded_frontend_serves_entry_pages() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut settings = settings_for(dir.path().into(), 1024 * 1024);
+    settings.embedded_frontend = true;
+    let router = build_router(&settings).await.unwrap();
+    let server = TestServer::new(router);
+    for path in [
+        "/",
+        "/setup",
+        "/campaign/3",
+        "/play/maps_miss200",
+        "/game/x/y",
+        "/inspector",
+    ] {
+        let res = server.get(path).await;
+        res.assert_status_ok();
+        assert!(
+            res.headers()["content-type"]
+                .to_str()
+                .unwrap()
+                .starts_with("text/html"),
+            "{path}"
+        );
+    }
+    server
+        .get("/does-not-exist.js")
+        .await
+        .assert_status_not_found();
 }
