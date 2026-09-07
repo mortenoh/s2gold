@@ -20,7 +20,13 @@ import { BUILDING, buildingDef, RESOURCE, type BuildingType } from '../constants
 import type { Geometry } from '../geometry';
 import type { TerrainRules } from '../terrain';
 import { storeLive, type World } from '../world';
-import { enemyReferenceNode, hqNodeOf, pickBuildSite, type SiteBias } from './sites';
+import {
+  enemyReferenceNode,
+  hqNodeOf,
+  pickBuildSite,
+  type SiteBias,
+  ownedNodeNearest,
+} from './sites';
 import type { AiState } from './types';
 
 /** One planner goal: reach `count` of `type`, choosing sites by `bias`. */
@@ -34,10 +40,15 @@ interface Goal {
 
 /** How far from the reference node each bias scans for candidate sites. */
 const ECONOMY_SCAN_RADIUS = 16;
+/** How long an unplaceable goal rests before its site scan is retried. */
+const GOAL_RETRY_TICKS = 600;
 const FRONTIER_SCAN_RADIUS = 24;
 
 /** The ordered build plan (cumulative counts per type). */
 const PLAN: readonly Goal[] = [
+  // Military steps are interleaved with the economy from the start: the
+  // original AI pushes its border continuously, and every occupied building
+  // both claims land and banks the soldier surplus that attacks are made of.
   { type: BUILDING.woodcutter, count: 1, bias: 'nearTrees' },
   { type: BUILDING.sawmill, count: 1, bias: 'nearHq' },
   { type: BUILDING.quarry, count: 1, bias: 'nearGranite' },
@@ -47,30 +58,50 @@ const PLAN: readonly Goal[] = [
   { type: BUILDING.guardhouse, count: 2, bias: 'frontier' },
   { type: BUILDING.sawmill, count: 2, bias: 'nearHq' },
   { type: BUILDING.forester, count: 2, bias: 'nearTrees' },
-  { type: BUILDING.farm, count: 1, bias: 'nearHq' },
   { type: BUILDING.guardhouse, count: 3, bias: 'frontier' },
+  { type: BUILDING.farm, count: 1, bias: 'nearHq' },
+  { type: BUILDING.hunter, count: 1, bias: 'nearHq' },
+  { type: BUILDING.guardhouse, count: 4, bias: 'frontier' },
   { type: BUILDING.mill, count: 1, bias: 'nearHq' },
-  // The well goes up only once the bakery is imminent: a well is a generator
-  // producing water continuously, and with no consumer yet every bucket would
-  // flood the road network toward the HQ (pure congestion).
   { type: BUILDING.well, count: 1, bias: 'nearHq' },
+  { type: BUILDING.watchtower, count: 1, bias: 'frontier' },
   { type: BUILDING.bakery, count: 1, bias: 'nearHq' },
   { type: BUILDING.quarry, count: 2, bias: 'nearGranite' },
+  // Quarries exhaust their granite piles; without a granite mine the stone
+  // supply dies and every later site (and the whole expansion) stalls.
+  { type: BUILDING.granitemine, count: 1, bias: 'mine', resource: RESOURCE.granite },
+  { type: BUILDING.guardhouse, count: 5, bias: 'frontier' },
   { type: BUILDING.coalmine, count: 1, bias: 'mine', resource: RESOURCE.coal },
   { type: BUILDING.ironmine, count: 1, bias: 'mine', resource: RESOURCE.iron },
+  { type: BUILDING.guardhouse, count: 6, bias: 'frontier' },
   { type: BUILDING.goldmine, count: 1, bias: 'mine', resource: RESOURCE.gold },
   { type: BUILDING.ironsmelter, count: 1, bias: 'nearHq' },
+  { type: BUILDING.watchtower, count: 2, bias: 'frontier' },
   { type: BUILDING.brewery, count: 1, bias: 'nearHq' },
   { type: BUILDING.armory, count: 1, bias: 'nearHq' },
+  { type: BUILDING.guardhouse, count: 7, bias: 'frontier' },
   { type: BUILDING.metalworks, count: 1, bias: 'nearHq' },
   { type: BUILDING.mint, count: 1, bias: 'nearHq' },
+  { type: BUILDING.fortress, count: 1, bias: 'frontier' },
   // Catapults: frontier area denial once the economy is deep. They are kind
   // 'catapult' (not military), so the maxMilitary cap does not stop them, and
   // they fire automatically as long as dispatch keeps stones coming.
   { type: BUILDING.catapult, count: 1, bias: 'frontier' },
-  { type: BUILDING.guardhouse, count: 4, bias: 'frontier' },
+  { type: BUILDING.guardhouse, count: 8, bias: 'frontier' },
   { type: BUILDING.catapult, count: 2, bias: 'frontier' },
 ];
+
+/**
+ * Open-ended frontier expansion once the fixed plan is met: like the original
+ * AI, keep stepping the border toward the nearest rival until the military cap
+ * or the land runs out. Bigger buildings every few steps hold more soldiers,
+ * which is what an attack's surplus comes from.
+ */
+function expansionType(militaryCount: number): BuildingType {
+  if (militaryCount % 6 === 5) return BUILDING.fortress;
+  if (militaryCount % 3 === 2) return BUILDING.watchtower;
+  return BUILDING.guardhouse;
+}
 
 /** Current number of a building type owned by `player` (sites + working). */
 function countType(world: World, player: number, type: BuildingType): number {
@@ -127,16 +158,25 @@ export function planNextBuilding(
   const hq = hqNodeOf(world, player);
   if (hq < 0) return null;
 
-  for (const goal of PLAN) {
+  for (let gi = 0; gi < PLAN.length; gi++) {
+    const goal = PLAN[gi];
     if (countType(world, player, goal.type) >= goal.count) continue;
     const isMilitary = buildingDef(goal.type)?.kind === 'military';
     if (isMilitary && militaryCount(world, player) >= state.maxMilitary) continue;
+    // A goal that found no site recently is skipped for a while (deterministic).
+    // (`??=`: AI state restored from an older save lacks the table.)
+    if (((state.goalRetryTick ??= {})[gi] ?? 0) > world.tick) continue;
 
     const bias = resolveBias(world, geom, player, goal);
     if (!bias) continue;
 
+    // Frontier: scan OUR land nearest the enemy (the window must contain nodes
+    // we can build on), scored by closeness to the enemy. Centring on the enemy
+    // itself left every guardhouse goal unplaceable whenever rivals started more
+    // than a scan radius apart, so the AI never expanded and never fought.
     const isFrontier = bias.kind === 'frontier';
-    const refNode = isFrontier ? bias.enemyNode : hq;
+    const refNode = isFrontier ? ownedNodeNearest(world, geom, player, bias.enemyNode) : hq;
+    if (refNode < 0) continue;
     const scanRadius = isFrontier ? FRONTIER_SCAN_RADIUS : ECONOMY_SCAN_RADIUS;
     const node = pickBuildSite(
       world,
@@ -149,8 +189,38 @@ export function planNextBuilding(
       scanRadius,
       state.maxRoadLength,
     );
-    if (node < 0) continue;
+    if (node < 0) {
+      state.goalRetryTick[gi] = world.tick + GOAL_RETRY_TICKS;
+      continue;
+    }
     return { player, type: 'placeBuilding', node, buildingType: goal.type };
+  }
+
+  // Plan complete: keep expanding toward the enemy while the cap allows.
+  const owned = militaryCount(world, player);
+  if (owned < state.maxMilitary) {
+    const bias = resolveBias(world, geom, player, {
+      type: BUILDING.guardhouse,
+      count: 0,
+      bias: 'frontier',
+    });
+    if (bias && bias.kind === 'frontier') {
+      const type = expansionType(owned);
+      const center = ownedNodeNearest(world, geom, player, bias.enemyNode);
+      if (center < 0) return null;
+      const node = pickBuildSite(
+        world,
+        geom,
+        rules,
+        player,
+        type,
+        bias,
+        center,
+        FRONTIER_SCAN_RADIUS,
+        state.maxRoadLength,
+      );
+      if (node >= 0) return { player, type: 'placeBuilding', node, buildingType: type };
+    }
   }
   return null;
 }

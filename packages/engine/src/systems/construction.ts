@@ -79,7 +79,7 @@ export function runConstruction(world: World, geom: Geometry, events: EventSink)
   }
 }
 
-function completeBuilding(
+export function completeBuilding(
   world: World,
   geom: Geometry,
   events: EventSink,

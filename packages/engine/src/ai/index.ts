@@ -50,7 +50,13 @@ const DEFAULT_INTERVAL = 12;
 /** Default road-length budget (lattice steps) per connection. */
 const DEFAULT_MAX_ROAD = 14;
 /** Default cap on frontier military buildings. */
-const DEFAULT_MAX_MILITARY = 4;
+/**
+ * Military building cap. The original AI keeps pushing its border until it
+ * meets a rival, so the cap is generous: at 4 (the old value) the computer
+ * stopped after a ring of guardhouses and never reached anyone on maps larger
+ * than a starter island, so fights rarely happened.
+ */
+const DEFAULT_MAX_MILITARY = 20;
 /** Max concurrent construction sites the AI keeps open (throttles material spend). */
 const MAX_CONCURRENT_SITES = 2;
 /** Default independent RNG seed base (mixed with playerId). */
@@ -78,6 +84,7 @@ export function createAiState(playerId: number, options: AiOptions = {}): AiStat
     maxRoadLength: Math.max(1, options.maxRoadLength ?? DEFAULT_MAX_ROAD),
     maxMilitary: Math.max(0, options.maxMilitary ?? DEFAULT_MAX_MILITARY),
     roadAttempts: {},
+    goalRetryTick: {},
     coinsSet: {},
   };
 }

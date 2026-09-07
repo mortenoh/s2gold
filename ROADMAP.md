@@ -82,6 +82,30 @@ never committed (original art, same policy as the converted assets).
 
 ## Gameplay fidelity
 
+Landed 2026-09-07 (computer opponents that actually fight): three defects
+kept the AI from ever meeting a rival. Its frontier site scan was centred on
+the ENEMY building with a 24-node radius, so on any map where rivals start
+farther apart than that no guardhouse goal was ever placeable and the whole
+military plan was skipped; the military cap was 4; and the plan had no
+granite mine, so once the quarries emptied every later site (and the
+expansion) stalled on stone. Now the frontier scan is centred on the AI's own
+land nearest the enemy (`ownedNodeNearest`), the cap is 20 with an open-ended
+"keep stepping toward the enemy" goal past the fixed plan (guardhouse,
+watchtower, fortress in rotation), and the plan interleaves military with the
+economy from the start and adds a hunter and a granite mine. Unplaceable
+goals back off for 600 ticks instead of being rescanned every cycle. Measured
+with `scripts/soak.ts` over 60k ticks: chapter III's map went from 0 fights
+and 0 occupied military buildings to 88 fights / 18 captures / 149
+occupations; the 5-player "Good old times" from 106 fights / 6 captures to
+179 / 29. `scripts/duel.ts` plays a passive human against the AI and reports
+whether it attacks, captures and razes the headquarters.
+
+Landed 2026-09-07 (cheats, free play only): Instant build joins Unlimited
+resources in the Settings panel's Cheats row (`Player.cheatInstantBuild`,
+WORLD_VERSION 7): every construction site of the player completes at once.
+Verified in the browser with all 25 building types placed and finished.
+
+
 Landed 2026-09-07 (node walkability, original rule): a settler may stand on a
 node unless any of the six triangles around it is lava, and only if at least
 one of the six is walkable ground (`engine/src/walk.ts`). The old rule needed

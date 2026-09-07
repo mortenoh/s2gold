@@ -50,6 +50,7 @@ const timed = (name: string, fn: () => void): void => {
   cost[name] = (cost[name] ?? 0) + performance.now() - t;
 };
 
+let fights = 0, captured = 0, occupied = 0;
 const start = performance.now();
 for (let i = 0; i < ticks; i++) {
   timed('ai', () => {
@@ -67,7 +68,11 @@ for (let i = 0; i < ticks; i++) {
   timed('geologists', () => runGeologists(world, geom, rules, events));
   timed('seafaring', () => runSeafaring(world, geom, events));
   world.tick++;
-  events.drain();
+  for (const e of events.drain()) {
+    if (e.type === 'FightStarted') fights++;
+    else if (e.type === 'BuildingCaptured') captured++;
+    else if (e.type === 'MilitaryOccupied') occupied++;
+  }
   if ((i + 1) % 1000 === 0) {
     const elapsed = performance.now() - start;
     console.log(`tick ${i + 1}: ${((i + 1) / (elapsed / 1000)).toFixed(0)} ticks/s`);
@@ -79,6 +84,7 @@ for (const b of world.buildings.items) if (b) buildings++;
 console.log(
   `${mapName} ${map.width}x${map.height} players=${world.players.length} buildings=${buildings} hash=${hashWorld(world)}`,
 );
+console.log(`fights=${fights} captured=${captured} militaryOccupied=${occupied}`);
 console.log(
   `total ${total.toFixed(0)} ms for ${ticks} ticks = ${(total / ticks).toFixed(3)} ms/tick`,
 );

@@ -123,7 +123,8 @@ forget: the **Map** picker (switch maps without leaving), **Fog** of war on/off,
 the debug **Tick** and **FPS** readouts (both off by default), audio —
 **SFX** mute + volume and **Music** on/off + volume — and, in unlimited play
 only, the **Cheats** row: **Unlimited resources** keeps every ware in your
-warehouses, your helpers, privates and donkeys topped up while it is on.
+warehouses, your helpers, privates and donkeys topped up while it is on, and
+**Instant build** finishes every construction site the moment it is placed.
 
 **The minimap** (bottom-right corner) shows the whole map, tinted by territory
 owner. **Click anywhere on it to jump the camera there** — the fastest way to

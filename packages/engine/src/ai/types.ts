@@ -44,5 +44,12 @@ export interface AiState {
   /** flagId -> number of road-connect attempts made (self-heals stuck flags). */
   roadAttempts: Record<number, number>;
   /** buildingId -> last coin-enable state the AI issued (avoids redundant toggles). */
+  /**
+   * Per plan-goal backoff: goal index -> tick before which the goal is not
+   * retried, after a cycle found no site for it. Site scans are the AI's main
+   * cost, and an unplaceable goal (no mountain for a mine, no coast) would
+   * otherwise be rescanned every cycle for the rest of the game.
+   */
+  goalRetryTick: Record<number, number>;
   coinsSet: Record<number, boolean>;
 }

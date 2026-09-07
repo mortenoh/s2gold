@@ -29,7 +29,13 @@ import { harborDockNode, isCoastalLand, isWaterNode } from '../water';
 import { storeLive, type Building, type Ship, type World } from '../world';
 import { militaryCount } from './planner';
 import { flagsConnectedToHq } from './roads';
-import { hqNodeOf, pickBuildSite, playerFlagNodes, siteRoadDistance } from './sites';
+import {
+  hqNodeOf,
+  ownedNodeNearest,
+  pickBuildSite,
+  playerFlagNodes,
+  siteRoadDistance,
+} from './sites';
 import type { AiState } from './types';
 
 /**
@@ -289,23 +295,6 @@ function pickCoastObjective(
     if (!canPlaceHarbor(world, geom, rules, n)) continue;
     if (pickTarget(world, geom, sea, n) < 0) continue; // must open a real sea crossing
     const d = geom.distance(hq, n);
-    if (d < bestDist || (d === bestDist && (best < 0 || n < best))) {
-      best = n;
-      bestDist = d;
-    }
-  }
-  return best;
-}
-
-/** Our own land node nearest `target` (the frontier point we push out from). -1 none. */
-function ownedNodeNearest(world: World, geom: Geometry, player: number, target: number): number {
-  let best = -1;
-  let bestDist = Infinity;
-  const { waterMask } = staticSea(world, geom);
-  for (let n = 0; n < geom.size; n++) {
-    if (ownerPlayer(world.owner[n]) !== player) continue;
-    if (waterMask[n] === 1) continue;
-    const d = geom.distance(target, n);
     if (d < bestDist || (d === bestDist && (best < 0 || n < best))) {
       best = n;
       bestDist = d;

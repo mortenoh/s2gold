@@ -22,10 +22,12 @@ import {
   resourceAmount,
   resourceType,
   type BuildingType,
+  ownerPlayer,
 } from '../constants';
 import type { Geometry } from '../geometry';
-import { findWalkPath } from '../pathfinding';
 import type { TerrainRules } from '../terrain';
+import { isWaterNode } from '../water';
+import { isWalkableNode } from '../walk';
 import { storeLive, type World } from '../world';
 
 /** How a site is scored relative to a reference point. */
@@ -74,8 +76,60 @@ export function siteRoadDistance(
   const nearest = nearestFlag(geom, flagNodes, flagNode);
   if (nearest.dist > maxRoadLength) return -1;
   if (nearest.node < 0) return -1;
-  if (findWalkPath(world, geom, rules, flagNode, nearest.node) === null) return -1;
+  if (!walkConnected(world, geom, rules, flagNode, nearest.node)) return -1;
   return nearest.dist;
+}
+
+/**
+ * "A walkable path exists between a and b" (what a findWalkPath existence
+ * check answers), from one walkable-component labelling per tick instead of
+ * an A* per candidate: a failing search explores the whole reachable region,
+ * and site picks test hundreds of candidates per AI cycle. The labelling uses
+ * findWalkPath's own walkable predicate (no building on the node, terrain
+ * walkable; flags do not block), so the answer is identical. Orders issued
+ * during a tick apply on the next one, so a per-tick cache is exact.
+ */
+function walkConnected(
+  world: World,
+  geom: Geometry,
+  rules: TerrainRules,
+  a: number,
+  b: number,
+): boolean {
+  if (a === b) return true;
+  const comp = walkComponents(world, geom, rules);
+  return comp[a] >= 0 && comp[a] === comp[b];
+}
+
+const walkCompCache = new WeakMap<World, { tick: number; comp: Int32Array }>();
+
+function walkComponents(world: World, geom: Geometry, rules: TerrainRules): Int32Array {
+  const cached = walkCompCache.get(world);
+  if (cached && cached.tick === world.tick) return cached.comp;
+  const comp = new Int32Array(geom.size).fill(-1);
+  const member = (n: number): boolean =>
+    world.buildingAtNode[n] < 0 && isWalkableNode(world, geom, n, rules);
+  const scratch = new Array<number>(6);
+  let next = 0;
+  for (let start = 0; start < geom.size; start++) {
+    if (comp[start] >= 0 || !member(start)) continue;
+    const id = next++;
+    comp[start] = id;
+    const stack = [start];
+    while (stack.length > 0) {
+      const cur = stack.pop() as number;
+      geom.neighboursInto(cur, scratch);
+      for (let i = 0; i < 6; i++) {
+        const nb = scratch[i];
+        if (comp[nb] < 0 && member(nb)) {
+          comp[nb] = id;
+          stack.push(nb);
+        }
+      }
+    }
+  }
+  walkCompCache.set(world, { tick: world.tick, comp });
+  return comp;
 }
 
 /**
@@ -276,6 +330,32 @@ export function enemyReferenceNode(world: World, geom: Geometry, player: number)
     const d = geom.distance(hq, b.node);
     if (d < bestDist || (d === bestDist && (best < 0 || b.node < best))) {
       best = b.node;
+      bestDist = d;
+    }
+  }
+  return best;
+}
+
+/**
+ * The player's own land node nearest `target` (lowest id on ties), or -1 when
+ * the player owns nothing. Frontier site scans are centred here: the window
+ * must cover OUR territory (where a building can go), scored by closeness to
+ * the enemy, not be centred on the enemy, whose surroundings we do not own.
+ */
+export function ownedNodeNearest(
+  world: World,
+  geom: Geometry,
+  player: number,
+  target: number,
+): number {
+  let best = -1;
+  let bestDist = Infinity;
+  for (let n = 0; n < geom.size; n++) {
+    if (ownerPlayer(world.owner[n]) !== player) continue;
+    if (isWaterNode(world, n)) continue;
+    const d = geom.distance(target, n);
+    if (d < bestDist || (d === bestDist && (best < 0 || n < best))) {
+      best = n;
       bestDist = d;
     }
   }

@@ -99,6 +99,12 @@ const MIGRATIONS: Readonly<Record<number, (w: World) => void>> = {
       if (p) p.cheatUnlimited ??= false;
     }
   },
+  // v6 -> v7: the instant-build cheat flag; older saves never cheated.
+  6: (w) => {
+    for (const p of w.players ?? []) {
+      if (p) p.cheatInstantBuild ??= false;
+    }
+  },
 };
 
 /** Parse a serialized world, migrating older versions up to the current one. */

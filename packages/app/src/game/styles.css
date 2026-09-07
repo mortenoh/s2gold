@@ -43,12 +43,12 @@ body {
      positioned box's shrink-to-fit width is capped at (viewport - left), so
      left:50% halved the bar's available width and forced a second row. */
   left: 12px;
-  /* Reserve the minimap's corner (256px canvas + frame + margin) so a single
-     row never slides under it; the bar centres in the space that remains. */
-  right: 292px;
+  right: 12px;
   margin-inline: auto;
   width: fit-content;
-  max-width: calc(100vw - 304px);
+  /* The minimap sits above the bar (see .minimap-box), so the whole width is
+     available and one row holds every control down to ~1000px windows. */
+  max-width: calc(100vw - 24px);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1039,7 +1039,8 @@ body {
 .minimap-box {
   position: absolute;
   right: 12px;
-  bottom: 12px;
+  /* Above the HUD bar, which spans the bottom edge on one row. */
+  bottom: 60px;
   padding: 4px;
   background: rgba(20, 20, 24, 0.85);
   border: 1px solid #3a3a44;

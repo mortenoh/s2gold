@@ -7,10 +7,10 @@ import {
   serializeWorld,
   tickWorld,
   warehouseTotals,
+  worldGeometry,
 } from './index';
 import { makeFlatMap } from './harness';
 import { CHEAT_HELPER_FLOOR, CHEAT_STOCK_FLOOR } from './systems/cheats';
-import { WORLD_VERSION } from './world';
 
 describe('unlimited-resources cheat', () => {
   it('tops up every ware, the Helper pool and privates while enabled', () => {
@@ -32,6 +32,25 @@ describe('unlimited-resources cheat', () => {
     expect(warehouseTotals(world, 0).gold).toBe(CHEAT_STOCK_FLOOR);
   });
 
+  it('instant build finishes every site the moment it is placed', () => {
+    const world = createWorld(makeFlatMap(24, 24, 4, 4), { seed: 1, players: 1 });
+    const geom = worldGeometry(world);
+    const hq = world.buildings.items.find((b) => b?.type === 'headquarters')!;
+    const site = geom.index(geom.x(hq.node) + 3, geom.y(hq.node));
+    applyCommand(world, { type: 'cheatInstantBuild', player: 0, enabled: true });
+    applyCommand(world, {
+      type: 'placeBuilding',
+      player: 0,
+      node: site,
+      buildingType: 'woodcutter',
+    });
+    tickWorld(world); // commands apply
+    tickWorld(world); // cheat completes the site
+    const wc = world.buildings.items.find((b) => b?.type === 'woodcutter');
+    expect(wc?.state).toBe('working');
+    expect(world.players[0]!.cheatInstantBuild).toBe(true);
+  });
+
   it('survives save/load and migrates older saves to off', () => {
     const world = createWorld(makeFlatMap(24, 24, 4, 4), { seed: 1, players: 1 });
     applyCommand(world, { type: 'cheatUnlimited', player: 0, enabled: true });
@@ -41,7 +60,7 @@ describe('unlimited-resources cheat', () => {
       version: number;
       players: ({ cheatUnlimited?: boolean } | null)[];
     };
-    legacy.version = WORLD_VERSION - 1;
+    legacy.version = 5; // the last version without the field
     for (const p of legacy.players) if (p) delete p.cheatUnlimited;
     expect(deserializeWorld(JSON.stringify(legacy)).players[0]!.cheatUnlimited).toBe(false);
   });

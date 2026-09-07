@@ -874,6 +874,15 @@ export class GameSession {
     return this.world.players[this.localPlayer]?.cheatUnlimited ?? false;
   }
 
+  /** Free-play cheat: construction sites of the local player finish at once. */
+  cheatInstantBuild(): boolean {
+    return this.world.players[this.localPlayer]?.cheatInstantBuild ?? false;
+  }
+
+  setCheatInstantBuild(enabled: boolean): void {
+    applyCommand(this.world, { type: 'cheatInstantBuild', player: this.localPlayer, enabled });
+  }
+
   /** Free-play cheat: keep the local player's stocks topped up. */
   setCheatUnlimited(enabled: boolean): void {
     applyCommand(this.world, { type: 'cheatUnlimited', player: this.localPlayer, enabled });

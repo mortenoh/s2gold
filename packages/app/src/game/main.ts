@@ -310,11 +310,30 @@ async function boot(): Promise<void> {
     // The command applies on the next tick; reflect it once it has.
     window.setTimeout(applyCheatToggle, 150);
   });
+  const instantToggle = el('button', {
+    text: 'Instant build: off',
+    attrs: {
+      'data-testid': 'cheat-instant',
+      type: 'button',
+      title: 'Construction sites finish the moment they are placed (free play only)',
+    },
+  });
+  const applyInstantToggle = (): void => {
+    const on = session?.cheatInstantBuild() ?? false;
+    instantToggle.textContent = on ? 'Instant build: on' : 'Instant build: off';
+    instantToggle.classList.toggle('active', on);
+  };
+  instantToggle.addEventListener('click', () => {
+    if (!session) return;
+    session.setCheatInstantBuild(!session.cheatInstantBuild());
+    window.setTimeout(applyInstantToggle, 150);
+  });
   const cheatRow = el(
     'div',
     { class: 'settings-row', attrs: { 'data-testid': 'cheat-row' } },
     el('span', { class: 'settings-label', text: 'Cheats' }),
     cheatToggle,
+    instantToggle,
   );
   const settingsPanel = el(
     'div',
@@ -883,6 +902,7 @@ async function boot(): Promise<void> {
   function resyncAfterLoad(): void {
     overlayKey = '';
     applyCheatToggle();
+    applyInstantToggle();
     if (session) {
       prevExpReady = session.counters.expeditionsReady;
       prevExpLanded = session.counters.expeditionsLanded;
@@ -1310,6 +1330,7 @@ async function boot(): Promise<void> {
   // Resume last game (title menu): load the newest save for this map.
   if (params.get('resume') === '1') void saveMenu.quickload();
   applyCheatToggle();
+  applyInstantToggle();
   // Load game (title menu list): load one specific save into this map.
   const saveParam = params.get('save');
   if (saveParam) void saveMenu.loadById(saveParam);

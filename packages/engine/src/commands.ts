@@ -113,6 +113,14 @@ export type Command =
       enabled: boolean;
     }
   | {
+      // Free-play cheat: construction sites complete immediately.
+      tick: number;
+      player: number;
+      seq: number;
+      type: 'cheatInstantBuild';
+      enabled: boolean;
+    }
+  | {
       // Building window: stop/resume a production building (S2 "stop
       // production"). Ignored for warehouses, the HQ and military buildings.
       tick: number;
@@ -238,6 +246,11 @@ function executeCommand(
     case 'cheatUnlimited': {
       const pl = world.players[cmd.player];
       if (pl) pl.cheatUnlimited = cmd.enabled;
+      break;
+    }
+    case 'cheatInstantBuild': {
+      const pl = world.players[cmd.player];
+      if (pl) pl.cheatInstantBuild = cmd.enabled;
       break;
     }
     case 'toggleProduction': {
