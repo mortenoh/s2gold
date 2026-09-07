@@ -360,3 +360,65 @@ while paused (place building/flag, demolish) now execute immediately via
 instead of silently waiting for resume; and a delegated fast-tooltip layer
 (`game/tooltip.ts`) adopts `title` attributes into a styled tip after 150ms
 instead of the ~1s native bubble, copying text to `aria-label` when absent.
+
+## G. Self-contained desktop app (Tauri)
+
+Goal: one locally built Tauri app that wraps everything -- game, server,
+saves, AND the asset conversion -- so a player only needs the app plus their
+own GOG installer. The app binary itself never contains original art (the
+converted assets are produced on the user's machine from their installer), so
+the build recipe and the code stay publishable while the built app with
+its converted assets stays personal. Tauri is the right shell: the server is
+already Rust/axum and `crates/desktop` already embeds it.
+
+What exists today (section F): `crates/desktop` starts the axum server on a
+random port and points a WebviewWindow at it. It is NOT self-contained: it
+resolves `packages/app/dist`, `public/assets`, and the legacy `saves/`
+directories from the repo checkout via `CARGO_MANIFEST_DIR`, so it only runs
+from a source tree that has already run `make install`.
+
+Steps, in order of payoff:
+
+1. Bundle the frontend. Embed `packages/app/dist` into the binary
+   (`include_dir!`/`rust-embed` served by axum, or Tauri resources) so the
+   app no longer needs the repo at runtime. The server already serves
+   `dist/app/`; only the root path changes.
+2. Move runtime data under the OS app-data directory. Assets go to
+   `<app_data>/assets`, the database is already there. Drop the legacy
+   `saves/`/`sessions/` import for the desktop build (or point it at the
+   same app-data dir).
+3. First-run setup screen (the "no assets" state). When `<app_data>/assets/
+   manifest.json` is missing, the webview shows a native file picker
+   (tauri-plugin-dialog) for `setup_the_settlers_2_gold_*.exe`, then runs
+   the conversion with a progress log and restarts the server's asset
+   mount when done. The existing menu already degrades gracefully when
+   assets are absent, so this is an additive screen.
+4. The conversion itself, two options:
+   a. Short term: shell out to the Python pipeline as a Tauri sidecar
+      (`uv run s2gold install <exe>` with `uv` on PATH, plus `innoextract`).
+      Cheap, but the built app then depends on uv/innoextract being
+      installed, which contradicts "self-contained".
+   b. Proper: port `src/s2gold` to a Rust crate (`crates/convert`). The
+      formats are small, well-documented parsers (LST/BOB/DAT/WLD/LBM/
+      palette/gametext, see `src/s2gold/formats/`) and the converters are
+      mostly atlas packing + PNG/JSON writing. innoextract's Inno Setup
+      reader would need a Rust equivalent (the `innoextract` crate or a
+      minimal Inno v5 stream reader for the two data files the installer
+      carries). Music (XMI -> MIDI -> soundfont render -> MP3) and the SMK
+      intro are the only pieces with heavy external deps; ship them as
+      optional steps that skip cleanly when fluidsynth/ffmpeg are absent
+      (the Python pipeline already does), or bundle a tiny GM soundfont
+      renderer later.
+   Doing (b) removes uv, Python, and innoextract from the player's
+   machine entirely; `make install` then becomes `cargo run -p s2gold-convert`.
+5. Packaging. `make desktop-build` already signs and notarises on macOS;
+   add Windows (NSIS/MSI) and Linux (AppImage/deb) targets in
+   `tauri.conf.json` once assets live in app-data, and document that the
+   bundle contains no game data. Keep the GOG installer check (version
+   1.5.1 Windows build) in the first-run screen so users grab the right file.
+6. Quality-of-life for the app: native menu entries for Quicksave/Quickload,
+   an "Open saves folder" item, and a "Re-run asset conversion" item in
+   the Settings panel so a soundfont/ffmpeg install later can add music.
+
+Keep the browser path (`make dev`/`make serve`) unchanged; the desktop app
+is the same frontend with the server and the conversion moved in-process.

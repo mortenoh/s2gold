@@ -39,9 +39,16 @@ body {
 .hud-top {
   position: absolute;
   bottom: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: calc(100vw - 24px);
+  /* Centre with auto margins, not left:50% + translate: an absolutely
+     positioned box's shrink-to-fit width is capped at (viewport - left), so
+     left:50% halved the bar's available width and forced a second row. */
+  left: 12px;
+  /* Reserve the minimap's corner (256px canvas + frame + margin) so a single
+     row never slides under it; the bar centres in the space that remains. */
+  right: 292px;
+  margin-inline: auto;
+  width: fit-content;
+  max-width: calc(100vw - 304px);
   display: flex;
   align-items: center;
   gap: 8px;

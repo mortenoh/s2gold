@@ -555,7 +555,7 @@ async function boot(): Promise<void> {
 
     // Show the local player's people (cosmetic label only for this phase).
     nationLabelEl.textContent = nationLabel(session.localNation);
-    overlayTick = -1; // new world: drop per-tick overlay caches
+    overlayKey = ''; // new world: drop per-tick overlay caches
     // A fresh session runs at 1x unpaused: sync the HUD controls to it.
     setSpeed(1);
     setPaused(false);
@@ -826,7 +826,7 @@ async function boot(): Promise<void> {
    * detectors to avoid phantom sea toasts; and redraw the stats charts.
    */
   function resyncAfterLoad(): void {
-    overlayTick = -1;
+    overlayKey = '';
     if (session) {
       prevExpReady = session.counters.expeditionsReady;
       prevExpLanded = session.counters.expeditionsLanded;
@@ -912,15 +912,18 @@ async function boot(): Promise<void> {
   // change only when the simulation ticks; cache them per tick so paused and
   // high-fps frames stop rebuilding segment arrays and re-running the
   // road-graph flood fill every frame.
-  let overlayTick = -1;
+  let overlayKey = '';
   let cachedRoadSegs: ReturnType<typeof roadSegments> = [];
   let cachedUpgradedSegs: ReturnType<typeof upgradedRoadSegments> = [];
   let cachedDisc: ReturnType<typeof disconnectedBuildingMarkers> = [];
   let cachedDry: ReturnType<typeof depletedMineMarkers> = [];
   function refreshOverlays(): void {
     if (!session) return;
-    if (session.world.tick === overlayTick) return;
-    overlayTick = session.world.tick;
+    // Keyed on the tick AND paused edits: roads/flags placed while paused
+    // apply immediately (drainCommands) without the tick moving.
+    const key = `${session.world.tick}:${session.pausedEdits}`;
+    if (key === overlayKey) return;
+    overlayKey = key;
     cachedRoadSegs = roadSegments(session.world, session.geom);
     cachedUpgradedSegs = upgradedRoadSegments(session.world, session.geom);
     cachedDisc = disconnectedBuildingMarkers(session.world, session.localPlayer);

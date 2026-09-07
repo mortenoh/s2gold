@@ -119,6 +119,7 @@ export class CampaignController {
     return {
       playerCount: session.playerCount,
       buildingsOf: (p) => session.buildingsOf(p),
+      completedBuildingsOf: (p) => session.completedBuildingsOf(p),
       ownedLandOf: (p) => session.territory(p).length,
     };
   }

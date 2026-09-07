@@ -186,6 +186,11 @@ export class GameSession {
   fogDirty = true;
   /** Set when territory changed, so the border/minimap overlays refresh. */
   territoryDirty = true;
+  /**
+   * Bumped each time orders are applied while paused. The tick does not advance
+   * then, so tick-keyed render caches (roads, markers) watch this too.
+   */
+  pausedEdits = 0;
 
   /** Per-node fog state (0 unexplored, 1 explored, 2 visible). Persistent. */
   readonly visibility: Uint8Array;
@@ -283,6 +288,7 @@ export class GameSession {
       // which would run them first anyway — so the player sees the site or
       // flag appear instead of a silent nothing until resume.
       for (const e of drainCommands(this.world, this.rules)) this.record(e);
+      this.pausedEdits++;
     }
     return this.paused ? 0 : Math.min(1, this.acc / interval);
   }
@@ -371,6 +377,15 @@ export class GameSession {
   buildingsOf(player: number): number {
     let n = 0;
     for (const b of this.world.buildings.items) if (b && b.player === player) n++;
+    return n;
+  }
+
+  /** Finished (working) buildings of a player, HQ included; sites excluded. */
+  completedBuildingsOf(player: number): number {
+    let n = 0;
+    for (const b of this.world.buildings.items) {
+      if (b && b.player === player && b.state === 'working') n++;
+    }
     return n;
   }
 

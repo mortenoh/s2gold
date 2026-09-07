@@ -17,7 +17,7 @@ import { assetUrl, fetchJson } from '../lib/manifest';
 
 /** A checkable, approximate chapter goal (see module docstring). */
 export type WinCondition =
-  /** Player 0 reaches `count` live buildings (economy build-up). */
+  /** Player 0 reaches `count` finished buildings, HQ included (economy build-up). */
   | { readonly kind: 'buildings'; readonly count: number }
   /** Player 0 holds at least `fraction` of all settled land (0..1). */
   | { readonly kind: 'territory'; readonly fraction: number }
@@ -395,6 +395,8 @@ export interface CampaignWorldView {
   readonly playerCount: number;
   /** Live building count for a player (HQ + sites + working). */
   buildingsOf(player: number): number;
+  /** Finished (working) buildings only, HQ included; construction sites excluded. */
+  completedBuildingsOf(player: number): number;
   /** Count of nodes owned by a player. */
   ownedLandOf(player: number): number;
 }
@@ -423,7 +425,9 @@ export class WinTracker {
   evaluate(view: CampaignWorldView): WinStatus {
     switch (this.win.kind) {
       case 'buildings': {
-        const have = view.buildingsOf(0);
+        // Finished buildings only: a construction site is not a building yet,
+        // so placing ten sites while paused must not complete the chapter.
+        const have = view.completedBuildingsOf(0);
         return {
           done: have >= this.win.count,
           progress: `${Math.min(have, this.win.count)} / ${this.win.count} buildings`,
