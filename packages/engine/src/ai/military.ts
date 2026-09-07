@@ -74,8 +74,12 @@ export function pickAttackTarget(
     // HQ is a valid target even with an empty garrison.
     if (!isHq && garrisonCount(t) <= 0) continue;
     // Reachable if any surplus source has a foot path within the run limit.
+    // A path of N steps needs a lattice distance <= N, so the cheap distance
+    // rules most pairs out before the search (a failing A* explores the whole
+    // reachable map, and this ran per source x target every cycle).
     let dist = Infinity;
     for (const s of sources) {
+      if (geom.distance(s.node, t.node) > MILITARY_ATTACK.maxRunDistance) continue;
       const path = findWalkPath(world, geom, rules, s.node, t.node);
       if (path && path.length <= MILITARY_ATTACK.maxRunDistance) {
         dist = Math.min(dist, path.length);
