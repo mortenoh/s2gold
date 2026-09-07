@@ -885,7 +885,11 @@ test('P6: setup selects a computer opponent that seeds and expands', async ({ pa
 
   // Start -> lands on the game page for the chosen map with the AI + nations query.
   await page.getByTestId('start-game').click();
-  await expect(page).toHaveURL(/\/play\/maps4_map02\?ai=1&nations=rom,jap$/);
+  // /play fallback (setup in the query) without the API server; a
+  // /game/<map>/<id> session (setup stored server-side) with it.
+  await expect(page).toHaveURL(
+    /\/(play\/maps4_map02\?ai=1&nations=rom,jap|game\/maps4_map02\/[0-9a-f]+)$/,
+  );
   await expect(page.locator('body[data-map-ready]')).toBeAttached({ timeout: 15_000 });
   await expect(page.locator('body')).toHaveAttribute('data-map-ready', 'maps4_map02');
 

@@ -7,7 +7,8 @@ async function apiUp(page: Page): Promise<boolean> {
   return res.ok() && (res.headers()['content-type'] ?? '').includes('json');
 }
 
-const MAP = 'maps_miss200';
+// A map no other spec saves on: parallel workers share the API server.
+const MAP = 'maps_miss208';
 const SAVE_ID = `${MAP}_slot9`;
 
 test.describe('Load game (title menu)', () => {

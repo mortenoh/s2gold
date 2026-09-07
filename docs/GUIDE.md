@@ -47,7 +47,7 @@ The entries, top to bottom:
 | **Roman Campaign**   | The ten-chapter story campaign (missions I–X). See [Campaigns](#campaigns). |
 | **World Campaign**   | The eighteen conquest missions, chosen from a spinning-globe world map.     |
 | **Resume last game** | Jumps straight back into your newest game. Greyed out until you have one.   |
-| **Load game**        | A pointer to the in-game Load menu (saves are managed from inside a game).  |
+| **Load game**        | Lists every save on the server, grouped by map; click one to load it.        |
 | **Unlimited play**   | Free play: pick any map and set up opponents. This is the sandbox.          |
 | **Options**          | Music and sound-effect settings.                                            |
 | **Intro**            | Plays the intro video (shows "Replay intro" once watched).                  |
@@ -486,7 +486,11 @@ Open the **Game** button on the HUD bar for saving and loading.
   game tick it was saved at. **Delete** removes a save.
 - **Quicksave / quickload**: **F5** saves into the first free tray; **F9** loads
   the most recent save for the current map.
-- **Exit to title** returns to the main menu.
+- **Exit to title** returns to the main menu. The title's **Load game** entry lists
+  every save on the server (all maps, tray numbers included) and loads the one you
+  click.
+- **Desktop app**: the native **Game** menu carries Quicksave, Quickload, Reload and
+  Open Saves Folder.
 
 Saving needs the game server running (see
 [Server games vs. the /play fallback](#server-games-vs-the-play-fallback)).
