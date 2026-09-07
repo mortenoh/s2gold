@@ -217,8 +217,11 @@ defaults a pre-nations save to all-Roman. The free-play setup screen grows a
 per-slot people picker (human defaults Roman; AI slots default to a varied,
 reproducible vikings/nubians/japanese cycle), plumbed through a compact
 `?nations=rom,vik,...` URL query and the sessions API (`nations` field, null =
-all-Roman, backward-compatible with stored sessions); campaign missions stay
-all-Roman. A small HUD label shows the local player's people. DEFERRED to
+all-Roman, backward-compatible with stored sessions); campaign missions gave
+every seat Roman until 2026-09-07, when chapter starts began assigning the
+rivals the setup screen's varied cycle (vikings, nubians, japanese) — the
+original's mission scripts pick each rival's people, and those scripts are not
+executed here, so this is an approximation of the intended variety. A small HUD label shows the local player's people. DEFERRED to
 phase 2: mapping each nation to its building/flag/settler sprite archive
 (vik_z/afr_z/jap_z), per-nation border stones, and the winter W* variants.
 

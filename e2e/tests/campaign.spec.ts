@@ -179,6 +179,18 @@ test('world briefing shows the objective and starts on the mission map', async (
 
   await page.getByTestId('briefing-start').click();
   await expect(page).toHaveURL(/\/(play\/maps3_omap00\?|game\/maps3_omap00\/[0-9a-f]+)/);
+  // Rival tribes get their own peoples (the player stays Roman).
+  await expect(page.getByTestId('game-canvas')).toBeVisible({ timeout: 15_000 });
+  await page.waitForFunction(
+    () => (window as unknown as { __s2debug?: { players: number } }).__s2debug !== undefined,
+  );
+  const peoples = await page.evaluate(() => {
+    const d = (window as unknown as { __s2debug: { players: number; nationOf(p: number): string } })
+      .__s2debug;
+    return Array.from({ length: d.players }, (_, p) => d.nationOf(p));
+  });
+  expect(peoples[0]).toBe('romans');
+  expect(peoples.slice(1).some((n) => n !== 'romans')).toBe(true);
   await expect(page.getByTestId('game-canvas')).toBeVisible({ timeout: 20_000 });
 
   expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);

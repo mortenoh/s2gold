@@ -24,6 +24,13 @@ import {
 } from './campaign-data';
 import { loadMissionText, wrapMissionText, paginate } from './mission-text';
 import { createSession } from '../lib/sessions';
+import {
+  defaultAiNation,
+  encodeNations,
+  isAllRoman,
+  NATION_CODES,
+  type Nation,
+} from '../lib/nations';
 
 const GOLD = '#f0c84a';
 const CREAM = '#f4ecd0';
@@ -206,11 +213,34 @@ async function startChapter(btn: HTMLButtonElement, chapter: Chapter): Promise<v
   const params = new URLSearchParams();
   params.set('campaign', String(chapter.id));
   if (ai.length > 0) params.set('ai', ai.join(','));
+  // Opponent peoples: the original's mission scripts assign each rival tribe
+  // its own people (the campaign is about meeting the Vikings, Nubians and
+  // Japanese); those scripts are not executed here, so the rivals take the
+  // same varied, reproducible cycle the setup screen uses (vikings, nubians,
+  // japanese, wrapping). The player stays Roman.
+  const nations = campaignNations(ai);
+  const nationCodes = isAllRoman(nations) ? null : nations.map((n) => NATION_CODES[n]);
+  if (nationCodes) params.set('nations', encodeNations(nations));
   // Legacy fallback, used verbatim when the session API is unreachable so the
   // chapter still launches (the e2e suite asserts these /play URLs).
   const fallback = `/play/${chapter.mapName}?${params.toString()}`;
-  // Campaign missions stay all-Roman (the Roman campaign is Roman), so nations
-  // is omitted (null) — no `?nations=` on the fallback URL either.
-  const id = await createSession({ map: chapter.mapName, ai, nations: null, campaign: chapter.id });
+  const id = await createSession({
+    map: chapter.mapName,
+    ai,
+    nations: nationCodes,
+    campaign: chapter.id,
+  });
   window.location.assign(id ? `/game/${chapter.mapName}/${id}` : fallback);
+}
+
+/** Slot-indexed peoples for a chapter: the player Roman, each rival its own. */
+export function campaignNations(aiSlots: readonly number[]): Nation[] {
+  const slots = Math.max(0, ...aiSlots) + 1;
+  const nations: Nation[] = new Array<Nation>(slots).fill('romans');
+  [...aiSlots]
+    .sort((a, b) => a - b)
+    .forEach((slot, ordinal) => {
+      nations[slot] = defaultAiNation(ordinal);
+    });
+  return nations;
 }
