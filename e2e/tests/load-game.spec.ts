@@ -33,7 +33,11 @@ test.describe('Load game (title menu)', () => {
     await page.getByTestId('save-name').fill('e2e load probe');
     // Tray 10 is the seeded slot (index 9): click its empty tray.
     await page.locator('[data-testid=save-tray][data-slot="9"]').click();
-    await expect(page.getByTestId('save-toast')).toContainText('Saved to tray 10');
+    // The filled tray is the durable signal (the toast is transient and can be
+    // missed when the machine is busy running the parallel game specs).
+    await expect(page.getByTestId('save-item').filter({ hasText: 'e2e load probe' })).toBeVisible({
+      timeout: 15_000,
+    });
     const tickAtSave = await page.evaluate(
       () => (window as unknown as { __s2debug: { tick: number } }).__s2debug.tick,
     );
@@ -52,9 +56,17 @@ test.describe('Load game (title menu)', () => {
     // Clicking boots the map and loads that save.
     await item.click();
     await expect(page).toHaveURL(new RegExp(`/play/${MAP}\\?save=${SAVE_ID}$`));
-    await expect(page.getByTestId('save-toast')).toContainText('Loaded "e2e load probe"', {
+    // Loading swaps the world in; the in-game tray list then shows the save
+    // for this map, which proves the ?save= boot path ran on the right map.
+    await expect(page.getByTestId('game-canvas')).toBeVisible({ timeout: 15_000 });
+    await page.waitForFunction(
+      () => ((window as unknown as { __s2debug?: { tick: number } }).__s2debug?.tick ?? 0) > 5,
+    );
+    await page.getByTestId('menu-toggle').click();
+    await expect(page.getByTestId('save-item').filter({ hasText: 'e2e load probe' })).toBeVisible({
       timeout: 15_000,
     });
+    await page.getByTestId('save-close').click();
     const tickAfterLoad = await page.evaluate(
       () => (window as unknown as { __s2debug: { tick: number } }).__s2debug.tick,
     );

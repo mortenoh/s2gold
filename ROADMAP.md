@@ -80,6 +80,15 @@ original's boat/ship toggle has no boat counterpart here). Covered by
 The title menu's Load game entry and the desktop Game menu landed the same day
 (see section G).
 
+Landed 2026-09-07: the Transport and Tools windows on the HUD bar
+(`game/priority-ui.ts`). Transport lists every ware in fetch order with
+up/down arrows (each move renumbers the engine's per-ware transport priority
+through `setTransportPriority`); Tools shows a 0-10 weight per tool, mapped
+onto the engine's cyclic `toolPriority` list by repeating a tool `weight`
+times (0 = never made). Both re-render from the engine on a short interval
+since commands apply on the next tick. `__s2debug.priorities()` exposes the
+state; `e2e/tests/priority-windows.spec.ts` covers both windows.
+
 
 Landed 2026-07-12: builder-to-site and settler-to-building travel is now
 road-constrained (`findRoadWalkPath` over the flag/road graph). A building

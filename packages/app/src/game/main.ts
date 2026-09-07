@@ -76,6 +76,7 @@ import { buildAudioControls } from './audio-controls';
 import { makeHudIconSet, iconifyHudButton, HUD_ICON, IO_ARCHIVE } from './hud-icons';
 import { MilitaryPanel } from './military-ui';
 import { ProductionPanel } from './production-ui';
+import { PriorityPanel } from './priority-ui';
 import { HarborPanel } from './harbor-ui';
 import { SaveMenu } from './save-ui';
 import { StatsPanel } from './stats-ui';
@@ -192,6 +193,14 @@ async function boot(): Promise<void> {
   const goodsButton = el('button', {
     text: 'Goods',
     attrs: { 'data-testid': 'goods-toggle', type: 'button', title: 'Full goods inventory' },
+  });
+  const transportButton = el('button', {
+    text: 'Transport',
+    attrs: { 'data-testid': 'transport-toggle', type: 'button', title: 'Ware transport order' },
+  });
+  const toolsButton = el('button', {
+    text: 'Tools',
+    attrs: { 'data-testid': 'tools-toggle', type: 'button', title: 'Tool production weights' },
   });
   // Long, transient hints (road mode etc.) float in their own toast below the
   // bar so the top bar never has to wrap to make room for them.
@@ -319,6 +328,8 @@ async function boot(): Promise<void> {
     menuButton,
     statsButton,
     goodsButton,
+    transportButton,
+    toolsButton,
     zoomButton,
     settingsButton,
     resources.element,
@@ -896,6 +907,27 @@ async function boot(): Promise<void> {
     close: () => goodsPanel.close(),
     element: () => goodsPanel.element,
   });
+  // Economy settings: the original's Transport and Tools windows.
+  for (const [button, mode] of [
+    [transportButton, 'transport'],
+    [toolsButton, 'tools'],
+  ] as const) {
+    const priorityPanel = new PriorityPanel(
+      {
+        root,
+        session: () => session,
+        icons: () => wareIcons,
+        onVisibility: (open) => syncHudPanelButton(button, open),
+      },
+      mode,
+    );
+    wireHudPanel(button, {
+      isOpen: () => priorityPanel.isOpen,
+      open: () => priorityPanel.open(),
+      close: () => priorityPanel.close(),
+      element: () => priorityPanel.element,
+    });
+  }
   // In the desktop shell (Tauri) the F and Q keys go through the app's native
   // commands: WKWebView does not support the HTML Fullscreen API here, and only
   // the shell can quit the process. Browsers use the web equivalents.

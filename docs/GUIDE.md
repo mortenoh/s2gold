@@ -112,6 +112,8 @@ Reading the bar from the left:
 | **Game**              | The Save / Load menu (quicksave **F5**, quickload **F9**) and "Exit to title".                       |
 | **Stats**             | The in-game statistics panel (per-player charts).                                                    |
 | **Goods**             | Your whole inventory, summed across all warehouses.                                                  |
+| **Transport**         | The ware transport order: wares higher in the list are carried first (move with the arrows).         |
+| **Tools**             | Per-tool production weights for the metalworks: how often each tool is made (0 = never).             |
 | **Zoom**              | Toggles 1× / 2× zoom. Shortcut: **Z**; the mouse wheel zooms freely.                                 |
 | **Settings**          | A pop-up panel: map picker, fog-of-war, tick/FPS readouts, and audio.                                |
 | **Ware readout**      | Live counts of your three build materials: **Wood** (raw logs), **Boards** (sawn planks), **Stone**. |

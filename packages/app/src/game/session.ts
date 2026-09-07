@@ -55,6 +55,8 @@ import {
   type Ship,
   type TerrainRules,
   type World,
+  TOOL_WARES,
+  type WareType,
 } from '@s2gold/engine';
 import { soundForEvent, type SoundCue } from './audio-map';
 
@@ -164,6 +166,14 @@ export const SPEEDS = [1, 3, 10, 25, 50] as const;
 export type Speed = (typeof SPEEDS)[number];
 
 /** A running game over one map for a single local player (player 0). */
+/** Economy settings snapshot (see {@link GameSession.priorities}). */
+export interface PrioritiesView {
+  /** Ware keys in transport order, first fetched first. */
+  readonly transport: readonly string[];
+  /** Production weight per tool key (0 = never made). */
+  readonly toolWeights: Readonly<Record<string, number>>;
+}
+
 /** What the production building window shows (see {@link GameSession.productionAt}). */
 export interface ProductionView {
   readonly buildingId: number;
@@ -811,6 +821,52 @@ export class GameSession {
       queued: b.outputQueue.length,
       flagNode: this.flagIdAt(flagNode) >= 0 ? flagNode : -1,
     };
+  }
+
+  /**
+   * Economy settings (the original's Transport and Tools windows): the ware
+   * transport order (first fetched first) and per-tool production weights.
+   */
+  priorities(): PrioritiesView {
+    const p = this.world.players[this.localPlayer];
+    const prio = p?.transportPriority ?? {};
+    const transport = Object.keys(prio).sort((a, b) => {
+      const d = (prio[a as keyof typeof prio] ?? 0) - (prio[b as keyof typeof prio] ?? 0);
+      return d !== 0 ? d : a.localeCompare(b);
+    });
+    const toolWeights: Record<string, number> = {};
+    for (const t of TOOL_WARES) toolWeights[t] = 0;
+    for (const t of p?.toolPriority ?? []) toolWeights[t] = (toolWeights[t] ?? 0) + 1;
+    return { transport, toolWeights };
+  }
+
+  /** Transport window: apply a new ware order (index = priority, lower first). */
+  setTransportOrder(order: readonly string[]): void {
+    const p = this.world.players[this.localPlayer];
+    if (!p) return;
+    order.forEach((ware, i) => {
+      if (p.transportPriority[ware as WareType] !== i) {
+        applyCommand(this.world, {
+          type: 'setTransportPriority',
+          player: this.localPlayer,
+          wareType: ware as WareType,
+          priority: i,
+        });
+      }
+    });
+  }
+
+  /**
+   * Tools window: per-tool weights 0..10. The metalworks cycles through a
+   * list, so a weight of n puts the tool n times into it (0 = never made).
+   */
+  setToolWeights(weights: Readonly<Record<string, number>>): void {
+    const tools: WareType[] = [];
+    for (const t of TOOL_WARES) {
+      for (let i = 0; i < Math.max(0, Math.min(10, weights[t] ?? 0)); i++) tools.push(t);
+    }
+    if (tools.length === 0) return; // the engine ignores an empty list; keep the last
+    applyCommand(this.world, { type: 'setToolPriority', player: this.localPlayer, tools });
   }
 
   /** Building window: stop or resume an own production building. */

@@ -54,6 +54,8 @@ export interface S2Debug {
   nationArchiveOf(player: number): string;
   /** Live building count for a player (HQ + sites + working). */
   buildingsOf(player: number): number;
+  /** Transport order + tool weights of the local player. */
+  priorities(): { transport: readonly string[]; toolWeights: Readonly<Record<string, number>> };
   /** Toggle fog of war (default on for a new game). */
   setFog(on: boolean): void;
   /** Total garrisoned soldiers at a military building node (-1 when not military). */
@@ -149,6 +151,7 @@ export function installDebugSurface(deps: DebugSurfaceDeps): void {
     nationOf: (player) => s.nationOf(player),
     nationArchiveOf: (player) => deps.nationArchiveFor(player),
     buildingsOf: (player) => s.buildingsOf(player),
+    priorities: () => s.priorities(),
     setFog: deps.setFog,
     militaryTroops: (node) => s.militaryAt(node)?.troops ?? -1,
     debugSpawnMilitary: (player, node, type) =>
