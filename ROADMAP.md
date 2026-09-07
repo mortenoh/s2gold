@@ -82,6 +82,20 @@ never committed (original art, same policy as the converted assets).
 
 ## Gameplay fidelity
 
+Landed 2026-09-07 (node walkability, original rule): a settler may stand on a
+node unless any of the six triangles around it is lava, and only if at least
+one of the six is walkable ground (`engine/src/walk.ts`). The old rule needed
+both of the node's OWN two triangles to be walkable, which blocked every
+shoreline, swamp edge and mountain foot: validated against all 50 shipped
+maps' build layers (`scripts/walk-probe.ts`), it rejected 42,950 nodes the
+original lets you put a flag on, including The Ditch's player-3 headquarters
+flag (that AI seat never built anything). The new rule rejects none. The same
+data showed winter ice (0x04/0x07) is walkable in the original (5052
+flag-capable nodes fully surrounded by it), so the winter impassable set lost
+the ice ids. Pathfinding, flag placement, road laying and planting all go
+through the shared helper.
+
+
 Landed 2026-09-07 (runthrough follow-ups): the production building window.
 Clicking an own production building (or its site) opens a window with the
 worker/progress state, the input stock with ware pictographs, what it makes,

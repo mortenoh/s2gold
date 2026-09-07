@@ -8,6 +8,7 @@
  * between two existing flags.
  */
 
+import { isWalkableNode } from './walk';
 import {
   BUILD_COST,
   BUILDING,
@@ -30,12 +31,7 @@ import { findWalkPath } from './pathfinding';
 import { beginWalk, spawnSettler } from './systems/movement';
 import type { EventSink } from './events';
 import { Geometry } from './geometry';
-import {
-  isBuildableTexture,
-  isMountainTexture,
-  isWalkableTexture,
-  type TerrainRules,
-} from './terrain';
+import { isBuildableTexture, isMountainTexture, type TerrainRules } from './terrain';
 import { isCoastalLand } from './water';
 import {
   getFlag,
@@ -301,12 +297,7 @@ export function canPlaceFlag(
     const ot = world.objectType[node];
     if (isTreeType(ot) || isGraniteType(ot) || isFieldObject(ot)) return false;
   }
-  if (
-    !isWalkableTexture(world.terrain1[node], rules) ||
-    !isWalkableTexture(world.terrain2[node], rules)
-  ) {
-    return false;
-  }
+  if (!isWalkableNode(world, geom, node, rules)) return false;
   for (const flag of storeLive(world.flags)) {
     if (geom.distance(flag.node, node) < FLAG_MIN_DISTANCE) return false;
   }
@@ -500,12 +491,7 @@ function execBuildRoad(
   for (let i = 1; i < path.length - 1; i++) {
     const n = path[i];
     if (world.flagAtNode[n] >= 0 || world.buildingAtNode[n] >= 0) return;
-    if (
-      !isWalkableTexture(world.terrain1[n], rules) ||
-      !isWalkableTexture(world.terrain2[n], rules)
-    ) {
-      return;
-    }
+    if (!isWalkableNode(world, geom, n, rules)) return;
   }
   const id = storeAlloc(world.roads, (rid) => ({
     id: rid,

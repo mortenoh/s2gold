@@ -12,7 +12,13 @@ import { fileURLToPath } from 'node:url';
 
 import { createAiState, runAi } from '../src/ai/index';
 import { EventSink } from '../src/events';
-import { createWorld, hashWorld, rulesForLandscape, worldGeometry, type MapJson } from '../src/index';
+import {
+  createWorld,
+  hashWorld,
+  rulesForLandscape,
+  worldGeometry,
+  type MapJson,
+} from '../src/index';
 import { runCarriers } from '../src/systems/carriers';
 import { runCheats } from '../src/systems/cheats';
 import { runConstruction } from '../src/systems/construction';
@@ -70,8 +76,14 @@ for (let i = 0; i < ticks; i++) {
 const total = performance.now() - start;
 let buildings = 0;
 for (const b of world.buildings.items) if (b) buildings++;
-console.log(`${mapName} ${map.width}x${map.height} players=${world.players.length} buildings=${buildings} hash=${hashWorld(world)}`);
-console.log(`total ${total.toFixed(0)} ms for ${ticks} ticks = ${(total / ticks).toFixed(3)} ms/tick`);
+console.log(
+  `${mapName} ${map.width}x${map.height} players=${world.players.length} buildings=${buildings} hash=${hashWorld(world)}`,
+);
+console.log(
+  `total ${total.toFixed(0)} ms for ${ticks} ticks = ${(total / ticks).toFixed(3)} ms/tick`,
+);
 for (const [name, ms] of Object.entries(cost).sort((a, b) => b[1] - a[1])) {
-  console.log(`  ${name.padEnd(13)} ${ms.toFixed(0).padStart(7)} ms  ${((ms / total) * 100).toFixed(1).padStart(5)}%`);
+  console.log(
+    `  ${name.padEnd(13)} ${ms.toFixed(0).padStart(7)} ms  ${((ms / total) * 100).toFixed(1).padStart(5)}%`,
+  );
 }

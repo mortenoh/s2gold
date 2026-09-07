@@ -43,10 +43,12 @@ describe('rulesForLandscape', () => {
 });
 
 describe('winter terrain rules', () => {
-  it('treats ice as unwalkable (the winter-specific hazards)', () => {
-    expect(isWalkableTexture(0x04, WINTER_RULES)).toBe(false); // ice 1
-    expect(isWalkableTexture(0x07, WINTER_RULES)).toBe(false); // ice 2
-    // Ice floes + open water are unwalkable too.
+  it('keeps the frozen desert slots walkable (the original allows flags on them)', () => {
+    // The winter maps' own build layers allow flags on 5052 nodes fully
+    // surrounded by 0x04 (scripts/walk-probe.ts), so ice is walkable ground.
+    expect(isWalkableTexture(0x04, WINTER_RULES)).toBe(true); // ice 1
+    expect(isWalkableTexture(0x07, WINTER_RULES)).toBe(true); // ice 2
+    // Ice floes + open water are unwalkable.
     expect(isWalkableTexture(0x02, WINTER_RULES)).toBe(false); // ice floe
     expect(isWalkableTexture(0x03, WINTER_RULES)).toBe(false); // ice floes
     expect(isWalkableTexture(0x05, WINTER_RULES)).toBe(false); // water
@@ -72,7 +74,7 @@ describe('winter terrain rules', () => {
   });
 
   it('classifies every id in the real winter maps consistently', () => {
-    const impassable = new Set([0x02, 0x03, 0x04, 0x05, 0x07]);
+    const impassable = new Set([0x02, 0x03, 0x05]);
     const buildable = new Set([0x00, 0x08, 0x09, 0x0a, 0x0e, 0x0f, 0x12]);
     for (const ids of [WINTER_MAP02_IDS, WINTER_MAP06_IDS]) {
       for (const raw of ids) {
@@ -91,7 +93,7 @@ describe('wasteland terrain rules', () => {
     // Alpine pasture (0x12) is green buildable ground here (original BQ: flag/hut/castle).
     expect(isWalkableTexture(0x12, WASTELAND_RULES)).toBe(true);
     expect(isBuildableTexture(0x12, WASTELAND_RULES)).toBe(true);
-    // Desert slots are walkable sand in wasteland (unlike winter, where they are ice).
+    // Desert slots are walkable sand in wasteland (and walkable ice in winter).
     expect(isWalkableTexture(0x04, WASTELAND_RULES)).toBe(true);
     expect(isWalkableTexture(0x07, WASTELAND_RULES)).toBe(true);
     expect(isBuildableTexture(0x04, WASTELAND_RULES)).toBe(false);
@@ -131,10 +133,11 @@ describe('greenland regression + cross-landscape divergence', () => {
   });
 
   it('diverges on the shared slots that change material by landscape', () => {
-    // 0x04 (desert/ice): walkable everywhere except winter, where it is ice.
+    // 0x04 (desert/ice): walkable in every landscape (winter ice included, per
+    // the winter maps' build layers); it only stops being buildable in winter.
     expect(isWalkableTexture(0x04, GREENLAND_RULES)).toBe(true);
     expect(isWalkableTexture(0x04, WASTELAND_RULES)).toBe(true);
-    expect(isWalkableTexture(0x04, WINTER_RULES)).toBe(false);
+    expect(isWalkableTexture(0x04, WINTER_RULES)).toBe(true);
     // 0x12 (mountain meadow / alpine pasture): green buildable ground in every
     // landscape — the original build-quality layer never marks it a hazard.
     for (const rules of [GREENLAND_RULES, WASTELAND_RULES, WINTER_RULES]) {

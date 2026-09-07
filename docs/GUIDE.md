@@ -212,7 +212,9 @@ so you can read the map.
 - **Harbor and shipyard** need **coast**: buildable shore land that touches
   **navigable water** (deep water a ship can sail).
 - **Blocked terrain**: open water, swamp, snow, lava and reef are impassable —
-  no building, no flag, no walking.
+  no building, no flag, no walking. Their _edges_ are fine: a node is walkable as
+  long as one of the six triangles around it is walkable ground and none is lava,
+  so settlers walk along beaches and swamp edges exactly as in the original.
 
 **Landscape differences.** The meadow family is buildable on every landscape. The
 hazards differ:
@@ -220,7 +222,7 @@ hazards differ:
 | Landscape                 | Notable rule                                                                                                                |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | **Greenland** (temperate) | Swamp and snow are hazards. A special shallow "buildable water" tile looks like water but is solid ground you can build on. |
-| **Winter**                | The desert slots freeze into **ice**, which is impassable.                                                                  |
+| **Winter**                | The desert slots freeze into **ice**: walkable, but nothing can be built on it.                                             |
 | **Wasteland**             | Those same slots stay **walkable sand**; lava is the main hazard.                                                           |
 
 ---

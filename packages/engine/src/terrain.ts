@@ -83,15 +83,13 @@ export const DEFAULT_IMPASSABLE: ReadonlySet<number> = new Set([
 ]);
 
 /**
- * Impassable terrain ids (winter): the shared greenland hazards plus the frozen
- * desert slots, which become ICE (0x04, 0x07) — unwalkable, matching the ice
- * floes (0x02, 0x03) already carried by the shared set.
+ * Impassable terrain ids (winter): the shared greenland hazards only. The frozen
+ * desert slots (0x04, 0x07) were once listed here as unwalkable ice, but the two
+ * shipped winter maps' own build layers allow flags on 5052 nodes fully
+ * surrounded by 0x04 (and none fully in 0x02/0x03/0x05), so ice is walkable
+ * ground in the original and only snow, ice floes and water block movement.
  */
-export const WINTER_IMPASSABLE: ReadonlySet<number> = new Set([
-  ...DEFAULT_IMPASSABLE,
-  0x04, // ice 1
-  0x07, // ice 2
-]);
+export const WINTER_IMPASSABLE: ReadonlySet<number> = new Set([...DEFAULT_IMPASSABLE]);
 
 /**
  * Impassable terrain ids (wasteland): the shared greenland hazards only.

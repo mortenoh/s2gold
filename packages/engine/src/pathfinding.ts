@@ -13,7 +13,8 @@
 
 import { ownerPlayer } from './constants';
 import type { Geometry } from './geometry';
-import { isWalkableTexture, type TerrainRules } from './terrain';
+import { type TerrainRules } from './terrain';
+import { isWalkableNode } from './walk';
 import { isWaterNode } from './water';
 import { getFlag, storeLive, type Road, type World } from './world';
 
@@ -116,9 +117,7 @@ export function findWalkPath(
     if (n !== goal && world.buildingAtNode[n] >= 0) return false;
     if (blockFlags && n !== goal && world.flagAtNode[n] >= 0) return false;
     if (ownedBy !== undefined && ownerPlayer(world.owner[n]) !== ownedBy) return false;
-    return (
-      isWalkableTexture(world.terrain1[n], rules) && isWalkableTexture(world.terrain2[n], rules)
-    );
+    return isWalkableNode(world, geom, n, rules);
   };
   if (!walkable(goal)) return null;
 

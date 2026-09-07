@@ -9,6 +9,7 @@
  * a subsurface resource. Missing workers are recruited from a Helper (+ tool).
  */
 
+import { isWalkableNode } from '../walk';
 import {
   BUILDING,
   buildingDef,
@@ -338,13 +339,14 @@ function runHarvester(
 }
 
 /** True when a forester may plant a sapling / farmer may sow a field at `node`. */
-function plantable(world: World, rules: TerrainRules, node: number): boolean {
+function plantable(world: World, geom: Geometry, rules: TerrainRules, node: number): boolean {
   if (world.objectType[node] !== OBJ_TYPE.none) return false;
   if (world.flagAtNode[node] >= 0 || world.buildingAtNode[node] >= 0) return false;
   return (
     isBuildableTexture(world.terrain1[node], rules) &&
     isWalkableTexture(world.terrain1[node], rules) &&
-    isWalkableTexture(world.terrain2[node], rules)
+    isWalkableTexture(world.terrain2[node], rules) &&
+    isWalkableNode(world, geom, node, rules)
   );
 }
 
@@ -373,7 +375,9 @@ function runFarmer(
       if (b.outputQueue.length >= 8) return; // wait for the flag to clear
       const target =
         nearestReachable(world, geom, rules, b.node, radius, (n) => harvestableCrop(world, n)) ??
-        nearestReachable(world, geom, rules, b.node, radius, (n) => plantable(world, rules, n));
+        nearestReachable(world, geom, rules, b.node, radius, (n) =>
+          plantable(world, geom, rules, n),
+        );
       if (!target) return;
       worker.state = 'toWork';
       worker.targetNode = target.node;
@@ -405,7 +409,7 @@ function runFarmer(
           world.cropFields = world.cropFields.filter((c) => c.node !== node);
           b.outputQueue.push(def.outputs[0]);
           events.emit({ type: 'CropHarvested', node, player: b.player });
-        } else if (plantable(world, rules, node)) {
+        } else if (plantable(world, geom, rules, node)) {
           world.objectType[node] = OBJ_TYPE_CROP;
           world.objectIndex[node] = OBJ_INDEX_SAPLING;
           world.cropFields.push({ node, matureTick: world.tick + TICKS.cropGrow });
@@ -641,10 +645,12 @@ function runHarvesterFor(
         b,
         worker,
         () =>
-          nearestReachable(world, geom, rules, b.node, radius, (n) => plantable(world, rules, n)),
+          nearestReachable(world, geom, rules, b.node, radius, (n) =>
+            plantable(world, geom, rules, n),
+          ),
         def.workTicks,
         (node) => {
-          if (!plantable(world, rules, node)) return false;
+          if (!plantable(world, geom, rules, node)) return false;
           world.objectType[node] = OBJ_TYPE_SAPLING;
           world.objectIndex[node] = OBJ_INDEX_SAPLING;
           world.saplings.push({ node, matureTick: world.tick + TICKS.treeGrow });
