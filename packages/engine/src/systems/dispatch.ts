@@ -220,13 +220,7 @@ function tryDeliver(
     const coinsBlocked =
       def?.kind === 'military' && w.type === WARE.coins && (!b.occupied || !b.coinsEnabled);
     const stopped = b.productionStopped && def?.kind !== 'military';
-    if (
-      def &&
-      idx >= 0 &&
-      !coinsBlocked &&
-      !stopped &&
-      (b.inputStock[idx] ?? 0) < def.inputCap
-    ) {
+    if (def && idx >= 0 && !coinsBlocked && !stopped && (b.inputStock[idx] ?? 0) < def.inputCap) {
       while (b.inputStock.length <= idx) b.inputStock.push(0);
       b.inputStock[idx]++;
       accepted = true;
