@@ -1,3 +1,4 @@
+import { WORLD_VERSION } from './world';
 import { describe, expect, it } from 'vitest';
 import { createWorld, hashWorld, deserializeWorld, serializeWorld, tickWorld } from './index';
 import { makeFlatMap } from './harness';
@@ -68,7 +69,7 @@ describe('per-player nations', () => {
     for (const p of raw.players as Record<string, unknown>[]) delete p.nation;
 
     const revived = deserializeWorld(JSON.stringify(raw));
-    expect(revived.version).toBe(4);
+    expect(revived.version).toBe(WORLD_VERSION);
     // A v3 save predates nations, so it was an all-Roman game.
     expect(revived.players.map((p) => p.nation)).toEqual(['romans', 'romans']);
     expect(() => tickWorld(revived)).not.toThrow();

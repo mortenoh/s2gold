@@ -106,6 +106,8 @@ function demand(world: World, b: Building, wareType: WareType): number {
   }
   const idx = def.inputs.indexOf(wareType);
   if (idx < 0) return 0;
+  // A stopped building neither works nor stocks up (S2 stop production).
+  if (b.productionStopped) return 0;
   return Math.max(0, def.inputCap - (b.inputStock[idx] ?? 0));
 }
 
@@ -213,10 +215,18 @@ function tryDeliver(
     const def = buildingDef(b.type);
     const idx = def ? def.inputs.indexOf(w.type) : -1;
     // Same gate as demand(): a military building that is unoccupied or has
-    // coins toggled off also rejects coins already in flight to it.
+    // coins toggled off also rejects coins already in flight to it, and a
+    // stopped production building rejects inputs in flight (re-routed).
     const coinsBlocked =
       def?.kind === 'military' && w.type === WARE.coins && (!b.occupied || !b.coinsEnabled);
-    if (def && idx >= 0 && !coinsBlocked && (b.inputStock[idx] ?? 0) < def.inputCap) {
+    const stopped = b.productionStopped && def?.kind !== 'military';
+    if (
+      def &&
+      idx >= 0 &&
+      !coinsBlocked &&
+      !stopped &&
+      (b.inputStock[idx] ?? 0) < def.inputCap
+    ) {
       while (b.inputStock.length <= idx) b.inputStock.push(0);
       b.inputStock[idx]++;
       accepted = true;

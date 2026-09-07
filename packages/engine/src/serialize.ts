@@ -86,6 +86,13 @@ const MIGRATIONS: Readonly<Record<number, (w: World) => void>> = {
       if (player) player.nation ??= 'romans';
     }
   },
+  // v4 -> v5: the building window's stop-production toggle. Older saves never
+  // stopped anything, so every building starts running.
+  4: (w) => {
+    for (const b of w.buildings?.items ?? []) {
+      if (b) b.productionStopped ??= false;
+    }
+  },
 };
 
 /** Parse a serialized world, migrating older versions up to the current one. */

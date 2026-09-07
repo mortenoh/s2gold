@@ -31,7 +31,7 @@ import {
 } from './map-loader';
 import { buildStaticObjects, objectAtlasForLandscape } from './map-objects';
 import { loadAtlas } from './sprite-atlas';
-import { makeWareIconSet } from './ware-icons';
+import { makeWareIconSet, type WareIconSet } from './ware-icons';
 import { loadBobAtlas } from './bob-atlas';
 import { MinimapView } from './minimap-view';
 import { installHandCursor } from './cursor';
@@ -75,6 +75,7 @@ import {
 import { buildAudioControls } from './audio-controls';
 import { makeHudIconSet, iconifyHudButton, HUD_ICON, IO_ARCHIVE } from './hud-icons';
 import { MilitaryPanel } from './military-ui';
+import { ProductionPanel } from './production-ui';
 import { HarborPanel } from './harbor-ui';
 import { SaveMenu } from './save-ui';
 import { StatsPanel } from './stats-ui';
@@ -423,6 +424,8 @@ async function boot(): Promise<void> {
     buildIcons = makeBuildIconSet(romanAtlas);
   }
   let objAtlasReady = false;
+  /** Ware pictographs from the object atlas (HUD readout + building windows). */
+  let wareIcons: WareIconSet | null = null;
   // Current map identity (drives per-map save filtering + default save names).
   let currentMap = '';
   let currentMapTitle = '';
@@ -500,7 +503,8 @@ async function boot(): Promise<void> {
     // The object archive also carries the original's small ware pictographs
     // (2200 + GoodType id); dress the HUD resource readout with them. Falls
     // back to the text readout when the atlas (or a sprite) is missing.
-    resources.build(makeWareIconSet(objAtlas));
+    wareIcons = makeWareIconSet(objAtlas);
+    resources.build(wareIcons);
 
     // Computer opponents: keep only slot indices this map can seat, then seed
     // enough players to cover the highest AI slot (human is always slot 0).
@@ -750,6 +754,13 @@ async function boot(): Promise<void> {
   // The harbor panel hands off to the interaction layer's expedition target-select
   // mode; the two reference each other, so a late-bound ref breaks the cycle.
   let interactionRef: Interaction | null = null;
+  const production = new ProductionPanel({
+    root,
+    session: () => session!,
+    icons: () => wareIcons,
+    buildRoad: (flagNode) => interactionRef?.beginRoad(flagNode),
+    demolish: (node) => session?.demolish(node),
+  });
   const harbor = new HarborPanel({
     root,
     session: () => {
@@ -780,6 +791,8 @@ async function boot(): Promise<void> {
     closeMilitary: () => military.close(),
     openHarbor: (node, x, y) => harbor.openAt(node, x, y),
     closeHarbor: () => harbor.close(),
+    openProduction: (node, x, y) => production.openAt(node, x, y),
+    closeProduction: () => production.close(),
     openWarehouse: (node) => {
       const title = session?.warehouseTitleAt(node) ?? null;
       if (!title) return false;

@@ -109,6 +109,16 @@ export type Command =
       enabled: boolean;
     }
   | {
+      // Building window: stop/resume a production building (S2 "stop
+      // production"). Ignored for warehouses, the HQ and military buildings.
+      tick: number;
+      player: number;
+      seq: number;
+      type: 'toggleProduction';
+      buildingId: number;
+      stopped: boolean;
+    }
+  | {
       // Begin assembling an expedition kit at a harbor (P7).
       tick: number;
       player: number;
@@ -218,6 +228,14 @@ function executeCommand(
       const b = world.buildings.items[cmd.buildingId];
       if (b && b.player === cmd.player && buildingDef(b.type)?.kind === 'military') {
         b.coinsEnabled = cmd.enabled;
+      }
+      break;
+    }
+    case 'toggleProduction': {
+      const b = world.buildings.items[cmd.buildingId];
+      const kind = b ? buildingDef(b.type)?.kind : undefined;
+      if (b && b.player === cmd.player && kind && !['hq', 'warehouse', 'military'].includes(kind)) {
+        b.productionStopped = cmd.stopped;
       }
       break;
     }

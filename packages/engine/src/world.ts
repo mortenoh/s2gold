@@ -30,7 +30,7 @@ import { seedRng, type RngState } from './rng';
 import { recalcTerritory } from './systems/territory';
 
 /** Format version for serialized worlds. */
-export const WORLD_VERSION = 4;
+export const WORLD_VERSION = 5;
 
 /**
  * The four playable peoples of Settlers II. In the original these are purely
@@ -135,6 +135,13 @@ export interface Building {
   wareStock: Record<WareType, number>;
   /** Production work timer (ticks remaining in the current cycle; 0 = idle). */
   workTimer: number;
+  /**
+   * Player-set "stop production" (the original building window's toggle). A
+   * stopped building finishes the cycle it is in, then neither starts another
+   * nor requests input wares; the worker stays home. Warehouses and military
+   * buildings never stop.
+   */
+  productionStopped: boolean;
   /** Alternating-output toggle (armory: 0 = sword, 1 = shield). */
   altToggle: number;
   // --- Military fields (MILITARY.md; non-military buildings leave these zeroed) ---
@@ -566,6 +573,7 @@ export function makeBuilding(
     outputQueue: [],
     wareStock: {},
     workTimer: 0,
+    productionStopped: false,
     altToggle: 0,
     garrison: new Array<number>(NUM_SOLDIER_RANKS).fill(0),
     occupied: false,

@@ -174,8 +174,11 @@ right-click) at any time to cancel road mode or close a menu.
 
 Clicking a **flag** also lets you **Send geologist** (see
 [Mines and geologists](#mines-and-geologists)) or **Demolish flag**. Clicking one
-of **your own buildings** shows its name and a **Demolish** option (the
-headquarters cannot be demolished).
+of **your own production buildings** opens its window: the worker state, the
+input stock, what it makes, and **Stop production** / **Resume production**,
+**Build road** and **Demolish** buttons (the headquarters cannot be demolished).
+A stopped building finishes the cycle it is in, then idles and stops asking for
+wares; use it to park a shipyard or a mine you do not need right now.
 
 ### Busy roads upgrade themselves
 

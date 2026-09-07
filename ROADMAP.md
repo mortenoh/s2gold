@@ -66,6 +66,21 @@ never committed (original art, same policy as the converted assets).
 
 ## Gameplay fidelity
 
+Landed 2026-09-07 (runthrough follow-ups): the production building window.
+Clicking an own production building (or its site) opens a window with the
+worker/progress state, the input stock with ware pictographs, what it makes,
+and Stop/Resume production, Build road, Demolish (`game/production-ui.ts`,
+`GameSession.productionAt`). The engine gained `Building.productionStopped`
+(WORLD_VERSION 5, v4->v5 migration) and the `toggleProduction` command: a
+stopped building finishes the cycle in flight, then neither starts another,
+requests inputs, nor accepts inputs already in flight (re-routed like coins to
+a closed military building). This is also the shipyard's off switch (the
+original's boat/ship toggle has no boat counterpart here). Covered by
+`engine/src/stop-production.test.ts` and `e2e/tests/production-window.spec.ts`.
+The title menu's Load game entry and the desktop Game menu landed the same day
+(see section G).
+
+
 Landed 2026-07-12: builder-to-site and settler-to-building travel is now
 road-constrained (`findRoadWalkPath` over the flag/road graph). A building
 with no road connection to the HQ is not staffed until one exists, matching

@@ -164,6 +164,28 @@ export const SPEEDS = [1, 3, 10, 25, 50] as const;
 export type Speed = (typeof SPEEDS)[number];
 
 /** A running game over one map for a single local player (player 0). */
+/** What the production building window shows (see {@link GameSession.productionAt}). */
+export interface ProductionView {
+  readonly buildingId: number;
+  readonly type: string;
+  readonly site: boolean;
+  readonly deliveredBoards: number;
+  readonly needBoards: number;
+  readonly deliveredStones: number;
+  readonly needStones: number;
+  /** Construction progress 0..1 (sites only). */
+  readonly buildProgress: number;
+  readonly staffed: boolean;
+  readonly workerOnWay: boolean;
+  readonly working: boolean;
+  readonly stopped: boolean;
+  readonly inputs: readonly { ware: string; count: number; cap: number }[];
+  readonly outputs: readonly string[];
+  readonly queued: number;
+  /** The building's flag node, or -1 when it has none (road entry). */
+  readonly flagNode: number;
+}
+
 export class GameSession {
   /** Live world state. Replaced wholesale by {@link loadWorld} (save load). */
   world: World;
@@ -753,6 +775,54 @@ export class GameSession {
   }
 
   /** Garrison/coin snapshot of the military building at a node, or null. */
+  /**
+   * The own production building (or its construction site) at `node`, as the
+   * building window shows it, or null for anything else (ground, warehouses,
+   * military buildings, enemy buildings).
+   */
+  productionAt(node: number): ProductionView | null {
+    const b = buildingAt(this.world, node);
+    if (!b || b.player !== this.localPlayer) return null;
+    const def = buildingDef(b.type);
+    if (!def || def.kind === 'hq' || def.kind === 'warehouse' || def.kind === 'military') {
+      return null;
+    }
+    const worker = b.workerId >= 0 ? this.world.settlers.items[b.workerId] : null;
+    const flagNode = this.geom.neighbour(b.node, 'SE');
+    return {
+      buildingId: b.id,
+      type: b.type,
+      site: b.state === 'site',
+      deliveredBoards: b.deliveredBoards,
+      needBoards: b.needBoards,
+      deliveredStones: b.deliveredStones,
+      needStones: b.needStones,
+      buildProgress: b.buildTicks > 0 ? b.buildProgress / b.buildTicks : 0,
+      staffed: b.staffed,
+      workerOnWay: !b.staffed && b.workerId >= 0,
+      working: b.workTimer > 0 || (worker !== null && worker.state !== 'idle'),
+      stopped: b.productionStopped,
+      inputs: def.inputs.map((ware, i) => ({
+        ware,
+        count: b.inputStock[i] ?? 0,
+        cap: def.inputCap,
+      })),
+      outputs: [...def.outputs],
+      queued: b.outputQueue.length,
+      flagNode: this.flagIdAt(flagNode) >= 0 ? flagNode : -1,
+    };
+  }
+
+  /** Building window: stop or resume an own production building. */
+  toggleProduction(buildingId: number, stopped: boolean): void {
+    applyCommand(this.world, {
+      type: 'toggleProduction',
+      player: this.localPlayer,
+      buildingId,
+      stopped,
+    });
+  }
+
   militaryAt(node: number): MilitaryView | null {
     const b = buildingAt(this.world, node);
     return b ? militaryView(this.world, b.id) : null;

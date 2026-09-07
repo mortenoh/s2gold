@@ -714,16 +714,24 @@ export function runProduction(
     // and always drain whatever is already queued (placeOutput). A congested flag
     // leaves queued output, so gate on the work timer (about to restart) rather
     // than an empty queue, or a jammed producer would never idle.
+    const betweenCycles =
+      def.kind === 'harvester' || def.kind === 'farm'
+        ? !worker || worker.state === 'idle'
+        : b.workTimer === 0;
+    // Stop production (building window): finish the cycle in flight, then
+    // idle at home. Queued output still drains so the flag clears.
+    if (b.productionStopped && betweenCycles) {
+      placeOutput(world, events, b);
+      continue;
+    }
     const ware = producedWare(def);
-    if (ware && !wareWanted(warehouse.get(b.player) ?? {}, ware, transit.get(b.player) ?? {})) {
-      const betweenCycles =
-        def.kind === 'harvester' || def.kind === 'farm'
-          ? !worker || worker.state === 'idle'
-          : b.workTimer === 0;
-      if (betweenCycles) {
-        placeOutput(world, events, b);
-        continue;
-      }
+    if (
+      ware &&
+      betweenCycles &&
+      !wareWanted(warehouse.get(b.player) ?? {}, ware, transit.get(b.player) ?? {})
+    ) {
+      placeOutput(world, events, b);
+      continue;
     }
 
     switch (def.kind) {

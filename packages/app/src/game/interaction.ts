@@ -17,6 +17,7 @@ import type { Camera } from '@s2gold/renderer';
 import { el } from '../lib/dom';
 import type { BuildIconSet } from './build-icons';
 import { mineDepletedAt, nodeAtWorld } from './game-render';
+import { BUILDING_LABEL } from './building-labels';
 import type { GameSession } from './session';
 
 /**
@@ -54,35 +55,6 @@ const SIGN_LABEL: Readonly<Record<number, string>> = {
   2: 'gold',
   3: 'coal',
   4: 'granite',
-};
-
-const BUILDING_LABEL: Readonly<Record<string, string>> = {
-  woodcutter: 'Woodcutter',
-  forester: 'Forester',
-  quarry: 'Quarry',
-  fishery: 'Fishery',
-  well: 'Well',
-  hunter: 'Hunter',
-  lookout: 'Lookout tower',
-  sawmill: 'Sawmill',
-  mill: 'Mill',
-  bakery: 'Bakery',
-  slaughterhouse: 'Slaughterhouse',
-  brewery: 'Brewery',
-  ironsmelter: 'Iron smelter',
-  armory: 'Armory',
-  metalworks: 'Metalworks',
-  mint: 'Mint',
-  storehouse: 'Storehouse',
-  harbor: 'Harbor',
-  shipyard: 'Shipyard',
-  farm: 'Farm',
-  pigfarm: 'Pig farm',
-  donkeybreeder: 'Donkey breeder',
-  coalmine: 'Coal mine',
-  ironmine: 'Iron mine',
-  goldmine: 'Gold mine',
-  granitemine: 'Granite mine',
 };
 
 /** Building types in menu order, grouped by size class (excluding the HQ). */
@@ -148,6 +120,9 @@ export interface InteractionDeps {
    * harbor was there (so the build menu is suppressed).
    */
   openHarbor?(node: number, clientX: number, clientY: number): boolean;
+  /** Own production building (or its site) at `node`: open its window. */
+  openProduction?(node: number, clientX: number, clientY: number): boolean;
+  closeProduction?(): void;
   /** Close any open harbor panel. */
   closeHarbor?(): void;
   /**
@@ -247,6 +222,7 @@ export class Interaction {
     }
     this.deps.closeMilitary?.();
     this.deps.closeHarbor?.();
+    this.deps.closeProduction?.();
     if (this.roadMode) {
       this.finishRoad(node);
       return;
@@ -256,6 +232,7 @@ export class Interaction {
     if (this.deps.openMilitary?.(node, ev.clientX, ev.clientY)) return;
     if (this.deps.openHarbor?.(node, ev.clientX, ev.clientY)) return;
     if (this.deps.openWarehouse?.(node)) return;
+    if (this.deps.openProduction?.(node, ev.clientX, ev.clientY)) return;
     this.openMenu(ev.clientX, ev.clientY, node);
   }
 
@@ -285,6 +262,11 @@ export class Interaction {
   }
 
   // --- Road mode ------------------------------------------------------------
+
+  /** Enter road mode from a flag node (building windows' "Build road"). */
+  beginRoad(fromFlagNode: number): void {
+    this.startRoad(fromFlagNode);
+  }
 
   private startRoad(fromFlagNode: number): void {
     this.roadStartFlagNode = fromFlagNode;

@@ -1205,3 +1205,21 @@ body {
 .ui-tooltip-visible {
   opacity: 1;
 }
+
+/* Production building window (shares the military panel chrome). */
+.production-panel .production-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.production-panel .production-ware-icon {
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.production-panel .mil-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}

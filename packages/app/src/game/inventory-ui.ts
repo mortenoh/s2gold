@@ -76,6 +76,11 @@ const GROUPS: readonly GoodsGroup[] = [
   },
 ];
 
+/** Display label per ware key, flattened from the grouped table. */
+export const WARE_LABEL: Readonly<Record<string, string>> = Object.fromEntries(
+  GROUPS.flatMap((group) => group.wares.map(([key, label]) => [key, label])),
+);
+
 /** One resolved ware row (engine key, display label, current count). */
 export interface GoodsEntry {
   readonly key: string;
