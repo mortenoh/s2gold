@@ -344,11 +344,17 @@ export function storeFree<T>(store: Store<T>, id: number): void {
   store.free.push(id);
 }
 
-/** Iterate live items in ascending id order (deterministic). */
-export function* storeLive<T>(store: Store<T>): Generator<T> {
+/**
+ * Live items in ascending id order (deterministic). Returns a plain array:
+ * generator resumption was a measurable share of the tick on big maps, where
+ * dispatch and the AI walk the stores many times per tick.
+ */
+export function storeLive<T>(store: Store<T>): T[] {
+  const out: T[] = [];
   for (const item of store.items) {
-    if (item !== null) yield item;
+    if (item !== null) out.push(item);
   }
+  return out;
 }
 
 /** The complete simulation state. */

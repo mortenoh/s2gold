@@ -11,7 +11,23 @@ the reference-study gap list, and the 2026-07-11/12 full code review
 (findings below marked "review" were confirmed against the code; the
 correctness findings from that review are already fixed).
 
-## A. Performance (landed 2026-07-12)
+## A. Performance (landed 2026-07-12; AI round 2026-09-07)
+
+Landed 2026-09-07 (big-map AI throughput): a per-system soak
+(`packages/engine/scripts/soak.ts`, `bun run` it with a map name) showed the
+computer opponents taking 90% of the tick on the 7-player 176x176 map
+`maps3_omap10`: the site picker scanned every node of the map per goal per
+decision, the seafaring planner re-flooded the whole map's water/land
+components every cycle, and generator-based store iteration resumed millions
+of times. Fixes, all bit-identical (same world hash after 3000 ticks with six
+AIs): the site scan is a bounded window around the reference node with the
+player's flag list computed once per pick and a breadth-first anchor mask
+instead of a per-candidate distance loop; water/land components, the water
+mask and the coastal node list are cached per world (terrain never changes);
+and `storeLive` returns an array. 2.09 -> 0.57 ms/tick (3.6x) on that map.
+Remaining cost is split between the AI's canPlaceBuilding window checks and
+dispatch's per-ware needer scan.
+
 
 The whole batch shipped, each change verified bit-identical against the
 previous engine via long-run world-hash traces (~40% higher tick throughput

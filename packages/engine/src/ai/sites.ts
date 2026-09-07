@@ -68,59 +68,47 @@ export function siteRoadDistance(
   player: number,
   node: number,
   maxRoadLength: number,
+  flagNodes: readonly number[] = playerFlagNodes(world, player),
 ): number {
   const flagNode = doorFlagNode(geom, node);
-  const roadDist = nearestPlayerFlagDistance(world, geom, player, flagNode);
-  if (roadDist > maxRoadLength) return -1;
-  if (!nearestFlagWalkable(world, geom, rules, player, flagNode)) return -1;
-  return roadDist;
+  const nearest = nearestFlag(geom, flagNodes, flagNode);
+  if (nearest.dist > maxRoadLength) return -1;
+  if (nearest.node < 0) return -1;
+  if (findWalkPath(world, geom, rules, flagNode, nearest.node) === null) return -1;
+  return nearest.dist;
 }
 
-/** Distance from `node` to the nearest existing flag owned by `player` (Infinity if none). */
-function nearestPlayerFlagDistance(
-  world: World,
+/**
+ * The player's flag nodes in id order. Site pickers scan hundreds of
+ * candidates per decision; listing the flags once per pick instead of walking
+ * the whole flag store per candidate is the difference between a big map
+ * running at 50x and crawling (profiled on a 7-player 176x176 map).
+ */
+export function playerFlagNodes(world: World, player: number): number[] {
+  const out: number[] = [];
+  for (const f of storeLive(world.flags)) if (f.player === player) out.push(f.node);
+  return out;
+}
+
+/** Nearest flag (node + distance) among `flagNodes`; lowest node on ties, -1 when none. */
+function nearestFlag(
   geom: Geometry,
-  player: number,
+  flagNodes: readonly number[],
   node: number,
-): number {
-  let best = Infinity;
-  for (const f of storeLive(world.flags)) {
-    if (f.player !== player) continue;
-    const d = geom.distance(f.node, node);
-    if (d < best) best = d;
-  }
-  return best;
-}
-
-/** Nearest existing flag node owned by `player`, or -1. */
-function nearestPlayerFlagNode(world: World, geom: Geometry, player: number, node: number): number {
+): { node: number; dist: number } {
   let best = -1;
   let bestDist = Infinity;
-  for (const f of storeLive(world.flags)) {
-    if (f.player !== player) continue;
-    const d = geom.distance(f.node, node);
-    if (d < bestDist || (d === bestDist && (best < 0 || f.node < best))) {
-      best = f.node;
+  for (const f of flagNodes) {
+    const d = geom.distance(f, node);
+    if (d < bestDist || (d === bestDist && (best < 0 || f < best))) {
+      best = f;
       bestDist = d;
     }
   }
-  return best;
+  return { node: best, dist: bestDist };
 }
 
-/** True when a road could plausibly be laid from `flagNode` to the nearest player flag. */
-function nearestFlagWalkable(
-  world: World,
-  geom: Geometry,
-  rules: TerrainRules,
-  player: number,
-  flagNode: number,
-): boolean {
-  const target = nearestPlayerFlagNode(world, geom, player, flagNode);
-  if (target < 0) return false;
-  return findWalkPath(world, geom, rules, flagNode, target) !== null;
-}
-
-/** Nodes (bounded) matching `match` within `radius` of `center`. */
+/** Nodes (bounded) matching `match` within `radius` of `center`, id-ascending. */
 function objectNodesNear(
   geom: Geometry,
   center: number,
@@ -128,22 +116,48 @@ function objectNodesNear(
   match: (node: number) => boolean,
 ): number[] {
   const out: number[] = [];
-  for (let n = 0; n < geom.size; n++) {
-    if (!match(n)) continue;
+  geom.forEachNodeWithin(center, radius, (n) => {
+    if (!match(n)) return;
     if (geom.distance(center, n) <= radius) out.push(n);
-  }
-  return out;
+  });
+  return out.sort((a, b) => a - b);
 }
 
-/** True when at least one node matching `match` lies within `radius` of `node`. */
-function hasWithin(
-  geom: Geometry,
-  node: number,
-  radius: number,
-  targets: readonly number[],
-): boolean {
-  for (const t of targets) if (geom.distance(node, t) <= radius) return true;
-  return false;
+/**
+ * Mask of every node within `radius` of any anchor (1 = near). Built once per
+ * pick so the candidate loop is a lookup instead of an anchors-length distance
+ * scan per candidate (trees run into the hundreds on a wooded map).
+ */
+function nearMask(geom: Geometry, anchors: readonly number[], radius: number): Uint8Array {
+  // Multi-source breadth-first dilation: lattice-step depth IS the torus
+  // distance, so depth <= radius marks exactly the nodes within the radius
+  // without a single distance() call.
+  const depth = new Int16Array(geom.size).fill(-1);
+  let frontier: number[] = [];
+  for (const a of anchors) {
+    if (depth[a] < 0) {
+      depth[a] = 0;
+      frontier.push(a);
+    }
+  }
+  const scratch = new Array<number>(6);
+  for (let d = 0; d < radius && frontier.length > 0; d++) {
+    const next: number[] = [];
+    for (const n of frontier) {
+      geom.neighboursInto(n, scratch);
+      for (let i = 0; i < 6; i++) {
+        const nb = scratch[i];
+        if (depth[nb] < 0) {
+          depth[nb] = d + 1;
+          next.push(nb);
+        }
+      }
+    }
+    frontier = next;
+  }
+  const mask = new Uint8Array(geom.size);
+  for (let n = 0; n < geom.size; n++) if (depth[n] >= 0) mask[n] = 1;
+  return mask;
 }
 
 /**
@@ -169,27 +183,31 @@ export function pickBuildSite(
   if (hq < 0) return -1;
 
   // Precompute the resource anchor list once (bounded to the scan disc).
-  let trees: number[] = [];
-  let granites: number[] = [];
+  let nearAnchor: Uint8Array | null = null;
   if (bias.kind === 'nearTrees') {
-    trees = objectNodesNear(geom, refNode, scanRadius + RADIUS.woodcutter, (n) =>
+    const trees = objectNodesNear(geom, refNode, scanRadius + RADIUS.woodcutter, (n) =>
       isTreeType(world.objectType[n]),
     );
     if (trees.length === 0) return -1; // nowhere useful to fell
+    nearAnchor = nearMask(geom, trees, RADIUS.woodcutter - 1);
   } else if (bias.kind === 'nearGranite') {
-    granites = objectNodesNear(geom, refNode, scanRadius + RADIUS.quarry, (n) =>
+    const granites = objectNodesNear(geom, refNode, scanRadius + RADIUS.quarry, (n) =>
       isGraniteType(world.objectType[n]),
     );
     if (granites.length === 0) return -1;
+    nearAnchor = nearMask(geom, granites, RADIUS.quarry - 1);
   }
 
   let bestNode = -1;
   let bestScore = Infinity;
   let bestSpacing = -Infinity;
+  const flagNodes = playerFlagNodes(world, player);
 
-  for (let node = 0; node < geom.size; node++) {
-    if (geom.distance(refNode, node) > scanRadius) continue;
-    if (!canPlaceBuilding(world, geom, rules, node, type, player)) continue;
+  // Bounded window around the reference node (exact disc check inside); the
+  // winner is tie-broken by node id, so visiting order does not matter.
+  geom.forEachNodeWithin(refNode, scanRadius, (node) => {
+    if (geom.distance(refNode, node) > scanRadius) return;
+    if (!canPlaceBuilding(world, geom, rules, node, type, player)) return;
 
     // Bias-specific primary score (lower is better) and hard filters.
     let score: number;
@@ -198,18 +216,18 @@ export function pickBuildSite(
         score = geom.distance(hq, node);
         break;
       case 'nearTrees':
-        if (!hasWithin(geom, node, RADIUS.woodcutter - 1, trees)) continue;
+        if (nearAnchor?.[node] !== 1) return;
         score = geom.distance(hq, node);
         break;
       case 'nearGranite':
-        if (!hasWithin(geom, node, RADIUS.quarry - 1, granites)) continue;
+        if (nearAnchor?.[node] !== 1) return;
         score = geom.distance(hq, node);
         break;
       case 'mine': {
         // Mines sit on the resource; require the subsurface nibble under the node.
-        if (!terrainMineable(world, geom, node)) continue;
-        if (resourceType(world.resource[node]) !== bias.resource) continue;
-        if (resourceAmount(world.resource[node]) <= 0) continue;
+        if (!terrainMineable(world, geom, node)) return;
+        if (resourceType(world.resource[node]) !== bias.resource) return;
+        if (resourceAmount(world.resource[node]) <= 0) return;
         // canPlaceBuilding already rejected any node not owned by us (neutral and
         // enemy alike), so a surviving mine candidate is guaranteed on our land.
         score = geom.distance(hq, node);
@@ -227,8 +245,8 @@ export function pickBuildSite(
 
     // Connectivity budget: the door flag must be within road reach of the network
     // and there must be a walkable route from it to the nearest existing flag.
-    const roadDist = siteRoadDistance(world, geom, rules, player, node, maxRoadLength);
-    if (roadDist < 0) continue;
+    const roadDist = siteRoadDistance(world, geom, rules, player, node, maxRoadLength, flagNodes);
+    if (roadDist < 0) return;
 
     // Spacing bonus: prefer sites a little away from our own flags (tie-break).
     const spacing = roadDist;
@@ -241,7 +259,7 @@ export function pickBuildSite(
       bestScore = score;
       bestSpacing = spacing;
     }
-  }
+  });
   return bestNode;
 }
 

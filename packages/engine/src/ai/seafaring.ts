@@ -29,7 +29,7 @@ import { harborDockNode, isCoastalLand, isWaterNode } from '../water';
 import { storeLive, type Building, type Ship, type World } from '../world';
 import { militaryCount } from './planner';
 import { flagsConnectedToHq } from './roads';
-import { hqNodeOf, pickBuildSite, siteRoadDistance } from './sites';
+import { hqNodeOf, pickBuildSite, playerFlagNodes, siteRoadDistance } from './sites';
 import type { AiState } from './types';
 
 /**
@@ -115,14 +115,45 @@ interface SeaMap {
   targets: number[];
 }
 
+/**
+ * Water/land components depend on terrain only, which never changes, so they
+ * are labelled once per world and reused by every AI player and cycle (a full
+ * map flood per cycle was a quarter of the tick cost on 7-player maps).
+ */
+interface StaticSea {
+  water: Components;
+  land: Components;
+  /** 1 where the node is navigable water. */
+  waterMask: Uint8Array;
+  /** Coastal land nodes (land touching navigable water), id-ascending. */
+  coastal: number[];
+}
+
+const componentCache = new WeakMap<World, StaticSea>();
+
+function staticSea(world: World, geom: Geometry): StaticSea {
+  let cached = componentCache.get(world);
+  if (!cached) {
+    const waterMask = new Uint8Array(geom.size);
+    for (let n = 0; n < geom.size; n++) if (isWaterNode(world, n)) waterMask[n] = 1;
+    const coastal: number[] = [];
+    for (let n = 0; n < geom.size; n++) if (isCoastalLand(world, geom, n)) coastal.push(n);
+    cached = {
+      water: labelComponents(geom, (n) => waterMask[n] === 1),
+      land: labelComponents(geom, (n) => waterMask[n] === 0),
+      waterMask,
+      coastal,
+    };
+    componentCache.set(world, cached);
+  }
+  return cached;
+}
+
 function analyzeSea(world: World, geom: Geometry, player: number): SeaMap {
-  const water = labelComponents(geom, (n) => isWaterNode(world, n));
-  const land = labelComponents(geom, (n) => !isWaterNode(world, n));
+  const { water, land, coastal } = staticSea(world, geom);
   const targets: number[] = [];
-  for (let n = 0; n < geom.size; n++) {
-    if (isWaterNode(world, n)) continue;
+  for (const n of coastal) {
     if (world.owner[n] !== OWNER_NONE) continue; // must be unclaimed by anyone
-    if (!isCoastalLand(world, geom, n)) continue;
     if (!spotFree(world, geom, n, player)) continue;
     targets.push(n);
   }
@@ -187,10 +218,10 @@ function pickHarborSite(
   let best = -1;
   let bestFlagged = false;
   let bestDist = Infinity;
-  for (let n = 0; n < geom.size; n++) {
-    if (!isCoastalLand(world, geom, n)) continue;
+  const flagNodes = playerFlagNodes(world, player);
+  for (const n of staticSea(world, geom).coastal) {
     if (!canPlaceHarbor(world, geom, rules, n, player)) continue; // own land + free door
-    if (siteRoadDistance(world, geom, rules, player, n, maxRoadLength) < 0) continue;
+    if (siteRoadDistance(world, geom, rules, player, n, maxRoadLength, flagNodes) < 0) continue;
     if (pickTarget(world, geom, sea, n) < 0) continue; // must open a real sea crossing
     const flagged = hasHarborFlag(world.terrain1[n]) || hasHarborFlag(world.terrain2[n]);
     const dist = geom.distance(hq, n);
@@ -218,10 +249,10 @@ function pickShipyardSite(
 ): number {
   let best = -1;
   let bestDist = Infinity;
-  for (let n = 0; n < geom.size; n++) {
-    if (!isCoastalLand(world, geom, n)) continue;
+  const flagNodes = playerFlagNodes(world, player);
+  for (const n of staticSea(world, geom).coastal) {
     if (!canPlaceBuilding(world, geom, rules, n, BUILDING.shipyard, player)) continue;
-    if (siteRoadDistance(world, geom, rules, player, n, maxRoadLength) < 0) continue;
+    if (siteRoadDistance(world, geom, rules, player, n, maxRoadLength, flagNodes) < 0) continue;
     const dist = geom.distance(harbor.node, n);
     if (dist < bestDist || (dist === bestDist && (best < 0 || n < best))) {
       best = n;
@@ -252,9 +283,8 @@ function pickCoastObjective(
   const homeLand = sea.land.comp[hq];
   let best = -1;
   let bestDist = Infinity;
-  for (let n = 0; n < geom.size; n++) {
+  for (const n of staticSea(world, geom).coastal) {
     if (sea.land.comp[n] !== homeLand) continue; // must be reachable over our own land
-    if (!isCoastalLand(world, geom, n)) continue;
     // Ownership ignored: we do not own this shore yet — that is the whole point.
     if (!canPlaceHarbor(world, geom, rules, n)) continue;
     if (pickTarget(world, geom, sea, n) < 0) continue; // must open a real sea crossing
@@ -271,9 +301,10 @@ function pickCoastObjective(
 function ownedNodeNearest(world: World, geom: Geometry, player: number, target: number): number {
   let best = -1;
   let bestDist = Infinity;
+  const { waterMask } = staticSea(world, geom);
   for (let n = 0; n < geom.size; n++) {
     if (ownerPlayer(world.owner[n]) !== player) continue;
-    if (isWaterNode(world, n)) continue;
+    if (waterMask[n] === 1) continue;
     const d = geom.distance(target, n);
     if (d < bestDist || (d === bestDist && (best < 0 || n < best))) {
       best = n;
