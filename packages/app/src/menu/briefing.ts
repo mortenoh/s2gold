@@ -24,13 +24,8 @@ import {
 } from './campaign-data';
 import { loadMissionText, wrapMissionText, paginate } from './mission-text';
 import { createSession } from '../lib/sessions';
-import {
-  defaultAiNation,
-  encodeNations,
-  isAllRoman,
-  NATION_CODES,
-  type Nation,
-} from '../lib/nations';
+import { defaultAiNation, encodeNations, isAllRoman, NATION_CODES } from '../lib/nations';
+import type { Nation } from '@s2gold/engine';
 
 const GOLD = '#f0c84a';
 const CREAM = '#f4ecd0';
