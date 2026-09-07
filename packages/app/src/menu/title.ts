@@ -17,6 +17,8 @@ import { menuStrings } from './strings';
 import { MenuMusic } from './music';
 import { openIntro, introWatched } from './intro';
 import { newestSession } from '../lib/sessions';
+import { loadManifest } from '../lib/manifest';
+import { missingAssetsHint, renderFirstRun, tauriGlobal } from './first-run';
 
 /** The dev-only Asset inspector shows with ?dev=1 or localStorage s2gold.dev=1. */
 function devToolsEnabled(): boolean {
@@ -49,6 +51,15 @@ const GOLD = '#f0c84a';
 const CREAM = '#f4ecd0';
 
 export async function renderTitle(root: HTMLElement): Promise<void> {
+  // No converted assets yet. Desktop: the first-run screen (pick the GOG
+  // installer, convert) replaces the menu. Browser: the menu still renders
+  // (text-only) with a hint on how to run the pipeline.
+  const assetsMissing = (await loadManifest()) === null;
+  const tauri = tauriGlobal();
+  if (assetsMissing && tauri) {
+    await renderFirstRun(root, tauri);
+    return;
+  }
   clear(root);
   root.className = 'menu-screen menu-title';
 
@@ -68,6 +79,7 @@ export async function renderTitle(root: HTMLElement): Promise<void> {
   }
 
   const panel = el('div', { class: 'menu-panel', attrs: { 'data-testid': 'title-panel' } });
+  if (assetsMissing) panel.append(missingAssetsHint());
 
   if (font) {
     panel.append(

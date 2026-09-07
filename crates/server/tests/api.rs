@@ -434,3 +434,25 @@ async fn embedded_frontend_serves_entry_pages() {
         .await
         .assert_status_not_found();
 }
+
+#[tokio::test]
+async fn assets_status_reports_manifest_presence() {
+    let dir = tempfile::tempdir().unwrap();
+    let settings = settings_for(dir.path().into(), 1024 * 1024);
+    let server = TestServer::new(build_router(&settings).await.unwrap());
+    let res = server.get("/api/assets/status").await;
+    res.assert_status_ok();
+    assert_eq!(res.json::<Value>()["installed"], json!(false));
+    // A missing asset tree answers 404, not a routing error.
+    server
+        .get("/assets/manifest.json")
+        .await
+        .assert_status_not_found();
+
+    let assets = settings.assets_dir.clone();
+    fs::create_dir_all(&assets).unwrap();
+    fs::write(assets.join("manifest.json"), "{}").unwrap();
+    let res = server.get("/api/assets/status").await;
+    assert_eq!(res.json::<Value>()["installed"], json!(true));
+    server.get("/assets/manifest.json").await.assert_status_ok();
+}

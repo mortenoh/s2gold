@@ -394,17 +394,29 @@ Steps, in order of payoff:
    when app data holds no `assets/manifest.json`, so `make desktop` still
    works from a checkout; release builds show the missing-assets state until
    step 3 lands.
-3. First-run setup screen (the "no assets" state). When `<app_data>/assets/
-   manifest.json` is missing, the webview shows a native file picker
-   (tauri-plugin-dialog) for `setup_the_settlers_2_gold_*.exe`, then runs
-   the conversion with a progress log and restarts the server's asset
-   mount when done. The existing menu already degrades gracefully when
-   assets are absent, so this is an additive screen.
+3. LANDED 2026-09-07: first-run setup screen. `/api/assets/status` reports
+   whether the asset manifest exists and `/assets` is mounted even before the
+   directory does (no restart after conversion). The title menu checks the
+   manifest: in the desktop app a setup panel (`menu/first-run.ts`) replaces
+   the menu, lists the resolved tools (`converter_status` command), opens the
+   native file picker (tauri-plugin-dialog, `dialog:allow-open`), runs the
+   `convert_assets` command with the log streamed as `convert-progress`
+   events, and reloads into the game; in the browser the menu still renders
+   with a hint on how to run `make install`. `s2gold-desktop --convert
+   <installer.exe>` runs the same conversion headless from a terminal.
+   Verified on the release binary: missing assets -> setup screen with the
+   tools resolved, stand-in converter fills `<app_data>/assets`, restart ->
+   title menu; saves and sessions written through the API survive an app
+   restart in `<app_data>/s2gold.db`.
 4. The conversion itself, two options:
-   a. Short term: shell out to the Python pipeline as a Tauri sidecar
-      (`uv run s2gold install <exe>` with `uv` on PATH, plus `innoextract`).
-      Cheap, but the built app then depends on uv/innoextract being
-      installed, which contradicts "self-contained".
+   a. LANDED 2026-09-07 as the interim backend (`crates/desktop/src/convert.rs`):
+      the app runs `uv run --project <source tree> s2gold install <exe>
+      --assets <app_data>/assets --extracted <app_data>/extracted`, with
+      Homebrew/user-local bins added to PATH (GUI apps start without them)
+      and `S2GOLD_CONVERTER` as an override. The built app therefore still
+      depends on `uv`, `innoextract` and the source checkout it was built
+      from; the setup screen says so before the user picks a file. This is
+      what (b) replaces.
    b. Proper: port `src/s2gold` to a Rust crate (`crates/convert`). The
       formats are small, well-documented parsers (LST/BOB/DAT/WLD/LBM/
       palette/gametext, see `src/s2gold/formats/`) and the converters are

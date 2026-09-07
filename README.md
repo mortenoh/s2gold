@@ -24,7 +24,10 @@ music, maps and texts into web-native assets under `packages/app/public/assets/`
   pre-database JSON files in `saves/`/`sessions/` are imported on first startup
 - Desktop app: Tauri shell under `crates/desktop/` embedding the same server
   with the frontend compiled in; saves and converted assets live under the OS
-  app-data directory. Run via `make desktop`, bundle via `make desktop-app`
+  app-data directory. On first launch it asks for the GOG installer and
+  converts the assets itself (currently via `uv` + the source tree it was
+  built from; `s2gold-desktop --convert <installer.exe>` does the same from a
+  terminal). Run via `make desktop`, bundle via `make desktop-app`
 
 Requirements: `uv`, `pnpm`, `cargo`, `innoextract` (required), `fluidsynth` + `ffmpeg`
 (optional, for music/intro video conversion).

@@ -1154,3 +1154,67 @@ a.campaign-chapter:focus-visible {
   display: flex;
   gap: 12px;
 }
+
+/* First-run (missing assets) screen and the browser hint. */
+.first-run-hint {
+  max-width: 560px;
+  padding: 10px 14px;
+  color: #f4ecd0;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(240, 200, 74, 0.35);
+  border-radius: 6px;
+}
+
+.menu-panel.first-run {
+  max-width: 640px;
+  align-items: stretch;
+  gap: 14px;
+  color: #f4ecd0;
+}
+
+.first-run-title {
+  margin: 0;
+  color: #f0c84a;
+  font-size: 22px;
+}
+
+.first-run-text,
+.first-run-state {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.first-run-tools {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.6;
+  opacity: 0.85;
+  word-break: break-all;
+}
+
+.first-run-problem {
+  margin: 0;
+  color: #ff9a7a;
+  font-size: 13px;
+}
+
+.first-run-pick {
+  align-self: flex-start;
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.first-run-log {
+  max-height: 220px;
+  overflow: auto;
+  margin: 0;
+  padding: 8px;
+  font-size: 11px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid #33333c;
+  border-radius: 6px;
+  white-space: pre-wrap;
+}

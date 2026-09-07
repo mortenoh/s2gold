@@ -16,6 +16,9 @@ use crate::store::{Db, StoreError};
 #[derive(Clone)]
 pub struct AppState {
     pub db: Db,
+    /// Converted game assets root; `/api/assets/status` reports whether it
+    /// holds a manifest yet (the desktop first-run screen polls this).
+    pub assets_dir: std::path::PathBuf,
 }
 
 /// Build the application router. Opens (creating if needed) the database and,
@@ -27,10 +30,14 @@ pub async fn build_router(settings: &Settings) -> Result<Router, StoreError> {
         &settings.legacy_sessions_dir,
     )
     .await?;
-    let state = AppState { db };
+    let state = AppState {
+        db,
+        assets_dir: settings.assets_dir.clone(),
+    };
 
     let mut router = Router::new()
         .route("/health", get(health::health_check))
+        .route("/api/assets/status", get(health::assets_status))
         .route("/api/saves", get(saves::list_saves))
         .route(
             "/api/saves/{save_id}",
@@ -53,9 +60,9 @@ pub async fn build_router(settings: &Settings) -> Result<Router, StoreError> {
 
     // Converted game assets live outside dist so a frontend rebuild never has to
     // copy 75 MB; mount them explicitly, then the built app as the catch-all.
-    if settings.assets_dir.is_dir() {
-        router = router.nest_service("/assets", ServeDir::new(&settings.assets_dir));
-    }
+    // Mounted even when the directory does not exist yet (plain 404s until the
+    // first-run conversion fills it), so no restart is needed afterwards.
+    router = router.nest_service("/assets", ServeDir::new(&settings.assets_dir));
     if settings.embedded_frontend {
         #[cfg(feature = "embed-frontend")]
         {
