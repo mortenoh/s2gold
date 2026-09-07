@@ -7,7 +7,8 @@
 use std::path::PathBuf;
 
 use s2gold_server::{Settings, build_router, serve};
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 /// Toggle native window fullscreen. Invoked by the frontend's F key; the HTML
 /// Fullscreen API is not available in WKWebView here, so the desktop uses the
@@ -22,6 +23,63 @@ fn toggle_fullscreen(window: tauri::WebviewWindow) {
 #[tauri::command]
 fn quit(app: tauri::AppHandle) {
     app.exit(0);
+}
+
+/// Native "Game" menu next to the default app/edit/window menus. Quicksave,
+/// Quickload and Reload are forwarded to the webview as `menu-action` events
+/// (the frontend already owns those behaviours); Open Saves Folder reveals the
+/// app-data directory that holds `s2gold.db`.
+fn install_menu(app: &tauri::App) -> tauri::Result<()> {
+    let handle = app.handle();
+    let quicksave = MenuItem::with_id(handle, "quicksave", "Quicksave", true, Some("F5"))?;
+    let quickload = MenuItem::with_id(handle, "quickload", "Quickload", true, Some("F9"))?;
+    let reload = MenuItem::with_id(handle, "reload", "Reload", true, Some("CmdOrCtrl+R"))?;
+    let saves = MenuItem::with_id(
+        handle,
+        "open_saves",
+        "Open Saves Folder",
+        true,
+        None::<&str>,
+    )?;
+    let game = Submenu::with_items(
+        handle,
+        "Game",
+        true,
+        &[
+            &quicksave,
+            &quickload,
+            &PredefinedMenuItem::separator(handle)?,
+            &reload,
+            &PredefinedMenuItem::separator(handle)?,
+            &saves,
+        ],
+    )?;
+    let menu = Menu::default(handle)?;
+    menu.append(&game)?;
+    app.set_menu(menu)?;
+    app.on_menu_event(|app, event| match event.id().as_ref() {
+        "open_saves" => reveal_dir(&app_data_dir(app)),
+        id @ ("quicksave" | "quickload" | "reload") => {
+            let _ = app.emit("menu-action", id);
+        }
+        _ => {}
+    });
+    Ok(())
+}
+
+/// Open a directory in the platform file manager (creating it first so the
+/// call never fails on a fresh install).
+fn reveal_dir(dir: &std::path::Path) {
+    let _ = std::fs::create_dir_all(dir);
+    #[cfg(target_os = "macos")]
+    let program = "open";
+    #[cfg(target_os = "windows")]
+    let program = "explorer";
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let program = "xdg-open";
+    if let Err(err) = std::process::Command::new(program).arg(dir).spawn() {
+        eprintln!("could not open {}: {err}", dir.display());
+    }
 }
 
 fn app_data_dir(app: &tauri::AppHandle) -> PathBuf {
@@ -75,6 +133,7 @@ fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![toggle_fullscreen, quit])
         .setup(|app| {
+            install_menu(app)?;
             let settings = desktop_settings(app.handle());
             let listener = tauri::async_runtime::block_on(tokio::net::TcpListener::bind((
                 settings.host.as_str(),

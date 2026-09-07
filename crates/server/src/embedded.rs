@@ -33,6 +33,7 @@ pub fn mount_frontend(mut router: Router) -> Router {
         "/setup",
         "/options",
         "/credits",
+        "/load",
         "/campaign",
         "/campaign/{chapter}",
     ] {

@@ -19,6 +19,7 @@ import { openIntro, introWatched } from './intro';
 import { newestSession } from '../lib/sessions';
 import { loadManifest } from '../lib/manifest';
 import { missingAssetsHint, renderFirstRun, tauriGlobal } from './first-run';
+import { listSaves } from './load';
 
 /** The dev-only Asset inspector shows with ?dev=1 or localStorage s2gold.dev=1. */
 function devToolsEnabled(): boolean {
@@ -94,6 +95,9 @@ export async function renderTitle(root: HTMLElement): Promise<void> {
     // Both probes are resilient: an absent API yields null, not a throw.
     const resumeSession = await newestSession();
     const resumeSave = resumeSession ? null : await newestSave();
+    // Load game: the original's Load dialog, here a full-page list of every
+    // save on the server (needs the API; disabled with a hint otherwise).
+    const savesOnline = (await listSaves()) !== null;
     const resumeHref = resumeSession
       ? `/game/${resumeSession.map}/${resumeSession.id}`
       : resumeSave
@@ -130,8 +134,9 @@ export async function renderTitle(root: HTMLElement): Promise<void> {
         font,
         label: strings.loadGame,
         color: CREAM,
-        disabled: true,
-        tooltip: 'Load a saved game from the in-game menu',
+        ...(savesOnline
+          ? { href: '/load', tooltip: 'Load a saved game' }
+          : { disabled: true, tooltip: 'Saves need the game server (make serve)' }),
         testid: 'menu-loadgame',
       }),
       menuEntry({
@@ -234,10 +239,11 @@ export async function renderTitle(root: HTMLElement): Promise<void> {
             text: 'Credits',
             attrs: { 'data-testid': 'menu-credits' },
           }),
-          el('span', {
-            class: 'menu-entry disabled',
+          el('a', {
+            class: 'menu-entry',
+            href: '/load',
             text: strings.loadGame,
-            attrs: { 'data-testid': 'menu-loadgame', 'aria-disabled': 'true' },
+            attrs: { 'data-testid': 'menu-loadgame' },
           }),
         );
         return nav;

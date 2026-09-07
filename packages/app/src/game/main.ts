@@ -799,7 +799,11 @@ async function boot(): Promise<void> {
 
   // Brief feedback toast (reuses the .status-toast look, offset below the road
   // hint so the two never overlap). Auto-dismisses; only the latest is shown.
-  const saveToast = makeToast(gameRoot, { className: 'save-toast', ms: 2200 });
+  const saveToast = makeToast(gameRoot, {
+    className: 'save-toast',
+    ms: 2200,
+    testid: 'save-toast',
+  });
 
   // Seafaring notifications (expedition ready / landed) float as their own toast,
   // slightly higher than the save toast so the two never overlap.
@@ -882,8 +886,24 @@ async function boot(): Promise<void> {
   // In the desktop shell (Tauri) the F and Q keys go through the app's native
   // commands: WKWebView does not support the HTML Fullscreen API here, and only
   // the shell can quit the process. Browsers use the web equivalents.
-  const tauri = (window as { __TAURI__?: { core: { invoke: (cmd: string) => Promise<unknown> } } })
-    .__TAURI__;
+  const tauri = (
+    window as {
+      __TAURI__?: {
+        core: { invoke: (cmd: string) => Promise<unknown> };
+        event?: {
+          listen: (name: string, cb: (ev: { payload: string }) => void) => Promise<unknown>;
+        };
+      };
+    }
+  ).__TAURI__;
+  // The desktop shell's native Game menu (Quicksave/Quickload/Reload) emits
+  // `menu-action`; the native accelerators consume F5/F9 before the keydown
+  // handler below sees them, so this is the only path for those items there.
+  void tauri?.event?.listen('menu-action', (ev) => {
+    if (ev.payload === 'quicksave') saveMenu.quicksave();
+    else if (ev.payload === 'quickload') void saveMenu.quickload();
+    else if (ev.payload === 'reload') window.location.reload();
+  });
   const plainKey = (ev: KeyboardEvent): boolean =>
     !ev.metaKey && !ev.ctrlKey && !ev.altKey && !isEditableTarget(ev.target);
   window.addEventListener('keydown', (ev) => {
@@ -1213,6 +1233,9 @@ async function boot(): Promise<void> {
 
   // Resume last game (title menu): load the newest save for this map.
   if (params.get('resume') === '1') void saveMenu.quickload();
+  // Load game (title menu list): load one specific save into this map.
+  const saveParam = params.get('save');
+  if (saveParam) void saveMenu.loadById(saveParam);
 
   // Campaign mode (/play/<map>?campaign=<id>): show the Objectives panel and
   // check the chapter's win condition against the live session.

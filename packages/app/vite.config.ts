@@ -27,6 +27,8 @@ function cleanUrls(): Plugin {
           url.startsWith('/options?') ||
           url === '/credits' ||
           url.startsWith('/credits?') ||
+          url === '/load' ||
+          url.startsWith('/load?') ||
           url === '/campaign' ||
           url.startsWith('/campaign/') ||
           url.startsWith('/campaign?')

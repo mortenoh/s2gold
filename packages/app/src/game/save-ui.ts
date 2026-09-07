@@ -245,6 +245,11 @@ export class SaveMenu {
     }
   }
 
+  /** Load a save by id (the title-screen Load game list boots into this). */
+  async loadById(id: string): Promise<void> {
+    await this.load(id);
+  }
+
   private async load(id: string): Promise<void> {
     const session = this.deps.session();
     if (!session || this.busy) return;

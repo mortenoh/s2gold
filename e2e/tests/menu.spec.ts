@@ -18,7 +18,14 @@ test('title screen renders the menu without console errors', async ({ page }) =>
   await expect(page.getByTestId('menu-campaign')).not.toHaveAttribute('aria-disabled', 'true');
   await expect(page.getByTestId('menu-worldcampaign')).toBeVisible();
   await expect(page.getByTestId('menu-resume')).toBeVisible();
-  await expect(page.getByTestId('menu-loadgame')).toHaveAttribute('aria-disabled', 'true');
+  // Load game links to the /load list when the API server answers and is
+  // disabled (with a hint) otherwise.
+  const api = await page.request.get('/api/saves');
+  if (api.ok() && (api.headers()['content-type'] ?? '').includes('json')) {
+    await expect(page.getByTestId('menu-loadgame')).toHaveAttribute('href', '/load');
+  } else {
+    await expect(page.getByTestId('menu-loadgame')).toHaveAttribute('aria-disabled', 'true');
+  }
   await expect(page.getByTestId('menu-freeplay')).toBeVisible();
   await expect(page.getByTestId('menu-options')).toBeVisible();
   await expect(page.getByTestId('menu-intro')).toBeVisible();

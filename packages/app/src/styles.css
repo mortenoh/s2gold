@@ -1195,3 +1195,32 @@ a.campaign-chapter:focus-visible {
   border-radius: 6px;
   white-space: pre-wrap;
 }
+
+/* Load game screen. */
+.menu-panel.load-panel {
+  min-width: 520px;
+  max-width: 720px;
+  align-items: stretch;
+}
+
+.load-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 60vh;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(8, 12, 8, 0.6);
+}
+
+.load-map-title {
+  padding: 8px 12px 4px;
+  color: var(--accent);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.load-item {
+  text-decoration: none;
+}

@@ -404,6 +404,12 @@ Open:
 5. Other platforms. Windows (NSIS/MSI) and Linux (AppImage/deb) targets in
    `tauri.conf.json`; the resource mapping is platform-neutral, only the
    `resource_dir` location differs. Untested until a machine is available.
-6. Quality of life: native menu entries for Quicksave/Quickload, "Open saves
-   folder", and a "Reload assets" action for after a fresh `make install`
-   without rebuilding (dev builds already read the repo tree live).
+6. LANDED 2026-09-07: native "Game" menu (Quicksave F5, Quickload F9,
+   Reload Cmd+R, Open Saves Folder). The first three reach the webview as
+   `menu-action` events (native accelerators consume the keys before the
+   page's keydown handler), Open Saves Folder reveals the app-data
+   directory. Verified through System Events on the release binary and by
+   `e2e/tests/desktop-menu.spec.ts` with a stub Tauri global. In the same
+   change the title menu's Load game entry became real: `/load` lists every
+   server save grouped by map with tray numbers and boots
+   `/play/<map>?save=<id>` (`e2e/tests/load-game.spec.ts`).

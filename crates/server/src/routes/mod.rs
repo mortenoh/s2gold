@@ -98,6 +98,7 @@ pub async fn build_router(settings: &Settings) -> Result<Router, StoreError> {
             "/setup",
             "/options",
             "/credits",
+            "/load",
             "/campaign",
             "/campaign/{chapter}",
         ] {
