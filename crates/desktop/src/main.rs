@@ -4,12 +4,10 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod convert;
-
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use s2gold_server::{Settings, build_router, serve};
-use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
 /// Toggle native window fullscreen. Invoked by the frontend's F key; the HTML
 /// Fullscreen API is not available in WKWebView here, so the desktop uses the
@@ -26,53 +24,39 @@ fn quit(app: tauri::AppHandle) {
     app.exit(0);
 }
 
-/// Tools the first-run screen needs, resolved before the user picks a file.
-#[tauri::command]
-fn converter_status(app: tauri::AppHandle) -> convert::ConverterStatus {
-    convert::status(&convert::Layout::under(&app_data_dir(&app)))
-}
-
-/// Convert the given GOG installer into `<app_data>/assets`, streaming log
-/// lines as `convert-progress` events. Resolves when the manifest exists.
-#[tauri::command]
-async fn convert_assets(app: tauri::AppHandle, installer: String) -> Result<(), String> {
-    let layout = convert::Layout::under(&app_data_dir(&app));
-    let emitter = app.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        convert::run(Path::new(&installer), &layout, |line| {
-            let _ = emitter.emit("convert-progress", line);
-        })
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
 fn app_data_dir(app: &tauri::AppHandle) -> PathBuf {
     app.path()
         .app_data_dir()
         .expect("app data directory is available")
 }
 
-/// Desktop defaults: everything lives under the per-user app data directory
-/// (`<app_data>/s2gold.db`, `<app_data>/assets`), and the frontend is compiled
-/// into the binary (server feature `embed-frontend`), so the built app runs
-/// without the source tree. The bundle itself carries no game data: the
-/// converted assets are produced on this machine from the user's own GOG
-/// installer. Debug builds fall back to the repo's converted asset tree when
-/// app data has none yet, so `make desktop` keeps working from a checkout.
-/// S2GOLD_* env vars override any field.
+/// Desktop defaults. The frontend is compiled into the binary (server feature
+/// `embed-frontend`) and the converted asset tree rides inside the bundle as a
+/// Tauri resource (`Contents/Resources/assets` on macOS, from
+/// `packages/app/public/assets` at build time), so the built app is
+/// self-contained. This is a personal, local-only build: the assets are
+/// converted from the user's own game data first (`make install`) and the
+/// bundle is never published. Saves live in the per-user app data directory.
+/// Resolution order for the assets: the bundle resource, then the repo's
+/// converted tree (dev builds from a checkout), then `<app_data>/assets` for a
+/// manually placed copy. S2GOLD_* env vars override any field.
 fn desktop_settings(app: &tauri::AppHandle) -> Settings {
     let app_data = app_data_dir(app);
-    let mut assets_dir = app_data.join("assets");
-    if cfg!(debug_assertions) && !assets_dir.join("manifest.json").is_file() {
-        let repo_assets = PathBuf::from(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../packages/app/public/assets"
-        ));
-        if repo_assets.join("manifest.json").is_file() {
-            assets_dir = repo_assets;
-        }
+    let has_manifest = |dir: &PathBuf| dir.join("manifest.json").is_file();
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Ok(res) = app.path().resource_dir() {
+        candidates.push(res.join("assets"));
     }
+    candidates.push(PathBuf::from(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../packages/app/public/assets"
+    )));
+    candidates.push(app_data.join("assets"));
+    let assets_dir = candidates
+        .iter()
+        .find(|dir| has_manifest(dir))
+        .cloned()
+        .unwrap_or_else(|| candidates[0].clone());
     Settings {
         host: "127.0.0.1".to_string(),
         port: 0,
@@ -87,56 +71,9 @@ fn desktop_settings(app: &tauri::AppHandle) -> Settings {
     .with_env_overrides()
 }
 
-/// `s2gold-desktop --convert <installer.exe>`: run the asset conversion
-/// headless (same code path as the first-run screen) and exit. Useful from a
-/// terminal and for verifying a build without driving the native file dialog.
-fn headless_convert(installer: &str) -> ! {
-    let layout = convert::Layout::under(&headless_app_data_dir());
-    match convert::run(Path::new(installer), &layout, |line| println!("{line}")) {
-        Ok(()) => {
-            println!("assets ready at {}", layout.assets_dir.display());
-            std::process::exit(0)
-        }
-        Err(err) => {
-            eprintln!("conversion failed: {err}");
-            std::process::exit(1)
-        }
-    }
-}
-
-/// Bundle identifier from tauri.conf.json; the app-data directory is named
-/// after it on every platform.
-const APP_IDENTIFIER: &str = "com.winterop.s2gold";
-
-/// The same directory `tauri::path::app_data_dir` resolves to, computed
-/// without building a Tauri app (`generate_context!` may appear only once).
-fn headless_app_data_dir() -> PathBuf {
-    let base = if cfg!(target_os = "macos") {
-        PathBuf::from(std::env::var_os("HOME").expect("HOME is set"))
-            .join("Library/Application Support")
-    } else if cfg!(target_os = "windows") {
-        PathBuf::from(std::env::var_os("APPDATA").expect("APPDATA is set"))
-    } else if let Some(xdg) = std::env::var_os("XDG_DATA_HOME") {
-        PathBuf::from(xdg)
-    } else {
-        PathBuf::from(std::env::var_os("HOME").expect("HOME is set")).join(".local/share")
-    };
-    base.join(APP_IDENTIFIER)
-}
-
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() == 3 && args[1] == "--convert" {
-        headless_convert(&args[2]);
-    }
     tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![
-            toggle_fullscreen,
-            quit,
-            converter_status,
-            convert_assets
-        ])
+        .invoke_handler(tauri::generate_handler![toggle_fullscreen, quit])
         .setup(|app| {
             let settings = desktop_settings(app.handle());
             let listener = tauri::async_runtime::block_on(tokio::net::TcpListener::bind((

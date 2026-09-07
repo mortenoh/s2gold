@@ -6,12 +6,5 @@
   "remote": {
     "urls": ["http://127.0.0.1:*"]
   },
-  "permissions": [
-    "core:default",
-    "allow-toggle-fullscreen",
-    "allow-quit",
-    "allow-convert-assets",
-    "allow-converter-status",
-    "dialog:allow-open"
-  ]
+  "permissions": ["core:default", "allow-toggle-fullscreen", "allow-quit"]
 }

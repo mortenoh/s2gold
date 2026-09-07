@@ -62,7 +62,8 @@ test('briefing shows diary text and Start lands in the game with the campaign pa
 
   // Start the chapter -> game page with ?campaign=1.
   await page.getByTestId('briefing-start').click();
-  await expect(page).toHaveURL(/\/play\/maps_miss200\?campaign=1/);
+  // /play fallback without the API server, a /game/<map>/<id> session with it.
+  await expect(page).toHaveURL(/\/(play\/maps_miss200\?campaign=1|game\/maps_miss200\/[0-9a-f]+)/);
   await expect(page.getByTestId('game-canvas')).toBeVisible({ timeout: 15_000 });
 
   // The in-game Objectives panel is available in campaign mode. The campaign
@@ -177,7 +178,7 @@ test('world briefing shows the objective and starts on the mission map', async (
   await expect(page.getByTestId('briefing-start')).toHaveAttribute('data-map', 'maps3_omap00');
 
   await page.getByTestId('briefing-start').click();
-  await expect(page).toHaveURL(/\/play\/maps3_omap00\?/);
+  await expect(page).toHaveURL(/\/(play\/maps3_omap00\?|game\/maps3_omap00\/[0-9a-f]+)/);
   await expect(page.getByTestId('game-canvas')).toBeVisible({ timeout: 20_000 });
 
   expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);

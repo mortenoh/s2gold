@@ -16,6 +16,9 @@
   "bundle": {
     "active": true,
     "targets": ["app", "dmg"],
-    "icon": ["icons/icon.icns"]
+    "icon": ["icons/icon.icns"],
+    "resources": {
+      "../../packages/app/public/assets/": "assets/"
+    }
   }
 }

@@ -364,80 +364,46 @@ instead of the ~1s native bubble, copying text to `aria-label` when absent.
 ## G. Self-contained desktop app (Tauri)
 
 Goal: one locally built Tauri app that wraps everything -- game, server,
-saves, AND the asset conversion -- so a player only needs the app plus their
-own GOG installer. The app binary itself never contains original art (the
-converted assets are produced on the user's machine from their installer), so
-the build recipe and the code stay publishable while the built app with
-its converted assets stays personal. Tauri is the right shell: the server is
-already Rust/axum and `crates/desktop` already embeds it.
+saves, AND the converted assets -- so the built app runs on its own. This is
+a personal, local-only build: `make install` converts the user's own GOG data
+first, `make desktop-app` bundles that converted tree into the .app, and the
+resulting bundle (which contains original art) is never published. The code
+and the build recipe stay publishable. Tauri is the right shell: the server
+is already Rust/axum and `crates/desktop` embeds it.
 
-What exists today (section F): `crates/desktop` starts the axum server on a
-random port and points a WebviewWindow at it. It is NOT self-contained: it
-resolves `packages/app/dist`, `public/assets`, and the legacy `saves/`
-directories from the repo checkout via `CARGO_MANIFEST_DIR`, so it only runs
-from a source tree that has already run `make install`.
+Landed 2026-09-07 (all verified on the release bundle copied to /tmp with the
+repo checkout's assets and the app-data directory hidden):
 
-Steps, in order of payoff:
-
-1. LANDED 2026-09-07: bundle the frontend. The server crate gained an
-   `embed-frontend` feature (`rust-embed`, `crates/server/src/embedded.rs`)
-   that compiles `packages/app/dist` into the binary and serves it with the
-   same clean-URL table as the on-disk mount; `Settings.embedded_frontend`
-   selects it and the desktop crate enables the feature. Release builds carry
-   the files, debug builds read them from disk per request. Verified: the
-   release binary started from `/tmp` serves `/`, `/setup`, `/game/..`, the
-   hashed `/app/*.js` bundle and `/api/*` with no repo checkout.
-2. LANDED 2026-09-07: runtime data under the OS app-data directory
+1. Frontend compiled into the binary. The server crate's `embed-frontend`
+   feature (`rust-embed`, `crates/server/src/embedded.rs`) serves
+   `packages/app/dist` from memory with the same clean-URL table as the
+   on-disk mount; `Settings.embedded_frontend` selects it and the desktop
+   crate enables the feature. Release builds carry the files, debug builds
+   read them from disk per request.
+2. Runtime data under the OS app-data directory
    (`~/Library/Application Support/com.winterop.s2gold` on macOS):
-   `s2gold.db`, `assets/`, and the (normally empty) `legacy/saves|sessions`
-   import sources. Debug builds fall back to the repo's converted asset tree
-   when app data holds no `assets/manifest.json`, so `make desktop` still
-   works from a checkout; release builds show the missing-assets state until
-   step 3 lands.
-3. LANDED 2026-09-07: first-run setup screen. `/api/assets/status` reports
-   whether the asset manifest exists and `/assets` is mounted even before the
-   directory does (no restart after conversion). The title menu checks the
-   manifest: in the desktop app a setup panel (`menu/first-run.ts`) replaces
-   the menu, lists the resolved tools (`converter_status` command), opens the
-   native file picker (tauri-plugin-dialog, `dialog:allow-open`), runs the
-   `convert_assets` command with the log streamed as `convert-progress`
-   events, and reloads into the game; in the browser the menu still renders
-   with a hint on how to run `make install`. `s2gold-desktop --convert
-   <installer.exe>` runs the same conversion headless from a terminal.
-   Verified on the release binary: missing assets -> setup screen with the
-   tools resolved, stand-in converter fills `<app_data>/assets`, restart ->
-   title menu; saves and sessions written through the API survive an app
-   restart in `<app_data>/s2gold.db`.
-4. The conversion itself, two options:
-   a. LANDED 2026-09-07 as the interim backend (`crates/desktop/src/convert.rs`):
-      the app runs `uv run --project <source tree> s2gold install <exe>
-      --assets <app_data>/assets --extracted <app_data>/extracted`, with
-      Homebrew/user-local bins added to PATH (GUI apps start without them)
-      and `S2GOLD_CONVERTER` as an override. The built app therefore still
-      depends on `uv`, `innoextract` and the source checkout it was built
-      from; the setup screen says so before the user picks a file. This is
-      what (b) replaces.
-   b. Proper: port `src/s2gold` to a Rust crate (`crates/convert`). The
-      formats are small, well-documented parsers (LST/BOB/DAT/WLD/LBM/
-      palette/gametext, see `src/s2gold/formats/`) and the converters are
-      mostly atlas packing + PNG/JSON writing. innoextract's Inno Setup
-      reader would need a Rust equivalent (the `innoextract` crate or a
-      minimal Inno v5 stream reader for the two data files the installer
-      carries). Music (XMI -> MIDI -> soundfont render -> MP3) and the SMK
-      intro are the only pieces with heavy external deps; ship them as
-      optional steps that skip cleanly when fluidsynth/ffmpeg are absent
-      (the Python pipeline already does), or bundle a tiny GM soundfont
-      renderer later.
-   Doing (b) removes uv, Python, and innoextract from the player's
-   machine entirely; `make install` then becomes `cargo run -p s2gold-convert`.
-5. Packaging. `make desktop-build` already signs and notarises on macOS;
-   add Windows (NSIS/MSI) and Linux (AppImage/deb) targets in
-   `tauri.conf.json` once assets live in app-data, and document that the
-   bundle contains no game data. Keep the GOG installer check (version
-   1.5.1 Windows build) in the first-run screen so users grab the right file.
-6. Quality-of-life for the app: native menu entries for Quicksave/Quickload,
-   an "Open saves folder" item, and a "Re-run asset conversion" item in
-   the Settings panel so a soundfont/ffmpeg install later can add music.
+   `s2gold.db` plus the (normally empty) `legacy/saves|sessions` import
+   sources. Saves and sessions written through the API survive an app
+   restart.
+3. Converted assets bundled as a Tauri resource: `tauri.conf.json` maps
+   `packages/app/public/assets/` to `Contents/Resources/assets`, and the
+   shell resolves the tree in this order: bundle resource, the repo's
+   converted tree (dev builds from a checkout), `<app_data>/assets` for a
+   manually placed copy. `make desktop-app` / `make desktop-build` refuse
+   to run until `make install` has produced the manifest. Bundle size is
+   about 110 MB with the 80 MB asset tree inside.
+4. Missing-assets state. `/api/assets/status` reports whether the manifest
+   exists and `/assets` is mounted even when the directory is absent. The
+   title menu checks the manifest: the desktop app shows rebuild
+   instructions (`make install`, then `make desktop-app`); the browser keeps
+   its menu with a hint. No in-app conversion and no installer picker, by
+   design (see the goal above).
 
-Keep the browser path (`make dev`/`make serve`) unchanged; the desktop app
-is the same frontend with the server and the conversion moved in-process.
+Open:
+
+5. Other platforms. Windows (NSIS/MSI) and Linux (AppImage/deb) targets in
+   `tauri.conf.json`; the resource mapping is platform-neutral, only the
+   `resource_dir` location differs. Untested until a machine is available.
+6. Quality of life: native menu entries for Quicksave/Quickload, "Open saves
+   folder", and a "Reload assets" action for after a fresh `make install`
+   without rebuilding (dev builds already read the repo tree live).

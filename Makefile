@@ -75,6 +75,7 @@ desktop: ## Run the Tauri desktop shell (dev)
 	cd crates/desktop && pnpm exec tauri dev
 
 desktop-app: ## Build the final signed macOS .app bundle only (target/release/bundle/macos/)
+	@test -f packages/app/public/assets/manifest.json || { echo "converted assets missing: run make install INSTALLER=... first (they are bundled into the app)"; exit 1; }
 	pnpm -r build
 	$(call tauri_build_signed,--bundles app)
 
@@ -90,6 +91,7 @@ define zip_app
 endef
 
 desktop-build: ## Build all desktop bundles, signed (.app + .dmg + .zip)
+	@test -f packages/app/public/assets/manifest.json || { echo "converted assets missing: run make install INSTALLER=... first (they are bundled into the app)"; exit 1; }
 	pnpm -r build
 	$(call tauri_build_signed,)
 	$(call zip_app)

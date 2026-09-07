@@ -58,7 +58,11 @@ test('free play flows to setup, lists maps, and starts a game', async ({ page })
   // Landed on the game page for the chosen map, with the canvas present. A
   // multi-player map defaults slot 1 to Computer (and a non-Roman nation), so the
   // URL may carry ?ai=… and, when any slot is non-Roman, &nations=…
-  await expect(page).toHaveURL(new RegExp(`/play/${mapName}(\\?ai=[0-9,]+(&nations=[a-z,]+)?)?$`));
+  // With the API server up, Start creates a server session at /game/<map>/<id>;
+  // without it the /play fallback URL carries the setup as query parameters.
+  await expect(page).toHaveURL(
+    new RegExp(`/(play/${mapName}(\\?ai=[0-9,]+(&nations=[a-z,]+)?)?|game/${mapName}/[0-9a-f]+)$`),
+  );
   await expect(page.getByTestId('game-canvas')).toBeVisible({ timeout: 15_000 });
 
   expect(errors, `unexpected page errors: ${errors.join('\n')}`).toEqual([]);

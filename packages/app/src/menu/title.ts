@@ -51,13 +51,12 @@ const GOLD = '#f0c84a';
 const CREAM = '#f4ecd0';
 
 export async function renderTitle(root: HTMLElement): Promise<void> {
-  // No converted assets yet. Desktop: the first-run screen (pick the GOG
-  // installer, convert) replaces the menu. Browser: the menu still renders
-  // (text-only) with a hint on how to run the pipeline.
+  // No converted assets. Desktop: a rebuild-instructions panel replaces the
+  // menu (the bundle was built before make install). Browser: the menu still
+  // renders (text-only) with a hint on how to run the pipeline.
   const assetsMissing = (await loadManifest()) === null;
-  const tauri = tauriGlobal();
-  if (assetsMissing && tauri) {
-    await renderFirstRun(root, tauri);
+  if (assetsMissing && tauriGlobal()) {
+    renderFirstRun(root);
     return;
   }
   clear(root);
