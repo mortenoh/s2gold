@@ -67,29 +67,39 @@ export function pickAttackTarget(
   let bestDist = Infinity;
   let bestHq = -1;
   let bestHqDist = Infinity;
+  let bestSendable = 0;
+  let bestHqSendable = 0;
   for (const t of storeLive(world.buildings)) {
     if (t.player === player || !isAttackable(t) || !t.occupied) continue;
     const isHq = !isMilitary(t);
     // HQ defenders live in the player's idle reserve, not the garrison, so an
     // HQ is a valid target even with an empty garrison.
     if (!isHq && garrisonCount(t) <= 0) continue;
-    // Reachable if any surplus source has a foot path within the run limit.
-    // A path of N steps needs a lattice distance <= N, so the cheap distance
-    // rules most pairs out before the search (a failing A* explores the whole
-    // reachable map, and this ran per source x target every cycle).
+    // Reachable if a source can actually SEND someone: the executor keeps one
+    // keeper and loses one attacker per lattice node beyond baseDistance, so a
+    // far guardhouse contributes nothing even with a walkable path. Mirror
+    // that maths here, or the AI commits attacks that march nobody. A path of
+    // N steps needs a lattice distance <= N, so the cheap distance rules most
+    // pairs out before the search (a failing A* explores the whole map).
     let dist = Infinity;
+    let sendable = 0;
     for (const s of sources) {
-      if (geom.distance(s.node, t.node) > MILITARY_ATTACK.maxRunDistance) continue;
+      const lattice = geom.distance(s.node, t.node);
+      if (lattice > MILITARY_ATTACK.maxRunDistance) continue;
+      const canSend = garrisonCount(s) - 1 - Math.max(0, lattice - MILITARY_ATTACK.baseDistance);
+      if (canSend <= 0) continue;
       const path = findWalkPath(world, geom, rules, s.node, t.node);
       if (path && path.length <= MILITARY_ATTACK.maxRunDistance) {
         dist = Math.min(dist, path.length);
+        sendable += canSend;
       }
     }
-    if (dist === Infinity) continue;
+    if (dist === Infinity || sendable <= 0) continue;
     if (isHq) {
       if (dist < bestHqDist || (dist === bestHqDist && (bestHq < 0 || t.id < bestHq))) {
         bestHq = t.id;
         bestHqDist = dist;
+        bestHqSendable = sendable;
       }
       continue;
     }
@@ -102,15 +112,16 @@ export function pickAttackTarget(
       best = t.id;
       bestStrength = strength;
       bestDist = dist;
+      bestSendable = sendable;
     }
   }
-  if (best < 0) best = bestHq;
+  if (best < 0) {
+    best = bestHq;
+    bestSendable = bestHqSendable;
+  }
   if (best < 0) return null;
-
-  // Commit the total surplus (leave one keeper per source), at least one.
-  let avail = 0;
-  for (const s of sources) avail += Math.max(0, garrisonCount(s) - 1);
-  return { targetBuildingId: best, soldiers: Math.max(1, avail) };
+  // Commit everything the executor will actually release toward this target.
+  return { targetBuildingId: best, soldiers: Math.max(1, bestSendable) };
 }
 
 /**

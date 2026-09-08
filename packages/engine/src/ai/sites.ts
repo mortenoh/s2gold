@@ -28,7 +28,7 @@ import type { Geometry } from '../geometry';
 import type { TerrainRules } from '../terrain';
 import { isWaterNode } from '../water';
 import { isWalkableNode } from '../walk';
-import { storeLive, type World } from '../world';
+import { storeLive, type Building, type World } from '../world';
 
 /** How a site is scored relative to a reference point. */
 export type SiteBias =
@@ -284,7 +284,11 @@ export function pickBuildSite(
         if (resourceAmount(world.resource[node]) <= 0) return;
         // canPlaceBuilding already rejected any node not owned by us (neutral and
         // enemy alike), so a surviving mine candidate is guaranteed on our land.
-        score = geom.distance(hq, node);
+        // Prefer the richer seam: a mine on a 7-unit pocket is exhausted in a
+        // few cycles (measured: 7 coal in 100k ticks, then a dead metal chain).
+        score =
+          geom.distance(hq, node) * 2 -
+          Math.min(40, depositAround(world, geom, node, bias.resource));
         break;
       }
       case 'frontier':
@@ -360,4 +364,31 @@ export function ownedNodeNearest(
     }
   }
   return best;
+}
+
+/** Reach of a mine (systems/production draws ore from this radius). */
+const MINE_RADIUS = 2;
+
+/** Total ore of `resource` within a mine's reach of `node` (the seam it would draw on). */
+export function depositAround(
+  world: World,
+  geom: Geometry,
+  node: number,
+  resource: number,
+): number {
+  const radius = MINE_RADIUS;
+  let total = 0;
+  geom.forEachNodeWithin(node, radius, (n) => {
+    if (geom.distance(node, n) > radius) return;
+    const byte = world.resource[n];
+    if (resourceType(byte) === resource) total += resourceAmount(byte);
+  });
+  return total;
+}
+
+/** A working mine whose reach holds no ore of its kind any more. */
+export function mineExhausted(world: World, geom: Geometry, b: Building): boolean {
+  const def = buildingDef(b.type);
+  if (!def || def.kind !== 'mine' || b.state !== 'working') return false;
+  return depositAround(world, geom, b.node, def.resource ?? 0) <= 0;
 }

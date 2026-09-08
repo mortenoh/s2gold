@@ -8,11 +8,13 @@ import { applyCommand, createWorld, tickWorld, worldGeometry } from './index';
 import { storeLive } from './world';
 import { JOB, RESOURCE } from './constants';
 import { makeFlatMap } from './harness';
+import { stopRecruiting } from './harness-economy';
 import { paintMountain, setResource } from './harness-economy';
 
 describe('geologist survey', () => {
   it('places a sign showing the ore under a nearby mountain and returns the helper', () => {
     const world = createWorld(makeFlatMap(30, 30, 2, 2), { seed: 1, players: 1 });
+    stopRecruiting(world); // exact Helper accounting below
     const geom = worldGeometry(world);
     // A coal mountain patch around (6,6) (inside the HQ's territory), flag next to it.
     const m = geom.index(6, 6);

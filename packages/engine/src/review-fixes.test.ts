@@ -22,6 +22,7 @@ import {
   garrisonBuilding,
   placeBuildingAndTick,
   spawnBuilding,
+  stopRecruiting,
 } from './harness-economy';
 import { recalcTerritory } from './systems/territory';
 import { storeAlloc, storeLive } from './world';
@@ -112,6 +113,7 @@ describe('soldiers are never silently deleted', () => {
       seed: 11,
       players: 2,
     });
+    stopRecruiting(world); // exact soldier accounting below
     const geom = worldGeometry(world);
     const src = spawnBuilding(world, geom, geom.index(12, 10), 'guardhouse', 0);
     garrisonBuilding(src, [5, 0, 0, 0, 0]);
@@ -131,6 +133,7 @@ describe('soldiers are never silently deleted', () => {
 
   it('demolishing an own military building returns its garrison to the pool', () => {
     const world = createWorld(makeFlatMap(30, 30, 2, 2), { seed: 12, players: 1 });
+    stopRecruiting(world); // exact soldier accounting below
     const geom = worldGeometry(world);
     const gh = spawnBuilding(world, geom, geom.index(12, 12), 'guardhouse', 0);
     garrisonBuilding(gh, [2, 1, 0, 0, 0]);
@@ -178,6 +181,7 @@ describe('captures do not absorb rival attackers', () => {
       ]),
       { seed: 13, players: 3 },
     );
+    stopRecruiting(world); // exact soldier accounting below
     const geom = worldGeometry(world);
     const tgt = spawnBuilding(world, geom, geom.index(22, 12), 'guardhouse', 0);
     garrisonBuilding(tgt, [1, 0, 0, 0, 0]);

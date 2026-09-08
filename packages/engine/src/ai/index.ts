@@ -33,8 +33,9 @@ import { storeLive, type World } from '../world';
 import { planCoins, pickAttackTarget } from './military';
 import { planNextBuilding } from './planner';
 import { countUnconnected, planRoads } from './roads';
+import { planTools } from './tools';
 import { planSeafaring } from './seafaring';
-import { enemyReferenceNode } from './sites';
+import { enemyReferenceNode, mineExhausted } from './sites';
 import type { AiOptions, AiState } from './types';
 
 export type { AiOptions, AiState } from './types';
@@ -110,6 +111,18 @@ export function stepAi(
 
   // 1. Road maintenance: reconnect any stranded building (bounded, self-healing).
   for (const c of planRoads(world, geom, rules, state)) commands.push(c);
+  // 1a. Exhausted mines are razed so the plan raises a fresh one on ore that
+  //     is still there (a human would do the same; a dead mine otherwise
+  //     satisfies its plan goal forever). One per cycle keeps this cheap.
+  for (const b of storeLive(world.buildings)) {
+    if (b.player === state.playerId && mineExhausted(world, geom, b)) {
+      commands.push({ player: state.playerId, type: 'demolish', node: b.node });
+      break;
+    }
+  }
+  // 1b. Tools: aim the metalworks at what idle buildings are waiting for.
+  const tools = planTools(world, state.playerId);
+  if (tools) commands.push(tools);
 
   // 2. Construction: place the next planned building, but only when construction
   //    is not backed up — cap concurrent sites so the HQ's finite board/stone

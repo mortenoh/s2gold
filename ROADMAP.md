@@ -100,6 +100,28 @@ occupations; the 5-player "Good old times" from 106 fights / 6 captures to
 179 / 29. `scripts/duel.ts` plays a passive human against the AI and reports
 whether it attacks, captures and razes the headquarters.
 
+Landed 2026-09-07 (computer opponent economy, second pass — driven by
+`scripts/duel.ts`, a passive human against the AI): the AI's metal chain
+deadlocked (coal 7, swords 4 in 100k ticks) because the armory came before the
+metalworks and mines sat on 7-unit pockets that emptied in a few cycles, and
+because the HQ's two starting pick-axes went to quarries, leaving mines
+unstaffed. Now: coal/iron/smelter/metalworks precede the armory; mine sites
+score the seam's total ore, exhausted mines are razed so the plan re-mines
+fresh ore; the AI steers tool production toward what its idle buildings need
+(`ai/tools.ts`); military placements wait for a reserve or pending recruits
+to fill them; the attack planner mirrors the executor's distance rule so it
+only commits soldiers the executor will release; and warehouses recruit
+privates whenever sword+shield+beer+helper are in stock, as the original does
+(the old on-demand rule could never restart once garrisons were full).
+Result on the same probe: coal 66, iron 44, swords 16, 22 recruits. 60k-tick
+AI-vs-AI soaks: chapter III 82 fights / 14 captures, Good old times 204 / 11,
+The Snake 27 / 0. Duels: on The Snake the AI attacked a six-building human 65
+times (and lost every fight, the human held); on chapter II's map the AI
+never reached the passive human in 200k ticks — its nearest garrison sits 25
+nodes from the human's nearest building, beyond the 21-node attack reach, and
+the map's stone runs out before it can push closer. That map remains the
+open case.
+
 Landed 2026-09-07 (cheats, free play only): Instant build joins Unlimited
 resources in the Settings panel's Cheats row (`Player.cheatInstantBuild`,
 WORLD_VERSION 7): every construction site of the player completes at once.

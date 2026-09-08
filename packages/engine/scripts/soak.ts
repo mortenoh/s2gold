@@ -50,7 +50,9 @@ const timed = (name: string, fn: () => void): void => {
   cost[name] = (cost[name] ?? 0) + performance.now() - t;
 };
 
-let fights = 0, captured = 0, occupied = 0;
+let fights = 0,
+  captured = 0,
+  occupied = 0;
 const start = performance.now();
 for (let i = 0; i < ticks; i++) {
   timed('ai', () => {

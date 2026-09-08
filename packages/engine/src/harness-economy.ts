@@ -189,3 +189,15 @@ export function placeBuildingAndTick(
   });
   tickWorld(world);
 }
+
+/**
+ * Empty every warehouse's beer so no soldier is recruited from the starting
+ * sword/shield/beer stock. Tests that count settlers or soldiers exactly use
+ * this to keep the starting population fixed; the original (and the engine)
+ * otherwise keep turning weapons and beer into privates.
+ */
+export function stopRecruiting(world: World): void {
+  for (const b of world.buildings.items) {
+    if (b && b.wareStock.beer !== undefined) b.wareStock.beer = 0;
+  }
+}

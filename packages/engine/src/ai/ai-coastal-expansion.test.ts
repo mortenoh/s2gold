@@ -61,7 +61,9 @@ describe('AI coastal expansion gate — expands to the sea, then colonises an is
     };
     let landedNode = -1;
 
-    const BUDGET = 45000;
+    // The AI now interleaves military with its economy and keeps expanding on
+    // land before seafaring becomes its fallback, so the colony lands later.
+    const BUDGET = 70000;
     let lastTick = 0;
     for (let i = 0; i < BUDGET; i++) {
       runAi(world, ai);

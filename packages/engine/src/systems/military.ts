@@ -133,26 +133,19 @@ function hqUnderSiege(world: World, player: Player): boolean {
 
 // --- Recruitment (MILITARY.md §6 / CONSTANTS.md §7) ------------------------
 
-/** Unmet garrison demand across a player's military buildings. */
-function soldierDemand(world: World, player: Player): number {
-  let demand = 0;
-  for (const b of storeLive(world.buildings)) {
-    if (b.player !== player.index || b.state !== 'working' || !isMilitary(b)) continue;
-    const cap = buildingDef(b.type)?.maxTroops ?? 0;
-    demand += Math.max(0, cap - garrisonCount(b) - b.incoming);
-  }
-  return demand;
-}
-
-/** Recruit privates from beer+sword+shield+helper on demand (MILITARY.md §6). */
+/**
+ * Recruit privates from beer+sword+shield+helper whenever the stock allows
+ * (MILITARY.md §6). The original's warehouses keep turning weapons and beer
+ * into soldiers who wait in the reserve; recruiting only "on demand" (the old
+ * rule here) deadlocked a settlement whose garrisons were full: no demand meant
+ * no recruits, no recruits meant no reserve to raise the next building with.
+ */
 function runRecruitment(world: World, events: EventSink): void {
   for (const player of world.players) {
     if (player.hqBuildingId < 0) {
       player.recruitTimer = -1;
       continue;
     }
-    const pool = player.soldiers.reduce((a, b) => a + b, 0);
-    const needed = soldierDemand(world, player);
     // Beer/sword/shield are drawn from the player's warehouse stock (aggregate);
     // the recruit itself stays a global-pool draw (Helper).
     const canAfford =
@@ -162,8 +155,7 @@ function runRecruitment(world: World, events: EventSink): void {
       (player.workers.carrier ?? 0) > 0;
 
     if (player.recruitTimer < 0) {
-      // Only start a recruit cycle when garrisons want more than the pool holds.
-      if (needed > pool && canAfford) {
+      if (canAfford) {
         player.recruitTimer = RECRUITE_GF + nextRange(world.rng, RECRUITE_RANDOM_GF);
       }
       continue;
