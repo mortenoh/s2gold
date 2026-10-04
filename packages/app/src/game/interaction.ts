@@ -199,8 +199,8 @@ export class Interaction {
     const sx = (clientX - rect.left) * dpr;
     const sy = (clientY - rect.top) * dpr;
     const { w: worldW, h: worldH } = camera.worldSize;
-    const worldX = camera.x + sx / camera.zoom;
-    const worldY = camera.y + sy / camera.zoom;
+    const worldX = camera.x + sx / camera.scale;
+    const worldY = camera.y + sy / camera.scale;
     return nodeAtWorld(session.world, worldX, worldY, worldW, worldH);
   }
 

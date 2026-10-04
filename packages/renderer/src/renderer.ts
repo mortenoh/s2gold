@@ -20,7 +20,7 @@ layout(location = 2) in float aShade;
 layout(location = 3) in float aFog;
 
 uniform vec2 uTranslate; // world-px offset (tile offset minus camera)
-uniform vec2 uScale;     // 2 * zoom / canvas size
+uniform vec2 uScale;     // 2 * scale (zoom x dpr) / canvas size
 
 out vec2 vUv;
 out float vShade;
@@ -418,12 +418,12 @@ export class TerrainRenderer {
     gl.bindTexture(gl.TEXTURE_2D, this.texGouraud);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.texIndex);
-    gl.uniform2f(this.uScale, (2 * camera.zoom) / cw, (2 * camera.zoom) / ch);
+    gl.uniform2f(this.uScale, (2 * camera.scale) / cw, (2 * camera.scale) / ch);
 
     // The mesh spans [0, worldW + TR_W] x [-MAX_RAISE, worldH + TR_H] in world
     // px; draw every tile offset whose padded bounds intersect the viewport.
-    const viewW = cw / camera.zoom;
-    const viewH = ch / camera.zoom;
+    const viewW = cw / camera.scale;
+    const viewH = ch / camera.scale;
     const i0 = Math.floor((camera.x - TR_W) / this.worldW) - 1;
     const i1 = Math.floor((camera.x + viewW) / this.worldW);
     const j0 = Math.floor((camera.y - TR_H) / this.worldH) - 1;

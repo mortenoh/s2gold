@@ -676,6 +676,9 @@ async function boot(): Promise<void> {
     rebuildStatics();
 
     camera = new Camera(map.data.width, map.data.height);
+    // Zoom is in screen points: on a retina display (dpr 2) zoom 1 draws each
+    // world pixel as 2x2 device pixels, the original art's intended size.
+    camera.dpr = window.devicePixelRatio || 1;
     minimap.setMap(map.data, camera.worldSize.w, camera.worldSize.h);
     applyFog();
     refreshTerritory();
@@ -738,12 +741,12 @@ async function boot(): Promise<void> {
     if (!session) return { x: 0, y: 0 };
     const a = nodeAnchor(session.world, node);
     const dpr = window.devicePixelRatio || 1;
-    const pw = camera.worldSize.w * camera.zoom;
-    const ph = camera.worldSize.h * camera.zoom;
-    let sx = ((a.x - camera.x) * camera.zoom) % pw;
+    const pw = camera.worldSize.w * camera.scale;
+    const ph = camera.worldSize.h * camera.scale;
+    let sx = ((a.x - camera.x) * camera.scale) % pw;
     if (sx < 0) sx += pw;
     if (sx > canvas.width) sx -= pw;
-    let sy = ((a.y - camera.y) * camera.zoom) % ph;
+    let sy = ((a.y - camera.y) * camera.scale) % ph;
     if (sy < 0) sy += ph;
     if (sy > canvas.height) sy -= ph;
     return { x: sx / dpr, y: sy / dpr };
@@ -1131,7 +1134,7 @@ async function boot(): Promise<void> {
             a.y,
             camera.x,
             camera.y,
-            camera.zoom,
+            camera.scale,
             canvas.width,
             canvas.height,
             camera.worldSize.w,
@@ -1157,7 +1160,11 @@ async function boot(): Promise<void> {
     if (session?.fogDirty) applyFog();
     if (session?.territoryDirty) refreshTerritory();
 
+    const prevW = canvas.width;
+    const prevH = canvas.height;
     renderer.resize();
+    // Moved to another display or browser zoom changed: keep the view centred.
+    camera.setDpr(window.devicePixelRatio || 1, prevW, prevH, canvas.width, canvas.height);
     renderer.render(camera, now);
     if (session) {
       refreshOverlays();

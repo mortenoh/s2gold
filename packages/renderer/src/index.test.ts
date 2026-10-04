@@ -207,6 +207,37 @@ describe('camera', () => {
     expect(cam.y + 600 / cam.zoom / 2).toBeCloseTo(300);
   });
 
+  it('scales device pixels by zoom x dpr on retina displays', () => {
+    const cam = new Camera(64, 64);
+    cam.dpr = 2;
+    expect(cam.scale).toBe(2); // zoom 1 = one screen point per world pixel
+    cam.panScreen(20, 0); // 20 device px = 10 points = 10 world px
+    expect(cam.x).toBe(10);
+    cam.zoom = 2;
+    expect(cam.scale).toBe(4);
+  });
+
+  it('centres in device pixels at dpr 2 and keeps the centre across a dpr change', () => {
+    const cam = new Camera(64, 64);
+    cam.dpr = 2;
+    cam.centerOn(500, 300, 1600, 1200); // 800x600 points on a dpr-2 screen
+    expect(cam.x + 1600 / cam.scale / 2).toBeCloseTo(500);
+    // Window dragged to a dpr-1 display: backing store halves, centre stays.
+    cam.setDpr(1, 1600, 1200, 800, 600);
+    expect(cam.dpr).toBe(1);
+    expect(cam.x + 800 / cam.scale / 2).toBeCloseTo(500);
+    expect(cam.y + 600 / cam.scale / 2).toBeCloseTo(300);
+  });
+
+  it('anchors wheel zoom on the device-pixel cursor at dpr 2', () => {
+    const cam = new Camera(64, 64);
+    cam.dpr = 2;
+    cam.centerOn(500, 300, 1600, 1200);
+    const wx = cam.x + 400 / cam.scale;
+    cam.zoomAt(2, 400, 0);
+    expect(cam.x + 400 / cam.scale).toBeCloseTo(wx);
+  });
+
   it('wrap() maps any value into [0, period)', () => {
     expect(wrap(-1, 10)).toBe(9);
     expect(wrap(10, 10)).toBe(0);

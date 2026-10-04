@@ -34,7 +34,7 @@ export interface RoadSegment {
 
 const VERTEX_SHADER = `#version 300 es
 layout(location = 0) in vec2 aPos; // world px relative to camera top-left
-uniform vec2 uScale;               // 2 * zoom / canvas size
+uniform vec2 uScale;               // 2 * scale (zoom x dpr) / canvas size
 uniform float uZ;                  // <0 = derive depth from screen y; else this constant z
 void main() {
   float clipX = aPos.x * uScale.x - 1.0;
@@ -144,8 +144,8 @@ export class RoadRenderer {
     const gl = this.gl;
     const cw = gl.drawingBufferWidth;
     const ch = gl.drawingBufferHeight;
-    const viewW = cw / camera.zoom;
-    const viewH = ch / camera.zoom;
+    const viewW = cw / camera.scale;
+    const viewH = ch / camera.scale;
 
     const i0 = Math.floor((camera.x - TR_W) / this.worldW) - 1;
     const i1 = Math.floor((camera.x + viewW) / this.worldW) + 1;
@@ -183,7 +183,7 @@ export class RoadRenderer {
 
     gl.useProgram(this.program);
     gl.bindVertexArray(this.vao);
-    gl.uniform2f(this.uScale, (2 * camera.zoom) / cw, (2 * camera.zoom) / ch);
+    gl.uniform2f(this.uScale, (2 * camera.scale) / cw, (2 * camera.scale) / ch);
     gl.uniform4f(this.uColor, color[0], color[1], color[2], color[3]);
     // Ground roads take a screen-y depth and test/write it; overlays (markers,
     // preview, garrison) sit on top: no depth test, fixed near z, no depth write.

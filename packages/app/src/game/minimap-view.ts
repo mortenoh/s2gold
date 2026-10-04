@@ -165,8 +165,8 @@ export class MinimapView {
     // Viewport outline in minimap pixels, split at the torus wrap seam.
     const rx = (camera.x / this.worldW) * mw;
     const ry = (camera.y / this.worldH) * mh;
-    const rw = (viewportW / camera.zoom / this.worldW) * mw;
-    const rh = (viewportH / camera.zoom / this.worldH) * mh;
+    const rw = (viewportW / camera.scale / this.worldW) * mw;
+    const rh = (viewportH / camera.scale / this.worldH) * mh;
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 1;
     ctx.beginPath();

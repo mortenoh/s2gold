@@ -37,7 +37,7 @@ layout(location = 2) in vec3 aTint;    // player tint rgb
 layout(location = 3) in vec2 aMaskUv;  // pmask uv, (<0) = no mask
 layout(location = 4) in float aAnchorY; // sprite foot screen y (constant per quad)
 
-uniform vec2 uScale; // 2 * zoom / canvas size
+uniform vec2 uScale; // 2 * scale (zoom x dpr) / canvas size
 
 out vec2 vUv;
 out vec3 vTint;
@@ -524,8 +524,8 @@ export class SpriteRenderer {
   ): SpriteDrawStats {
     if (this.atlases.size === 0) return { quads: 0, drawCalls: 0 };
     const gl = this.gl;
-    const viewW = gl.drawingBufferWidth / camera.zoom;
-    const viewH = gl.drawingBufferHeight / camera.zoom;
+    const viewW = gl.drawingBufferWidth / camera.scale;
+    const viewH = gl.drawingBufferHeight / camera.scale;
 
     const i0 = Math.floor((camera.x - TR_W) / this.worldW) - 1;
     const i1 = Math.floor((camera.x + viewW) / this.worldW) + 1;
@@ -626,8 +626,8 @@ export class SpriteRenderer {
     gl.bindVertexArray(this.vao);
     gl.uniform2f(
       this.uScale,
-      (2 * camera.zoom) / gl.drawingBufferWidth,
-      (2 * camera.zoom) / gl.drawingBufferHeight,
+      (2 * camera.scale) / gl.drawingBufferWidth,
+      (2 * camera.scale) / gl.drawingBufferHeight,
     );
     gl.uniform1i(this.uAtlas, 0);
     gl.uniform1i(this.uPmask, 1);
