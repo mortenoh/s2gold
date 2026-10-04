@@ -5,6 +5,8 @@ Produces, under ``<assets>/terrain/``:
 * ``<name>.png`` -- the tileset rendered to RGBA through its palette.
 * ``<name>_indexed.png`` -- a grayscale image of the raw palette indices, kept so
   the renderer can re-apply palette-correct lighting via the gouraud tables.
+* ``<name>_indexed_hd2.png`` -- the same indices magnified 2x with MMPX (TEX5-7 only);
+  every output index is a copy of an input index, so lighting and cycling still apply.
 * ``gouraud{5,6,7}.json`` -- the 256x256 shading lookup tables (base64 payload).
 
 Palette pairing (per the settlers2.net lighting article and verified on disk):
@@ -18,12 +20,14 @@ from __future__ import annotations
 import base64
 from pathlib import Path
 
+import numpy as np
 from PIL import Image
 
 from s2gold.core import Manifest, write_json
 from s2gold.formats.gouraud import load_gouraud
 from s2gold.formats.lbm import decode_lbm
 from s2gold.formats.palette import Palette, palette_cycles
+from s2gold.upscale import SCALE, upscale_indexed
 
 # (tileset filename, output name, external palette filename or None for embedded CMAP).
 _TILESETS: tuple[tuple[str, str, str | None], ...] = (
@@ -33,6 +37,22 @@ _TILESETS: tuple[tuple[str, str, str | None], ...] = (
     ("TEXTUR_0.LBM", "textur_0", None),
     ("TEXTUR_3.LBM", "textur_3", None),
 )
+
+# Tilesets the game renders (greenland, wasteland, winter), which get a 2x index image.
+HD_TILESETS = frozenset({"tex5", "tex6", "tex7"})
+
+# Texture rectangles inside a tileset, as (x, y, w, h). They mirror the terrain and edge
+# strip tables in packages/renderer/src/terrain-data.ts. Each is magnified on its own with
+# clamped edges, so a texture never picks up pixels from its neighbour in the sheet.
+TEXTURE_REGIONS: tuple[tuple[int, int, int, int], ...] = (
+    (0, 0, 32, 31), (48, 0, 32, 31), (96, 0, 32, 31), (144, 0, 32, 31),
+    (0, 48, 32, 31), (48, 48, 32, 31), (96, 48, 32, 31), (144, 48, 32, 31),
+    (0, 96, 32, 31), (48, 96, 32, 31), (96, 96, 32, 31), (144, 96, 32, 31),
+    (0, 144, 32, 31), (48, 144, 32, 31),
+    (193, 49, 53, 54), (193, 105, 53, 54),
+    (66, 222, 31, 33), (99, 222, 31, 33), (132, 222, 31, 33),
+    (192, 176, 64, 16), (192, 192, 64, 16), (192, 208, 64, 16), (192, 224, 64, 16), (192, 240, 64, 16),
+)  # fmt: skip
 
 _GOURAUD: tuple[tuple[str, str], ...] = (
     ("GOU5.DAT", "gouraud5"),
@@ -55,8 +75,12 @@ def _render_rgba(width: int, height: int, pixels: bytes, palette: Palette) -> Im
     return Image.frombytes("RGBA", (width, height), bytes(rgba))
 
 
-def run(extracted: Path, assets: Path) -> None:
-    """Convert terrain tilesets and gouraud tables (see module docstring)."""
+def run(extracted: Path, assets: Path, *, hd: bool = True) -> None:
+    """Convert terrain tilesets and gouraud tables (see module docstring).
+
+    With ``hd``, the tilesets the game draws (:data:`HD_TILESETS`) also get a 2x MMPX
+    index image, ``<name>_indexed_hd2.png``.
+    """
     tex_dir = extracted / "GFX" / "TEXTURES"
     pal_dir = extracted / "GFX" / "PALETTE"
     gou_dir = extracted / "DATA" / "TEXTURES"
@@ -78,6 +102,12 @@ def run(extracted: Path, assets: Path) -> None:
 
         _render_rgba(img.width, img.height, img.pixels, palette).save(out_dir / f"{name}.png")
         Image.frombytes("L", (img.width, img.height), img.pixels).save(out_dir / f"{name}_indexed.png")
+        hd_name = None
+        if hd and name in HD_TILESETS:
+            hd_name = f"{name}_indexed_hd{SCALE}.png"
+            indices = np.frombuffer(img.pixels, dtype=np.uint8).reshape(img.height, img.width)
+            big = upscale_indexed(indices, palette.colors, TEXTURE_REGIONS)
+            Image.frombytes("L", (big.shape[1], big.shape[0]), big.tobytes()).save(out_dir / hd_name)
         # Palette + active CRNG cycling ranges (water/lava animation): the
         # renderer rotates these palette slots at their CRNG rates.
         cycle_src = (pal_dir / pal_name) if pal_name else src_path
@@ -93,7 +123,7 @@ def run(extracted: Path, assets: Path) -> None:
                 "cycles": [{"low": c.low, "high": c.high, "msPerStep": round(c.ms_per_step, 3)} for c in cycles],
             },
         )
-        textures[name] = {
+        entry: dict[str, object] = {
             "png": f"terrain/{name}.png",
             "indexed": f"terrain/{name}_indexed.png",
             "pal": f"terrain/{name}_pal.json",
@@ -101,6 +131,9 @@ def run(extracted: Path, assets: Path) -> None:
             "height": img.height,
             "palette": pal_name.removesuffix(".BBM").lower() if pal_name else "embedded",
         }
+        if hd_name is not None:
+            entry["indexed_hd"] = {"scale": SCALE, "path": f"terrain/{hd_name}"}
+        textures[name] = entry
 
     gouraud: dict[str, object] = {}
     for src, name in _GOURAUD:

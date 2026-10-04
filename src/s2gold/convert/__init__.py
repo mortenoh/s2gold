@@ -34,8 +34,18 @@ CONVERTERS = (
 )
 
 
-def run_all(extracted: Path, assets: Path) -> None:
-    """Run every registered converter in order, skipping modules that don't exist yet."""
+# Converters that can also write the 2x MMPX graphics set.
+HD_CONVERTERS = frozenset({"terrain", "graphics", "bobs"})
+
+
+def run_all(extracted: Path, assets: Path, *, hd: bool = True) -> None:
+    """Run every registered converter in order, skipping modules that don't exist yet.
+
+    Args:
+        extracted: innoextract output root.
+        assets: Web asset output root.
+        hd: Also write the 2x graphics set (terrain, world sprites and settlers).
+    """
     assets.mkdir(parents=True, exist_ok=True)
     for name in CONVERTERS:
         try:
@@ -44,4 +54,7 @@ def run_all(extracted: Path, assets: Path) -> None:
             print(f"[skip] converter '{name}' not implemented yet")
             continue
         print(f"[run ] {name}")
-        mod.run(extracted, assets)
+        if name in HD_CONVERTERS:
+            mod.run(extracted, assets, hd=hd)
+        else:
+            mod.run(extracted, assets)

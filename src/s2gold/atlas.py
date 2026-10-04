@@ -14,7 +14,7 @@ from pathlib import Path
 from PIL import Image
 
 MAX_ATLAS_SIZE = 2048
-_PADDING = 1
+DEFAULT_PADDING = 1
 
 
 @dataclass(frozen=True)
@@ -61,9 +61,12 @@ class AtlasPacker:
 
     Attributes:
         max_size: Maximum atlas width and height in pixels.
+        padding: Transparent gap between sprites. Magnified sets use more, so linear
+            minification never samples a neighbouring sprite.
     """
 
     max_size: int = MAX_ATLAS_SIZE
+    padding: int = DEFAULT_PADDING
     _images: list[Image.Image] = field(default_factory=list)
     _placements: list[Placement] = field(default_factory=list)
     _shelf: _Shelf = field(default_factory=_Shelf)
@@ -71,15 +74,20 @@ class AtlasPacker:
     _used_h: int = 0
 
     def add(self, sprite: SpriteInput) -> None:
-        """Pack one sprite, starting a new atlas if it does not fit the current one."""
+        """Pack one sprite, starting a new atlas if it does not fit the current one.
+
+        Raises:
+            ValueError: If the sprite is larger than an atlas page.
+        """
         if not self._images:
             self._new_atlas()
-        w = min(sprite.width, self.max_size)
-        h = min(sprite.height, self.max_size)
+        w, h = sprite.width, sprite.height
+        if w > self.max_size or h > self.max_size:
+            raise ValueError(f"sprite {sprite.key} is {w}x{h}, larger than the {self.max_size}px atlas page")
         if w == 0 or h == 0 or not sprite.rgba:
             self._placements.append(Placement(sprite.key, len(self._images) - 1, 0, 0, w, h))
             return
-        step = _PADDING
+        step = self.padding
         if self._shelf.x + w > self.max_size:
             self._shelf.x = 0
             self._shelf.y += self._shelf.height + step
@@ -92,12 +100,10 @@ class AtlasPacker:
         """Draw a sprite at the current shelf cursor and record its placement."""
         img = self._images[-1]
         x, y = self._shelf.x, self._shelf.y
-        tile = Image.frombytes("RGBA", (sprite.width, sprite.height), sprite.rgba)
-        if (w, h) != (sprite.width, sprite.height):
-            tile = tile.crop((0, 0, w, h))
+        tile = Image.frombytes("RGBA", (w, h), sprite.rgba)
         img.paste(tile, (x, y))
         self._placements.append(Placement(sprite.key, len(self._images) - 1, x, y, w, h))
-        self._shelf.x += w + _PADDING
+        self._shelf.x += w + self.padding
         self._shelf.height = max(self._shelf.height, h)
         self._used_w = max(self._used_w, x + w)
         self._used_h = max(self._used_h, y + h)

@@ -63,12 +63,13 @@ def install(
     installer: Annotated[Path, typer.Argument(help="Path to the GOG setup_the_settlers_2_gold_*.exe", exists=True)],
     assets: Annotated[Path, typer.Option(help="Converted assets output directory")] = ASSETS_DIR,
     extracted: Annotated[Path, typer.Option(help="Installer extraction directory")] = EXTRACTED_DIR,
+    hd: Annotated[bool, typer.Option("--hd/--no-hd", help="Also build the 2x HD graphics set")] = True,
 ) -> None:
     """Extract the installer and convert all game assets for the browser app."""
     extract(installer, extracted)
     from s2gold.convert import run_all  # noqa: PLC0415 - converters land incrementally
 
-    run_all(extracted, assets)
+    run_all(extracted, assets, hd=hd)
     typer.echo(f"assets ready at {assets}")
 
 
