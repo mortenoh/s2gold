@@ -652,17 +652,23 @@ gitignored `remaster/` directory.
 Done: the finished buildings of all four nations in summer and winter (8 sets,
 256 sprites), and the static decorations and granite of all three landscape
 object archives (`remaster-prep <archive> --select objects`). The remastered
-sets add about 14 MB of assets. Winter building sets use a prompt that asks the
+sets add about 14 MB of assets.
+
+Trees (all nine species in the three landscape sets) are remastered too
+(`--select trees`). Only frame 0 of each sway animation is repainted; frames
+1-7 are derived by warping it with a per-pixel displacement field matched
+between the original frames (`src/s2gold/sway.py`), so the leaves move as in
+the original without per-frame flicker. Growth and falling frames are
+repainted as stills. Landscape repaints are colour-matched to the originals,
+because the model brightens foliage and stone. Winter building sets use a prompt that asks the
 model to keep every patch of snow (`prompt_for` in `src/s2gold/remaster.py`);
 without it the model cleans most of the snow off.
 
 Open:
 
-1. Trees: they sway over eight frames, so they need one repaint shared by
-   every frame or a consistency check between frames.
-2. Construction sites keep MMPX: their dithered floors are a transparency
+1. Construction sites keep MMPX: their dithered floors are a transparency
    effect the model paints as solid ground.
-3. Settlers and work animations stay MMPX: per-frame generation flickers.
+2. Settlers and work animations stay MMPX: per-frame generation flickers.
 
 ## J. Native client in egui (idea, not scheduled)
 
