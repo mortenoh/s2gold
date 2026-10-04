@@ -1,21 +1,24 @@
 /**
  * Small DOM widgets that compose the bitmap font into clickable menu chrome.
  *
- * Each label is a pixel-scaled canvas drawn from the original font; the widget
+ * Each label is a canvas drawn from the menu font (the original bitmap font,
+ * pixel-scaled, or the vector fonts in HD; see menu-font.ts); the widget
  * wraps it in a real anchor/button so hover, focus, keyboard activation and
  * tooltips work, and exposes an `aria-label` (plus `data-testid`) so the text
  * is discoverable by assistive tech and Playwright even though it is drawn to a
  * canvas rather than laid out as text.
  */
 
-import type { BitmapFont, DrawOptions } from './font';
+import type { DrawOptions } from './font';
+import type { MenuFont } from './menu-font';
+import type { TextRole } from './vector-font';
 import { el } from '../lib/dom';
 
 /** Build a right-sized canvas rendering `text` with `font`. */
 export function fontCanvas(
-  font: BitmapFont,
+  font: MenuFont,
   text: string,
-  opts: DrawOptions = {},
+  opts: DrawOptions & { role?: TextRole } = {},
 ): HTMLCanvasElement {
   const canvas = font.render(text, opts);
   canvas.className = 'font-canvas';
@@ -27,7 +30,7 @@ export function fontCanvas(
 }
 
 export interface MenuEntryOptions {
-  font: BitmapFont;
+  font: MenuFont;
   label: string;
   /** Draw scale for the label. */
   scale?: number;
@@ -72,7 +75,7 @@ export function menuEntry(opts: MenuEntryOptions): HTMLElement {
 
 /** A heading rendered from the bitmap font (non-interactive). */
 export function fontHeading(
-  font: BitmapFont,
+  font: MenuFont,
   text: string,
   opts: DrawOptions & { testid?: string } = {},
 ): HTMLElement {

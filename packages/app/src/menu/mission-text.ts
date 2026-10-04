@@ -11,7 +11,7 @@
  */
 
 import { assetUrl, fetchJson } from '../lib/manifest';
-import type { BitmapFont } from '../ui/font';
+import type { MenuFont } from '../ui/menu-font';
 
 /** Load a chapter text bank, or null when the asset is absent. */
 export async function loadMissionText(file: string): Promise<string[] | null> {
@@ -36,18 +36,13 @@ export function toParagraphs(raw: string): string[] {
  * returning the wrapped lines. Words longer than the width are placed on their
  * own line rather than split.
  */
-function wrapParagraph(
-  font: BitmapFont,
-  text: string,
-  maxWidthPx: number,
-  scale: number,
-): string[] {
+function wrapParagraph(font: MenuFont, text: string, maxWidthPx: number, scale: number): string[] {
   const words = text.split(' ').filter((w) => w.length > 0);
   const lines: string[] = [];
   let current = '';
   for (const word of words) {
     const candidate = current ? `${current} ${word}` : word;
-    if (current && font.measure(candidate, { scale }).width > maxWidthPx) {
+    if (current && font.measure(candidate, { scale, role: 'body' }).width > maxWidthPx) {
       lines.push(current);
       current = word;
     } else {
@@ -64,7 +59,7 @@ function wrapParagraph(
  * font as a single `\n`-joined block (or paginated by {@link paginate}).
  */
 export function wrapMissionText(
-  font: BitmapFont,
+  font: MenuFont,
   raw: string,
   maxWidthPx: number,
   scale: number,

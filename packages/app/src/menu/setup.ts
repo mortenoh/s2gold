@@ -19,7 +19,7 @@ import {
   nationLabel,
 } from '../lib/nations';
 import { createSession } from '../lib/sessions';
-import { BitmapFont } from '../ui/font';
+import { loadMenuFont, type MenuFont } from '../ui/menu-font';
 import { fontHeading } from '../ui/widgets';
 import { applyBackdrop, SETUP_PIC_KEYS } from './pics';
 import { buildMapPreview } from './minimap';
@@ -73,9 +73,9 @@ export async function renderSetup(root: HTMLElement): Promise<void> {
   await applyBackdrop(root, SETUP_PIC_KEYS);
 
   const strings = await menuStrings();
-  let font: BitmapFont | null = null;
+  let font: MenuFont | null = null;
   try {
-    font = await BitmapFont.load('font14');
+    font = await loadMenuFont('font14');
   } catch {
     font = null;
   }

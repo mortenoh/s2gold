@@ -9,7 +9,7 @@
  */
 
 import { clear, el } from '../lib/dom';
-import { BitmapFont } from '../ui/font';
+import { loadMenuFont, type MenuFont } from '../ui/menu-font';
 import { fontCanvas, fontHeading } from '../ui/widgets';
 import { applyBackdrop } from './pics';
 import { menuStrings } from './strings';
@@ -60,9 +60,9 @@ export async function renderBriefing(root: HTMLElement, chapterId: number): Prom
   }
 
   const strings = await menuStrings();
-  let font: BitmapFont | null = null;
+  let font: MenuFont | null = null;
   try {
-    font = await BitmapFont.load('font14');
+    font = await loadMenuFont('font14');
   } catch {
     font = null;
   }
@@ -138,7 +138,7 @@ export async function renderBriefing(root: HTMLElement, chapterId: number): Prom
 }
 
 /** Render the diary text with pagination, using the bitmap font when available. */
-function renderDiary(host: HTMLElement, font: BitmapFont | null, raw: string): void {
+function renderDiary(host: HTMLElement, font: MenuFont | null, raw: string): void {
   clear(host);
   if (!font) {
     // Plain-text fallback: paragraphs from the normalised source.
@@ -174,7 +174,9 @@ function renderDiary(host: HTMLElement, font: BitmapFont | null, raw: string): v
   const draw = (): void => {
     clear(canvasHost);
     const text = (pages[page] ?? []).join('\n');
-    canvasHost.append(fontCanvas(font, text, { scale: TEXT_SCALE, color: CREAM, lineSpacing: 4 }));
+    canvasHost.append(
+      fontCanvas(font, text, { scale: TEXT_SCALE, color: CREAM, lineSpacing: 4, role: 'body' }),
+    );
     label.textContent = `${page + 1} / ${pages.length}`;
     prev.disabled = page === 0;
     next.disabled = page >= pages.length - 1;

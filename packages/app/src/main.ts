@@ -7,6 +7,9 @@
  */
 
 import './styles.css';
+import '@fontsource/alegreya/400.css';
+import '@fontsource/alegreya/600.css';
+import { graphicsScale, readGraphicsPref } from './game/view-prefs';
 import { installHandCursor } from './game/cursor';
 import { renderTitle } from './menu/title';
 import { renderSetup } from './menu/setup';
@@ -15,6 +18,13 @@ import { renderBriefing } from './menu/briefing';
 import { renderOptions } from './menu/options';
 import { renderCredits } from './menu/credits';
 import { renderLoadGame } from './menu/load';
+
+// HD graphics also modernises the menu typography (see ui/menu-font.ts); the
+// Original set keeps the original look, monospace UI text included.
+document.documentElement.classList.toggle(
+  'font-modern',
+  graphicsScale(readGraphicsPref(), window.devicePixelRatio || 1) === 2,
+);
 
 /** Desktop shell: the native Game menu's Reload re-reads the current screen. */
 function listenDesktopMenu(): void {

@@ -9,7 +9,7 @@
  */
 
 import { clear, el } from '../lib/dom';
-import { BitmapFont } from '../ui/font';
+import { loadMenuFont, type MenuFont } from '../ui/menu-font';
 import { fontHeading } from '../ui/widgets';
 import { applyBackdrop } from './pics';
 import { MenuMusic } from './music';
@@ -62,9 +62,9 @@ export async function renderOptions(root: HTMLElement): Promise<void> {
   music.mount(root);
   await applyBackdrop(root, OPTIONS_PIC_KEYS);
 
-  let font: BitmapFont | null = null;
+  let font: MenuFont | null = null;
   try {
-    font = await BitmapFont.load('font14');
+    font = await loadMenuFont('font14');
   } catch {
     font = null;
   }

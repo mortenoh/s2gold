@@ -103,3 +103,32 @@ test('the Options screen cycles the graphics preference', async ({ page }) => {
   await row.click();
   await expect(row).toHaveText('Graphics: HD');
 });
+
+test('HD uses the vector menu fonts, Original keeps the bitmap font', async ({
+  browser,
+  page,
+  baseURL,
+}) => {
+  test.skip(!(await assetsPresent(page)), 'converted assets not installed');
+  for (const [pref, modern] of [
+    ['hd', true],
+    ['original', false],
+  ] as const) {
+    const context = await browser.newContext({ deviceScaleFactor: 2 });
+    await context.addInitScript((p) => localStorage.setItem('s2gold.view.graphics', p), pref);
+    const p = await context.newPage();
+    await p.goto(`${baseURL}/`);
+    const entry = p.getByRole('link', { name: 'Options' });
+    await expect(entry).toBeVisible();
+    expect(await p.evaluate(() => document.documentElement.classList.contains('font-modern'))).toBe(
+      modern,
+    );
+    // The bitmap canvas is drawn at 1 backing pixel per CSS pixel and scaled
+    // pixelated; the vector canvas is backed at the device pixel ratio.
+    const ratio = await entry
+      .locator('canvas')
+      .evaluate((c: HTMLCanvasElement) => c.width / c.getBoundingClientRect().width);
+    expect(ratio).toBeCloseTo(modern ? 2 : 1, 1);
+    await context.close();
+  }
+});

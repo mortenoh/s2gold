@@ -11,6 +11,8 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@fontsource-variable/cinzel": "^5.3.0",
+    "@fontsource/alegreya": "^5.3.0",
     "@s2gold/engine": "workspace:*",
     "@s2gold/renderer": "workspace:*"
   },

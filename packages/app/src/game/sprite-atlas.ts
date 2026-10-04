@@ -71,7 +71,7 @@ async function loadAtlasFrom(dir: string): Promise<LoadedAtlas | null> {
   if (!raw || !raw.sprites || !Array.isArray(raw.atlases)) return null;
   const meta = parseMeta(raw);
   const pages = await Promise.all(raw.atlases.map((name) => loadImage(assetUrl(`${dir}/${name}`))));
-  const pmaskPages = await loadMaskPages(dir, raw.pmasks, raw.atlases.length);
+  const pmaskPages = await loadMaskPages(dir, raw.pmasks, raw.atlases.length, meta.sprites);
   return { meta, pages, pmaskPages };
 }
 
@@ -84,11 +84,20 @@ export async function loadMaskPages(
   dir: string,
   masks: readonly string[] | undefined,
   pageCount: number,
+  sprites?: ReadonlyMap<number, AtlasSprite>,
 ): Promise<(AtlasPage | null)[]> {
   const out: (AtlasPage | null)[] = new Array<AtlasPage | null>(pageCount).fill(null);
   if (!masks) return out;
+  // The mask list names every page, but the pipeline only writes pages that
+  // hold a player-coloured sprite; skip the rest instead of requesting a 404.
+  let used: Set<number> | null = null;
+  if (sprites) {
+    used = new Set();
+    for (const s of sprites.values()) if (s.pmask) used.add(s.atlas);
+  }
   await Promise.all(
     masks.slice(0, pageCount).map(async (file, i) => {
+      if (used && !used.has(i)) return;
       try {
         out[i] = await loadImage(assetUrl(`${dir}/${file}`));
       } catch {

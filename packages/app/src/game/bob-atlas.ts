@@ -90,7 +90,7 @@ async function loadBobAtlasFrom(dir: string, archive: string): Promise<BobAtlas 
   }
   const meta = parseMeta(archive, raw);
   const pages = await Promise.all(raw.atlases.map((file) => loadImage(assetUrl(`${dir}/${file}`))));
-  const pmaskPages = await loadMaskPages(dir, raw.pmasks, raw.atlases.length);
+  const pmaskPages = await loadMaskPages(dir, raw.pmasks, raw.atlases.length, meta.sprites);
   return {
     archive,
     meta,

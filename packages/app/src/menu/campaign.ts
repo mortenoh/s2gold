@@ -20,7 +20,7 @@
  */
 
 import { clear, el } from '../lib/dom';
-import { BitmapFont } from '../ui/font';
+import { loadMenuFont, type MenuFont } from '../ui/menu-font';
 import { fontHeading } from '../ui/widgets';
 import { applyBackdrop, pickPicUrl, loadPicsIndex } from './pics';
 import { menuStrings } from './strings';
@@ -89,16 +89,16 @@ export async function renderCampaign(
 }
 
 /** Load the menu bitmap font, or null when the atlas is unavailable. */
-async function loadFont(): Promise<BitmapFont | null> {
+async function loadFont(): Promise<MenuFont | null> {
   try {
-    return await BitmapFont.load('font14');
+    return await loadMenuFont('font14');
   } catch {
     return null;
   }
 }
 
 /** The campaign heading (bitmap font when present, plain <h1> otherwise). */
-function campaignHeading(font: BitmapFont | null, text: string): HTMLElement {
+function campaignHeading(font: MenuFont | null, text: string): HTMLElement {
   return font
     ? fontHeading(font, text, { scale: 2, color: GOLD, testid: 'campaign-heading' })
     : el('h1', { text, attrs: { 'data-testid': 'campaign-heading', 'aria-label': text } });

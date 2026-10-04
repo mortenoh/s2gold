@@ -8,7 +8,7 @@
 
 import { clear, el } from '../lib/dom';
 import { assetUrl, fetchJson } from '../lib/manifest';
-import { BitmapFont } from '../ui/font';
+import { loadMenuFont, type MenuFont } from '../ui/menu-font';
 import { fontHeading } from '../ui/widgets';
 import { MenuMusic } from './music';
 
@@ -47,9 +47,9 @@ export async function renderCredits(root: HTMLElement): Promise<void> {
   const music = new MenuMusic();
   music.mount(root);
 
-  let font: BitmapFont | null = null;
+  let font: MenuFont | null = null;
   try {
-    font = await BitmapFont.load('font14');
+    font = await loadMenuFont('font14');
   } catch {
     font = null;
   }

@@ -42,7 +42,9 @@ export default defineConfig({
       S2GOLD_SESSIONS_DIR: join(API_DATA, 'legacy-sessions'),
     },
     url: BASE_URL,
-    reuseExistingServer: false,
+    // S2GOLD_E2E_REUSE=1 points the suite at a server that is already running,
+    // e.g. the packaged desktop app's embedded server (S2GOLD_E2E_PORT=<its port>).
+    reuseExistingServer: !!process.env.S2GOLD_E2E_REUSE,
     // The launcher owns separate process groups for cargo/server and Vite.
     // Give it SIGTERM so it can reap them before Playwright resorts to SIGKILL.
     gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 },
