@@ -292,9 +292,10 @@ all-Roman, backward-compatible with stored sessions); campaign missions gave
 every seat Roman until 2026-09-07, when chapter starts began assigning the
 rivals the setup screen's varied cycle (vikings, nubians, japanese) — the
 original's mission scripts pick each rival's people, and those scripts are not
-executed here, so this is an approximation of the intended variety. A small HUD label shows the local player's people. DEFERRED to
-phase 2: mapping each nation to its building/flag/settler sprite archive
-(vik_z/afr_z/jap_z), per-nation border stones, and the winter W* variants.
+executed here, so this is an approximation of the intended variety. A small
+HUD label shows the local player's people. Sprite archives per nation,
+per-nation border stones and the winter W* variants landed in phase 2 (next
+paragraph).
 
 Landed 2026-07-14 (multi-nation rendering, phase 2 of 2): each player's
 buildings, construction sites, flags, and border stones now render from THEIR
@@ -550,3 +551,25 @@ Open:
    change the title menu's Load game entry became real: `/load` lists every
    server save grouped by map with tray numbers and boots
    `/play/<map>?save=<id>` (`e2e/tests/load-game.spec.ts`).
+
+## H. Campaign mission scripts (open)
+
+The original drives each campaign chapter from event scripts
+(`texts/mission/mis_000N` in the installer data): triggers on territory,
+buildings and time, objective changes, scripted gifts of wares or soldiers,
+diary messages, and the people of each rival tribe. None of it is executed
+here. Chapters instead carry one approximate goal each (buildings, territory
+share or defeat-all, `packages/app/src/menu/campaign-data.ts`), and rivals take
+the setup screen's nation cycle (`campaignNations` in
+`packages/app/src/menu/briefing.ts`).
+
+Steps:
+
+1. Decode the script format in `src/s2gold/formats` and convert each chapter's
+   script to JSON next to the mission texts.
+2. Interpret it in an app-side controller beside `CampaignController`: watch
+   the world view, fire actions through engine commands (gifts via the cheat
+   path or a new command), and deliver scripted messages through the postbox.
+3. Retire the approximate goal per chapter once its script runs, keeping the
+   approximation as a fallback when the converted script is missing.
+4. Apply the scripted rival peoples instead of the setup cycle.
