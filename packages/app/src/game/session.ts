@@ -57,6 +57,8 @@ import {
   type World,
   TOOL_WARES,
   type WareType,
+  DISTRIBUTION_DEFAULT_WEIGHT,
+  DISTRIBUTION_GROUPS,
 } from '@s2gold/engine';
 import { soundForEvent, type SoundCue } from './audio-map';
 
@@ -172,6 +174,11 @@ export interface PrioritiesView {
   readonly transport: readonly string[];
   /** Production weight per tool key (0 = never made). */
   readonly toolWeights: Readonly<Record<string, number>>;
+  /** Distribution weight per ware and consumer kind, in display order. */
+  readonly distribution: readonly {
+    readonly ware: string;
+    readonly consumers: readonly { readonly consumer: string; readonly weight: number }[];
+  }[];
 }
 
 /** What the production building window shows (see {@link GameSession.productionAt}). */
@@ -837,7 +844,14 @@ export class GameSession {
     const toolWeights: Record<string, number> = {};
     for (const t of TOOL_WARES) toolWeights[t] = 0;
     for (const t of p?.toolPriority ?? []) toolWeights[t] = (toolWeights[t] ?? 0) + 1;
-    return { transport, toolWeights };
+    const distribution = Object.entries(DISTRIBUTION_GROUPS).map(([ware, consumers]) => ({
+      ware,
+      consumers: consumers.map((consumer) => ({
+        consumer,
+        weight: p?.distribution?.[ware]?.[consumer] ?? DISTRIBUTION_DEFAULT_WEIGHT,
+      })),
+    }));
+    return { transport, toolWeights, distribution };
   }
 
   /** Transport window: apply a new ware order (index = priority, lower first). */
@@ -867,6 +881,17 @@ export class GameSession {
     }
     if (tools.length === 0) return; // the engine ignores an empty list; keep the last
     applyCommand(this.world, { type: 'setToolPriority', player: this.localPlayer, tools });
+  }
+
+  /** Distribution window: weight (0..10) of one consumer kind for one ware. */
+  setDistribution(ware: string, consumer: string, weight: number): void {
+    applyCommand(this.world, {
+      type: 'setDistribution',
+      player: this.localPlayer,
+      wareType: ware as WareType,
+      consumer,
+      weight,
+    });
   }
 
   /** Free-play cheat state of the local player (Settings panel). */

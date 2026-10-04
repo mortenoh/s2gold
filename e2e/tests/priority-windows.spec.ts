@@ -2,7 +2,11 @@ import { test, expect } from '@playwright/test';
 import { assetsPresent } from './helpers';
 
 interface Dbg {
-  priorities(): { transport: string[]; toolWeights: Record<string, number> };
+  priorities(): {
+    transport: string[];
+    toolWeights: Record<string, number>;
+    distribution: { ware: string; consumers: { consumer: string; weight: number }[] }[];
+  };
 }
 
 const prios = (page: import('@playwright/test').Page) =>
@@ -50,12 +54,39 @@ test.describe('Transport and Tools windows', () => {
     await expect.poll(async () => (await prios(page)).toolWeights.saw).toBe(2);
     await expect(page.getByTestId('tools-weight-saw')).toHaveText('2');
     await page.getByTestId('tools-dec-axe').click();
+    // Fast repeat clicks accumulate (each click builds on the pending value).
+    await page.getByTestId('tools-inc-hammer').click();
+    await page.getByTestId('tools-inc-hammer').click();
+    await page.getByTestId('tools-inc-hammer').click();
+    await expect.poll(async () => (await prios(page)).toolWeights.hammer).toBe(4);
     await expect.poll(async () => (await prios(page)).toolWeights.axe).toBe(0);
     await expect(page.getByTestId('tools-dec-axe')).toBeDisabled();
-    // Weights never exceed the cap, and the other tools are untouched.
+    // Tools nobody clicked are untouched.
     const after = await prios(page);
-    expect(after.toolWeights.hammer).toBe(1);
+    expect(after.toolWeights.shovel).toBe(1);
     await page.getByTestId('tools-close').click();
+  });
+
+  test('distribution weights change which consumer the engine favours', async ({ page }) => {
+    const weightOf = async (ware: string, consumer: string): Promise<number | undefined> =>
+      (await prios(page)).distribution
+        .find((g) => g.ware === ware)
+        ?.consumers.find((c) => c.consumer === consumer)?.weight;
+    expect(await weightOf('grain', 'mill')).toBe(5);
+    await page.getByTestId('distribution-toggle').click();
+    await expect(page.getByTestId('distribution-panel')).toBeVisible();
+    // Group headers for the shared wares, consumer rows named by building.
+    await expect(page.locator('[data-testid=distribution-list] [data-group=grain]')).toBeVisible();
+    await page.getByTestId('distribution-inc-grain-mill').click();
+    await expect.poll(() => weightOf('grain', 'mill')).toBe(6);
+    await expect(page.getByTestId('distribution-weight-grain-mill')).toHaveText('6');
+    for (let i = 0; i < 5; i++) await page.getByTestId('distribution-dec-grain-brewery').click();
+    await expect.poll(() => weightOf('grain', 'brewery')).toBe(0);
+    await expect(page.getByTestId('distribution-dec-grain-brewery')).toBeDisabled();
+    // Untouched consumers keep the default.
+    expect(await weightOf('grain', 'pigfarm')).toBe(5);
+    await page.getByTestId('distribution-close').click();
+    await expect(page.getByTestId('distribution-panel')).toHaveCount(0);
   });
 });
 
@@ -68,7 +99,7 @@ for (const viewport of [
     await page.setViewportSize(viewport);
     await page.goto('/play/maps_miss200');
     await expect(page.locator('body[data-map-ready]')).toBeAttached();
-    for (const mode of ['transport', 'tools']) {
+    for (const mode of ['transport', 'tools', 'distribution']) {
       await page.getByTestId(`${mode}-toggle`).click();
       const panel = page.getByTestId(`${mode}-panel`);
       await expect(panel).toBeVisible();

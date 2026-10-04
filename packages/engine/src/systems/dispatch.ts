@@ -22,6 +22,8 @@ import {
   WARE,
   WARE_TYPES,
   type WareType,
+  DISTRIBUTION_CONSTRUCTION,
+  DISTRIBUTION_DEFAULT_WEIGHT,
 } from '../constants';
 import type { EventSink } from '../events';
 import type { Geometry } from '../geometry';
@@ -131,11 +133,25 @@ function findNeeder(
   let best = -1;
   let bestNeed = 0;
   let bestDist = Infinity;
+  const weights = world.players[player]?.distribution?.[wareType];
   for (const b of storeLive(world.buildings)) {
     if (b.player !== player) continue;
     if (skip?.has(b.id)) continue;
-    const need = demand(world, b, wareType) - censusGet(census, b.id, wareType);
-    if (need <= 0) continue;
+    const raw = demand(world, b, wareType) - censusGet(census, b.id, wareType);
+    if (raw <= 0) continue;
+    // Distribution window: rank by need x weight. Equal weights (the default)
+    // keep the old need-first order exactly; weight 0 starves the consumer.
+    let need = raw;
+    if (weights) {
+      const consumer = b.state === 'site' ? DISTRIBUTION_CONSTRUCTION : b.type;
+      const w = weights[consumer];
+      if (w !== undefined) {
+        if (w <= 0) continue;
+        need = raw * w;
+      } else {
+        need = raw * DISTRIBUTION_DEFAULT_WEIGHT;
+      }
+    }
     const d = geom.distance(fromNode, getFlag(world, b.flagId).node);
     if (
       need > bestNeed ||

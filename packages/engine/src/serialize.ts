@@ -7,7 +7,7 @@
  * stable across runs and a parse/stringify round-trip reproduces it exactly.
  */
 
-import { buildingDef, NUM_SOLDIER_RANKS } from './constants';
+import { buildingDef, NUM_SOLDIER_RANKS, defaultDistribution } from './constants';
 import { fnv1a } from './hash';
 import { WORLD_VERSION, type World } from './world';
 
@@ -23,6 +23,13 @@ export function serializeWorld(world: World): string {
  * loads through the same audited path.
  */
 const MIGRATIONS: Readonly<Record<number, (w: World) => void>> = {
+  // v8 -> v9: ware distribution weights; older saves get the equal defaults,
+  // which rank needers exactly as before.
+  8: (w) => {
+    for (const p of w.players ?? []) {
+      if (p) p.distribution ??= defaultDistribution();
+    }
+  },
   // v7 -> v8: old saves have no wildlife state; do not repopulate hunted land.
   7: (w) => {
     w.animals ??= { items: [], free: [] };

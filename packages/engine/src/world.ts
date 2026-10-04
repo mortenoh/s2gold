@@ -13,6 +13,7 @@ import {
   BUILDING,
   buildingDef,
   DEFAULT_TRANSPORT_PRIORITY,
+  defaultDistribution,
   HQ_START_SOLDIERS,
   HQ_START_WARES,
   HQ_START_WORKERS,
@@ -30,7 +31,7 @@ import { seedRng, type RngState } from './rng';
 import { recalcTerritory } from './systems/territory';
 
 /** Format version for serialized worlds. */
-export const WORLD_VERSION = 8;
+export const WORLD_VERSION = 9;
 
 /** Map wildlife; species use WLD codes and reservations prevent double hunts. */
 export interface Animal {
@@ -321,6 +322,12 @@ export interface Player {
   /** Per-ware transport priority (lower = fetched first). CONSTANTS.md §4. */
   transportPriority: Record<WareType, number>;
   /**
+   * Ware distribution weights (0..10) per ware and consumer kind (a building
+   * type, or 'construction' for sites); see DISTRIBUTION_GROUPS. Dispatch ranks
+   * needers by need x weight, and weight 0 means the consumer gets none.
+   */
+  distribution: Record<WareType, Record<string, number>>;
+  /**
    * Idle soldiers waiting in warehouses, count per rank 0..4 (MILITARY.md §1).
    * Recruited privates land in slot 0; occupation draws from the weak end.
    */
@@ -596,6 +603,7 @@ export function createWorld(map: MapJson, options: CreateWorldOptions): World {
       toolPriority: [...TOOL_WARES],
       toolCycle: 0,
       transportPriority: { ...DEFAULT_TRANSPORT_PRIORITY },
+      distribution: defaultDistribution(),
       soldiers: [...HQ_START_SOLDIERS],
       cheatUnlimited: false,
       cheatInstantBuild: false,

@@ -112,6 +112,23 @@ never committed (original art, same policy as the converted assets).
 
 ## Gameplay fidelity
 
+Landed 2026-10-04 (distribution window): the original's ware distribution
+settings. `DISTRIBUTION_GROUPS` (engine constants) lists every ware with more
+than one consumer kind: fish/meat/bread to the four mines; grain to mill, pig
+farm, brewery, donkey breeder; water to bakery, pig farm, brewery, donkey
+breeder; iron to armory and metalworks; coal to smelter, armory and mint;
+boards to construction sites, metalworks and shipyard; stone to construction
+sites and catapults. `Player.distribution` holds 0..10 weights (WORLD_VERSION
+9, defaults 5 for every consumer), set through the `setDistribution` command.
+Dispatch ranks needers by need x weight and skips weight 0, so the defaults
+reproduce the old order exactly (a 20k-tick five-player soak ends with the
+same buildings, fights and captures as before). The HUD's Distribution button
+opens a grouped window with -/+ per consumer. The Tools and Distribution
+windows now build on pending clicks, so rapid presses accumulate instead of
+resending the value the engine has not applied yet. Covered by
+`engine/src/distribution.test.ts` and `e2e/tests/priority-windows.spec.ts`.
+
+
 Landed 2026-09-07 (computer opponents that actually fight): three defects
 kept the AI from ever meeting a rival. Its frontier site scan was centred on
 the ENEMY building with a 24-node radius, so on any map where rivals start

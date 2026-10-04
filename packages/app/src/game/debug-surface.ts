@@ -6,7 +6,7 @@
  */
 
 import type { AudioEngine } from './audio';
-import type { GameSession } from './session';
+import type { GameSession, PrioritiesView } from './session';
 
 /** Debug counters + helpers exposed on window for e2e assertions. */
 export interface S2Debug {
@@ -58,7 +58,7 @@ export interface S2Debug {
   /** Live building count for a player (HQ + sites + working). */
   buildingsOf(player: number): number;
   /** Transport order + tool weights of the local player. */
-  priorities(): { transport: readonly string[]; toolWeights: Readonly<Record<string, number>> };
+  priorities(): PrioritiesView;
   /** Free-play cheat state of the local player. */
   cheatUnlimited(): boolean;
   cheatInstantBuild(): boolean;

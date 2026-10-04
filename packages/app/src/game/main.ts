@@ -202,6 +202,14 @@ async function boot(): Promise<void> {
     text: 'Tools',
     attrs: { 'data-testid': 'tools-toggle', type: 'button', title: 'Tool production weights' },
   });
+  const distributionButton = el('button', {
+    text: 'Distribution',
+    attrs: {
+      'data-testid': 'distribution-toggle',
+      type: 'button',
+      title: 'Which buildings get scarce wares first',
+    },
+  });
   // Long, transient hints (road mode etc.) float in their own toast below the
   // bar so the top bar never has to wrap to make room for them.
   const status = el('div', { class: 'status-toast', attrs: { 'data-testid': 'build-status' } });
@@ -376,6 +384,7 @@ async function boot(): Promise<void> {
     goodsButton,
     transportButton,
     toolsButton,
+    distributionButton,
     zoomButton,
     settingsButton,
     resources.element,
@@ -966,6 +975,7 @@ async function boot(): Promise<void> {
   for (const [button, mode] of [
     [transportButton, 'transport'],
     [toolsButton, 'tools'],
+    [distributionButton, 'distribution'],
   ] as const) {
     const priorityPanel = new PriorityPanel(
       {

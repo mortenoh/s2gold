@@ -26,6 +26,8 @@ import {
   FLAG_WARE_CAPACITY,
   type BuildingType,
   type WareType,
+  DISTRIBUTION_GROUPS,
+  DISTRIBUTION_MAX_WEIGHT,
 } from './constants';
 import { findWalkPath } from './pathfinding';
 import { beginWalk, spawnSettler } from './systems/movement';
@@ -84,6 +86,16 @@ export type Command =
       type: 'setTransportPriority';
       wareType: WareType;
       priority: number;
+    }
+  | {
+      // Distribution window: weight (0..10) of one consumer kind for one ware.
+      tick: number;
+      player: number;
+      seq: number;
+      type: 'setDistribution';
+      wareType: WareType;
+      consumer: string;
+      weight: number;
     }
   | {
       // Attack an enemy military building with up to `soldiers` attackers
@@ -230,6 +242,15 @@ function executeCommand(
       const pl = world.players[cmd.player];
       if (pl && cmd.wareType in pl.transportPriority) {
         pl.transportPriority[cmd.wareType] = cmd.priority;
+      }
+      break;
+    }
+    case 'setDistribution': {
+      const pl = world.players[cmd.player];
+      const group = DISTRIBUTION_GROUPS[cmd.wareType];
+      if (pl && group?.includes(cmd.consumer) && Number.isFinite(cmd.weight)) {
+        const w = Math.max(0, Math.min(DISTRIBUTION_MAX_WEIGHT, Math.round(cmd.weight)));
+        (pl.distribution[cmd.wareType] ??= {})[cmd.consumer] = w;
       }
       break;
     }

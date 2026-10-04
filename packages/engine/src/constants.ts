@@ -932,6 +932,38 @@ export const DONKEY_UPGRADE_BUSY_GF = (PRODUCTIVITY_GF * DONKEY_PRODUCTIVITY) / 
  * default; coins/tools sit near the top so they reach the HQ promptly. ENGINE
  * ordering (S2 exposes tunable priority classes; this is a sane default).
  */
+/**
+ * Ware distribution (the original's distribution window): for every ware with
+ * more than one kind of consumer, the consumer kinds the player can weight.
+ * `'construction'` stands for construction sites, which want boards and stone
+ * before they are any building type. Order is the display order.
+ */
+export const DISTRIBUTION_CONSTRUCTION = 'construction';
+export const DISTRIBUTION_GROUPS: Readonly<Record<WareType, readonly string[]>> = {
+  fish: ['coalmine', 'ironmine', 'goldmine', 'granitemine'],
+  meat: ['coalmine', 'ironmine', 'goldmine', 'granitemine'],
+  bread: ['coalmine', 'ironmine', 'goldmine', 'granitemine'],
+  grain: ['mill', 'pigfarm', 'brewery', 'donkeybreeder'],
+  water: ['bakery', 'pigfarm', 'brewery', 'donkeybreeder'],
+  iron: ['armory', 'metalworks'],
+  coal: ['ironsmelter', 'armory', 'mint'],
+  plank: ['construction', 'metalworks', 'shipyard'],
+  stone: ['construction', 'catapult'],
+};
+/** Distribution weight range; the default sits in the middle so all are equal. */
+export const DISTRIBUTION_MAX_WEIGHT = 10;
+export const DISTRIBUTION_DEFAULT_WEIGHT = 5;
+
+/** Fresh default distribution weights (every consumer at the default). */
+export function defaultDistribution(): Record<WareType, Record<string, number>> {
+  const out: Record<WareType, Record<string, number>> = {};
+  for (const [ware, consumers] of Object.entries(DISTRIBUTION_GROUPS)) {
+    out[ware] = {};
+    for (const c of consumers) out[ware][c] = DISTRIBUTION_DEFAULT_WEIGHT;
+  }
+  return out;
+}
+
 export const DEFAULT_TRANSPORT_PRIORITY: Readonly<Record<WareType, number>> = (() => {
   const order: WareType[] = [
     WARE.coins,
