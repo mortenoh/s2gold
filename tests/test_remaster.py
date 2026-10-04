@@ -48,3 +48,16 @@ def test_fit_gives_up_on_an_empty_result() -> None:
     gen = np.zeros((64, 64, 3), dtype=np.uint8)
     gen[:] = MAGENTA
     assert fit(Image.fromarray(gen, "RGB"), _sprite(10, 10, (0, 0, 10, 10))) is None
+
+
+def test_object_selection_skips_shadows_tiny_sprites_and_trees() -> None:
+    from s2gold.remaster import object_indices
+
+    decoded = [
+        (200, _sprite(40, 60, (0, 0, 40, 60))),  # a tree frame: animated, not selected
+        (500, _sprite(6, 5, (0, 0, 6, 5))),  # a few dots
+        (506, _sprite(47, 41, (0, 0, 47, 41))),
+        (516, _sprite(39, 16, (0, 0, 39, 16))),
+        (520, DecodedSprite(75, 40, 0, 0, "shadow", bytes(75 * 40 * 4), None, ())),
+    ]
+    assert object_indices(decoded) == [506, 516]

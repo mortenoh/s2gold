@@ -70,17 +70,44 @@ def reference_image(sprite: DecodedSprite) -> Image.Image:
     return canvas.convert("RGB")
 
 
-def prepare(extracted: Path, archive: str, out_root: Path = REMASTER_DIR) -> list[int]:
-    """Write reference images for an archive's buildings to ``<out_root>/<archive>/ref``.
+# Static landscape objects of a MAPBOBS archive: nature decorations 500..515 and the
+# two granite types in six sizes each, 516..527 (their shadows at 600+ stay MMPX).
+# Trees (200 + 15 * species) sway over eight frames and are not included.
+OBJECT_INDICES = range(500, 528)
+
+SELECTIONS = ("buildings", "objects")
+
+# Below this size (largest side, original pixels) a sprite is a few dots: the model
+# would invent the object rather than redraw it, so it keeps its MMPX version.
+MIN_OBJECT_SIZE = 20
+
+
+def object_indices(decoded: list[tuple[int, DecodedSprite]]) -> list[int]:
+    """Static decoration and granite sprite indices present in a landscape archive."""
+    present = {i for i, s in decoded if max(s.width, s.height) >= MIN_OBJECT_SIZE and s.kind != "shadow"}
+    return [i for i in OBJECT_INDICES if i in present]
+
+
+def prepare(extracted: Path, archive: str, selection: str = "buildings", out_root: Path = REMASTER_DIR) -> list[int]:
+    """Write reference images for a selection of sprites to ``<out_root>/<archive>/ref``.
+
+    Args:
+        extracted: innoextract output root.
+        archive: Graphics archive name.
+        selection: ``buildings`` (finished buildings of a nation set) or ``objects``
+            (static decorations and granite of a landscape set).
+        out_root: Remaster working directory.
 
     Returns:
         The sprite indices exported.
     """
+    if selection not in SELECTIONS:
+        raise ValueError(f"unknown selection {selection!r}; expected one of {SELECTIONS}")
     decoded = _decode(extracted, archive)
     by_index = dict(decoded)
     ref_dir = out_root / archive / "ref"
     ref_dir.mkdir(parents=True, exist_ok=True)
-    chosen = building_indices(decoded)
+    chosen = building_indices(decoded) if selection == "buildings" else object_indices(decoded)
     for index in chosen:
         reference_image(by_index[index]).save(ref_dir / f"{index}.png")
     write_json(out_root / archive / "jobs.json", {"archive": archive, "indices": chosen})

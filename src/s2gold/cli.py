@@ -75,13 +75,14 @@ def install(
 
 @app.command("remaster-prep")
 def remaster_prep(
-    archive: Annotated[str, typer.Argument(help="Graphics archive, e.g. rom_z")],
+    archive: Annotated[str, typer.Argument(help="Graphics archive, e.g. rom_z or mapbobs")],
+    select: Annotated[str, typer.Option(help="buildings (nation sets) or objects (landscape sets)")] = "buildings",
     extracted: Annotated[Path, typer.Option(help="Installer extraction directory")] = EXTRACTED_DIR,
 ) -> None:
-    """Export reference images of an archive's buildings for AI remastering."""
+    """Export reference images of an archive's sprites for AI remastering."""
     from s2gold.remaster import REMASTER_DIR, prepare  # noqa: PLC0415
 
-    chosen = prepare(extracted, archive)
+    chosen = prepare(extracted, archive, select)
     typer.echo(f"{len(chosen)} references in {REMASTER_DIR / archive / 'ref'}")
 
 
