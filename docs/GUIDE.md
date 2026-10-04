@@ -47,7 +47,7 @@ The entries, top to bottom:
 | **Roman Campaign**   | The ten-chapter story campaign (missions I–X). See [Campaigns](#campaigns). |
 | **World Campaign**   | The eighteen conquest missions, chosen from a spinning-globe world map.     |
 | **Resume last game** | Jumps straight back into your newest game. Greyed out until you have one.   |
-| **Load game**        | Lists every save on the server, grouped by map; click one to load it.        |
+| **Load game**        | Lists every save on the server, grouped by map; click one to load it.       |
 | **Unlimited play**   | Free play: pick any map and set up opponents. This is the sandbox.          |
 | **Options**          | Music and sound-effect settings.                                            |
 | **Intro**            | Plays the intro video (shows "Replay intro" once watched).                  |
@@ -102,27 +102,28 @@ bottom of the screen, plus the minimap in the corner.
 
 Reading the bar from the left:
 
-| Control               | What it does                                                                                         |
-| --------------------- | ---------------------------------------------------------------------------------------------------- |
-| **s2gold**            | Returns to the title screen.                                                                         |
-| **Map title**         | The current map's name.                                                                              |
-| **Nation pill**       | Your chosen people (e.g. "Romans").                                                                  |
-| **Pause** (hourglass) | Pauses/resumes the simulation. Shortcut: **Space**.                                                  |
-| **Speed dropdown**    | Game speed: **1×, 3×, 10×, 25×, 50×**. There is no speed key — use the dropdown.                     |
-| **Game**              | The Save / Load menu (quicksave **F5**, quickload **F9**) and "Exit to title".                       |
-| **Stats**             | The in-game statistics panel (per-player charts).                                                    |
-| **Goods**             | Your whole inventory, summed across all warehouses.                                                  |
-| **Transport**         | The ware transport order: wares higher in the list are carried first (move with the arrows).         |
-| **Tools**             | Per-tool production weights for the metalworks: how often each tool is made (0 = never).             |
+| Control               | What it does                                                                                                                                         |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **s2gold**            | Returns to the title screen.                                                                                                                         |
+| **Map title**         | The current map's name.                                                                                                                              |
+| **Nation pill**       | Your chosen people (e.g. "Romans").                                                                                                                  |
+| **Pause** (hourglass) | Pauses/resumes the simulation. Shortcut: **Space**.                                                                                                  |
+| **Speed dropdown**    | Game speed: **1×, 3×, 10×, 25×, 50×**. There is no speed key — use the dropdown.                                                                     |
+| **Game**              | The Save / Load menu (quicksave **F5**, quickload **F9**) and "Exit to title".                                                                       |
+| **Stats**             | The in-game statistics panel (per-player charts).                                                                                                    |
+| **Goods**             | Your whole inventory, summed across all warehouses.                                                                                                  |
+| **Transport**         | The ware transport order: wares higher in the list are carried first (move with the arrows).                                                         |
+| **Tools**             | Per-tool production weights for the metalworks: how often each tool is made (0 = never).                                                             |
 | **Postbox**           | Messages: attacks, captures and losses, finished military buildings, ore found, ships, defeats. Click one to jump there; the dove means unread mail. |
-| **Distribution**      | Which buildings get a scarce ware first, per ware (e.g. grain: mill, pig farm, brewery); 0 = none.   |
-| **Zoom**              | Toggles 1× / 2× zoom. Shortcut: **Z**; the mouse wheel zooms freely.                                 |
-| **Settings**          | A pop-up panel: map picker, fog-of-war, tick/FPS readouts, and audio.                                |
-| **Ware readout**      | Live counts of your three build materials: **Wood** (raw logs), **Boards** (sawn planks), **Stone**. |
+| **Distribution**      | Which buildings get a scarce ware first, per ware (e.g. grain: mill, pig farm, brewery); 0 = none.                                                   |
+| **Zoom**              | Toggles 1× / 2× zoom. Shortcut: **Z**; the mouse wheel zooms freely.                                                                                 |
+| **Settings**          | A pop-up panel: map picker, fog-of-war, tick/FPS readouts, graphics, and audio.                                                                      |
+| **Ware readout**      | Live counts of your three build materials: **Wood** (raw logs), **Boards** (sawn planks), **Stone**.                                                 |
 
 The **Settings** panel (opened from the bar) holds the switches you set once and
 forget: the **Map** picker (switch maps without leaving), **Fog** of war on/off,
-the debug **Tick** and **FPS** readouts (both off by default), audio —
+the debug **Tick** and **FPS** readouts (both off by default), **Graphics**
+(see [Options](#options); a change applies after a reload), audio —
 **SFX** mute + volume and **Music** on/off + volume — and, in unlimited play
 only, the **Cheats** row: **Unlimited resources** keeps every ware in your
 warehouses, your helpers, privates and donkeys topped up while it is on, and
@@ -518,13 +519,17 @@ itself a live autosave you can bookmark and reload.
 
 ## Options
 
-The **Options** screen (from the title menu) carries the audio settings, saved
-across sessions:
+The **Options** screen (from the title menu) carries the audio and graphics
+settings, saved across sessions:
 
 ![The Options screen: a gold "Options" heading over cycle-buttons for Music on/off, Music volume, Sound effects on/off and Effects volume, with a red Back button](guide-shots/05-options.png)
 
 - **Music** on/off and **Music volume**.
 - **Sound effects** on/off and **Effects volume**.
+- **Graphics**: **Original** draws the 1996 art as it was. **HD** uses a
+  smoothed 2x copy made when the assets were converted: the same colours and
+  shapes with cleaner diagonals and curves. **Auto** (the default) uses HD
+  on high-density (retina) screens and the original art elsewhere.
 
 Each button cycles its value on click. (The same audio controls also live in the
 in-game **Settings** panel.)

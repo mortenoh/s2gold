@@ -41,6 +41,10 @@ palettes/pal5.json ...            256×[r,g,b] arrays
 terrain/tex5.png ...              tilesets, plus terrain/gouraud5.json shading LUTs
 graphics/<archive>/atlas_N.png    sprite atlases (RGBA, transparent bg)
 graphics/<archive>/atlas.json     per-sprite: x,y,w,h in atlas + nx,ny anchor + kind
+graphics/<archive>/pmask_N.png    player-colour masks, same coordinates as atlas_N.png
+graphics/<archive>/hd2/...        2x MMPX set: same files, atlas.json adds "scale": 2
+bobs/<name>/...                   settler BOBs, same layout (+ body_table, links)
+terrain/tex5_indexed_hd2.png      2x palette-index tileset (tex5-7)
 fonts/<name>.png + <name>.json    glyph atlas + metrics
 maps/<name>.json                  parsed map (see maps agent brief)
 texts/<lang>/<name>.json          string arrays keyed by original file
@@ -55,8 +59,19 @@ Naming: lowercase, original basenames (`mapbobs`, `rom_y`, `tex5`, ...).
 
 Bitmap type 4 ("player" bitmaps) contain pixels that get recolored per player. Emit the
 base sprite with those pixels in the _first_ player's colors AND a separate grayscale/
-mask PNG (`*_pmask.png`) marking player-color pixels + shade index, so the renderer can
-tint at runtime. Record the palette indices used in atlas.json.
+mask page (`pmask_N.png`, R = shade + 1, A = 255 where player-coloured, same coordinates
+as `atlas_N.png`) so the renderer can tint at runtime. Record the palette indices used in
+atlas.json.
+
+## HD set (`hd2/`)
+
+`graphics.py`, `bobs.py` and `terrain.py` also write a 2x copy for the archives the game
+world draws (`HD_ARCHIVES`, `HD_BOBS`, `HD_TILESETS`), magnified with MMPX
+(`s2gold.upscale`). In `hd2/atlas.json`, `x,y,w,h,nx,ny` are in magnified atlas pixels and
+the top-level `"scale": 2` tells the renderer to divide by it for world size. Every other
+field (`kind`, `pmask`, `player_indices`, `body_table`, `links`) is unchanged. The manifest
+lists the sets in the `graphics_hd` and `bobs_hd` categories and as `indexed_hd` on each
+terrain texture. `install --no-hd` skips them.
 
 ## Verified local facts (from this machine's real data)
 

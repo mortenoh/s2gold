@@ -58,7 +58,6 @@ and `storeLive` returns an array. 2.09 -> 0.57 ms/tick (3.6x) on that map.
 Remaining cost is split between the AI's canPlaceBuilding window checks and
 dispatch's per-ware needer scan.
 
-
 The whole batch shipped, each change verified bit-identical against the
 previous engine via long-run world-hash traces (~40% higher tick throughput
 on a modest demo economy; the census/route wins grow with economy size):
@@ -142,7 +141,6 @@ windows now build on pending clicks, so rapid presses accumulate instead of
 resending the value the engine has not applied yet. Covered by
 `engine/src/distribution.test.ts` and `e2e/tests/priority-windows.spec.ts`.
 
-
 Landed 2026-09-07 (computer opponents that actually fight): three defects
 kept the AI from ever meeting a rival. Its frontier site scan was centred on
 the ENEMY building with a 24-node radius, so on any map where rivals start
@@ -187,7 +185,6 @@ resources in the Settings panel's Cheats row (`Player.cheatInstantBuild`,
 WORLD_VERSION 7): every construction site of the player completes at once.
 Verified in the browser with all 25 building types placed and finished.
 
-
 Landed 2026-09-07 (node walkability, original rule): a settler may stand on a
 node unless any of the six triangles around it is lava, and only if at least
 one of the six is walkable ground (`engine/src/walk.ts`). The old rule needed
@@ -200,7 +197,6 @@ data showed winter ice (0x04/0x07) is walkable in the original (5052
 flag-capable nodes fully surrounded by it), so the winter impassable set lost
 the ice ids. Pathfinding, flag placement, road laying and planting all go
 through the shared helper.
-
 
 Landed 2026-09-07 (runthrough follow-ups): the production building window.
 Clicking an own production building (or its site) opens a window with the
@@ -233,7 +229,6 @@ player's working warehouses, the Helper pool, idle privates and donkeys up
 to a floor each tick (99 wares / 99 helpers / 30 privates / 20 donkeys),
 never taking anything away. Deterministic and per player. Covered by
 `engine/src/cheats.test.ts` and `e2e/tests/cheats.spec.ts`.
-
 
 Landed 2026-07-12: builder-to-site and settler-to-building travel is now
 road-constrained (`findRoadWalkPath` over the flag/road graph). A building
@@ -465,6 +460,13 @@ and colonises the far island; run-twice determinism) and a live 50× soak on
 two expeditions by tick ~41k). Fully deterministic (sorted scans, lowest-id
 tie-breaks, no RNG).
 
+Observation windows (note, not scheduled): the original lets you open extra
+map views, resizable floating windows each showing a different part of the
+map, so you can watch a front line or a harbor while working elsewhere. The
+renderer would need to draw the terrain, sprite and road passes into several
+viewports, each with its own camera, and each view's fog and minimap
+rectangle would follow its own camera.
+
 Landed since the PLAN.md backlog was written: donkey roads + road upgrade,
 geologists, ground ware-stack sprites, soldier rank overlays + fight
 animations, wasteland/winter terrain rules, harbor territory recalc on
@@ -604,3 +606,31 @@ Steps:
 3. Retire the approximate goal per chapter once its script runs, keeping the
    approximation as a fallback when the converted script is missing.
 4. Apply the scripted rival peoples instead of the setup cycle.
+
+## I. HD graphics (landed 2026-10-04)
+
+The original art is 1996 pixel art drawn 1:1. Two changes make it suit
+today's screens:
+
+1. Zoom is in screen points (`packages/renderer/src/camera.ts`, `dpr` and
+   `scale`). On a retina display zoom 1 now shows the original size instead
+   of half of it, and clicks, panning and the minimap rectangle follow.
+2. A 2x set generated at conversion time with MMPX (McGuire and Gagiu, JCGT
+   2021, MIT reference code; `src/s2gold/upscale.py`). Every output pixel is a
+   copy of a source pixel, and the filter runs on keys that combine colour
+   and player shade (sprites) or on raw palette indices (terrain). Player
+   tint, shadows, gouraud lighting and water/lava palette cycling therefore
+   work unchanged. It covers the world: terrain tex5-7, the eight nation
+   building sets, ships, work animations, landscape objects, and the carrier
+   and jobs settlers. Sprites are magnified one at a time, so atlas
+   neighbours never bleed. Terrain textures are magnified one rectangle at a
+   time with clamped edges. `--no-hd` skips the set. It adds about 8 MB of
+   assets.
+3. A Graphics preference (Auto, Original, HD) in Options and in-game
+   Settings. Auto picks HD when the device pixel ratio is 1.5 or more, and a
+   change applies on the next page load. Loaders fall back to the original
+   art for anything the manifest does not list.
+
+Follow-ups (still 1x, drawn with pixelated scaling): HUD and menu icons,
+bitmap fonts, the cursor, menu backdrops and the campaign globe. A 3x or 4x
+set would be MMPX applied twice; it is not planned until a display needs it.
