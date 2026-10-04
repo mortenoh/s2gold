@@ -73,6 +73,10 @@ field (`kind`, `pmask`, `player_indices`, `body_table`, `links`) is unchanged. T
 lists the sets in the `graphics_hd` and `bobs_hd` categories and as `indexed_hd` on each
 terrain texture. `install --no-hd` skips them.
 
+`graphics/<archive>/ai2/` has the same layout for an AI-remastered archive (written by
+`s2gold remaster-pack`, listed in the manifest's `graphics_ai` category). Its `atlas.json`
+adds `"remastered"`, the number of sprites taken from generated images.
+
 ## Verified local facts (from this machine's real data)
 
 - LST container: little-endian; u16 magic 0x4E20, u32 item count; per item s16 used
