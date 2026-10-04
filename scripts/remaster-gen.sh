@@ -6,7 +6,9 @@
 # Copies remaster/<archive>/ref/*.png to the host, runs Qwen Image 2.1 editing with the
 # 4-step acceleration LoRA through stable-diffusion.cpp for every reference that has no
 # output yet, and copies the results back to remaster/<archive>/out/. Re-running resumes.
-# Host paths are overridable: SD_CLI, MODELS (holding the Qwen Image 2.1 files and loras/).
+# Host paths are overridable: SD_CLI, MODELS (holding the Qwen Image 2.1 files and loras/);
+# PROMPT replaces the edit instruction, which otherwise comes from remaster/<archive>/jobs.json
+# (written by remaster-prep; winter sets get a snow-keeping variant).
 set -euo pipefail
 ARCHIVE=${1:?archive name, e.g. rom_z}
 HOST=${2:-msai}
@@ -15,8 +17,13 @@ SD_CLI=${SD_CLI:-'~/dev/stable-diffusion.cpp/build/bin/sd-cli'}
 MODELS=${MODELS:-/data/lab/models/image}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)/remaster/$ARCHIVE
 REMOTE=s2gold-remaster/$ARCHIVE
-PROMPT="Redraw this low-resolution pixel-art game sprite as a high-resolution, detailed hand-painted illustration. Keep exactly the same object, layout, silhouette, proportions, isometric viewing angle, colours and every detail. Remove the pixelation and blockiness. Keep the flat solid magenta background exactly as it is."
+[ -n "${PROMPT:-}" ] && PROMPT_SET=1
+PROMPT=${PROMPT:-"Redraw this low-resolution pixel-art game sprite as a high-resolution, detailed hand-painted illustration. Keep exactly the same object, layout, silhouette, proportions, isometric viewing angle, colours and every detail. Remove the pixelation and blockiness. Keep the flat solid magenta background exactly as it is."}
 
+if [ -z "${PROMPT_SET:-}" ] && [ -f "$ROOT/jobs.json" ]; then
+  JOB_PROMPT=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("prompt", ""))' "$ROOT/jobs.json")
+  [ -n "$JOB_PROMPT" ] && PROMPT=$JOB_PROMPT
+fi
 [ -d "$ROOT/ref" ] || { echo "no references: run 'uv run s2gold remaster-prep $ARCHIVE' first" >&2; exit 1; }
 mkdir -p "$ROOT/out"
 ssh "$HOST" "mkdir -p $REMOTE/ref $REMOTE/out"

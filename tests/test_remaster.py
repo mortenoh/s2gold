@@ -61,3 +61,12 @@ def test_object_selection_skips_shadows_tiny_sprites_and_trees() -> None:
         (520, DecodedSprite(75, 40, 0, 0, "shadow", bytes(75 * 40 * 4), None, ())),
     ]
     assert object_indices(decoded) == [506, 516]
+
+
+def test_winter_sets_ask_the_model_to_keep_the_snow() -> None:
+    from s2gold.remaster import prompt_for
+
+    assert "snow" in prompt_for("wrom_z")
+    assert "snow" not in prompt_for("mapbobs1")  # winter objects have no snow
+    assert "snow" not in prompt_for("rom_z")
+    assert "magenta background" in prompt_for("rom_z")

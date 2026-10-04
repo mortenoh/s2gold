@@ -77,6 +77,31 @@ OBJECT_INDICES = range(500, 528)
 
 SELECTIONS = ("buildings", "objects")
 
+# The edit instruction given to the model. Winter sets add a line about snow: without
+# it the model tends to clean most of the snow off roofs and ledges.
+BASE_PROMPT = (
+    "Redraw this low-resolution pixel-art game sprite{subject} as a high-resolution, detailed "
+    "hand-painted illustration. Keep exactly the same object, layout, silhouette, proportions, "
+    "isometric viewing angle, colours and every detail{extra}. Remove the pixelation and "
+    "blockiness. Keep the flat solid magenta background exactly as it is."
+)
+# Winter building sets (their art is snow-covered). The winter object archive mapbobs1
+# is not listed: its decorations and granite carry no snow, and the snow line makes the
+# model add some.
+WINTER_ARCHIVES = frozenset({"wrom_z", "wvik_z", "wafr_z", "wjap_z"})
+
+
+def prompt_for(archive: str) -> str:
+    """The edit instruction for an archive's references."""
+    if archive in WINTER_ARCHIVES:
+        return BASE_PROMPT.format(
+            subject=" of a snow-covered winter object",
+            extra=", and keep all the snow: every white patch of snow on roofs, ledges, walls and "
+            "the ground must stay where it is",
+        )
+    return BASE_PROMPT.format(subject="", extra="")
+
+
 # Below this size (largest side, original pixels) a sprite is a few dots: the model
 # would invent the object rather than redraw it, so it keeps its MMPX version.
 MIN_OBJECT_SIZE = 20
@@ -110,7 +135,10 @@ def prepare(extracted: Path, archive: str, selection: str = "buildings", out_roo
     chosen = building_indices(decoded) if selection == "buildings" else object_indices(decoded)
     for index in chosen:
         reference_image(by_index[index]).save(ref_dir / f"{index}.png")
-    write_json(out_root / archive / "jobs.json", {"archive": archive, "indices": chosen})
+    write_json(
+        out_root / archive / "jobs.json",
+        {"archive": archive, "selection": selection, "prompt": prompt_for(archive), "indices": chosen},
+    )
     return chosen
 
 

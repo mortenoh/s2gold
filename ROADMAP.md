@@ -650,21 +650,19 @@ version. Generated art is derived from the game data, so it lives in the
 gitignored `remaster/` directory.
 
 Done: the finished buildings of all four nations in summer and winter (8 sets,
-256 sprites), and the static decorations and granite of the greenland and
-wasteland object archives (`remaster-prep <archive> --select objects`). The
-remastered sets add about 14 MB of assets.
+256 sprites), and the static decorations and granite of all three landscape
+object archives (`remaster-prep <archive> --select objects`). The remastered
+sets add about 14 MB of assets. Winter building sets use a prompt that asks the
+model to keep every patch of snow (`prompt_for` in `src/s2gold/remaster.py`);
+without it the model cleans most of the snow off.
 
 Open:
 
-1. Winter objects (mapbobs1): generated, but the copy back from the GPU host
-   failed; re-run `scripts/remaster-gen.sh mapbobs1` and pack.
-2. Trees: they sway over eight frames, so they need one repaint shared by
+1. Trees: they sway over eight frames, so they need one repaint shared by
    every frame or a consistency check between frames.
-3. Construction sites keep MMPX: their dithered floors are a transparency
+2. Construction sites keep MMPX: their dithered floors are a transparency
    effect the model paints as solid ground.
-4. Settlers and work animations stay MMPX: per-frame generation flickers.
-5. Winter buildings lose some of their snow in the repaint; a winter-specific
-   prompt ("keep all the snow on roofs and ledges") may hold it better.
+3. Settlers and work animations stay MMPX: per-frame generation flickers.
 
 ## J. Native client in egui (idea, not scheduled)
 
