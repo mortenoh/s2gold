@@ -9,6 +9,7 @@ title, size, players, terrain set).
 from __future__ import annotations
 
 import base64
+import struct
 from pathlib import Path
 
 from s2gold.core import Manifest, write_json
@@ -24,6 +25,29 @@ _MAP_DIRS: tuple[tuple[str, str, str], ...] = (
 )
 
 
+def _animals(m: WorldMap) -> list[dict[str, int]]:
+    """Decode five-byte <species, x:u16, y:u16> footer records, ending in FF.
+
+    Verified against all bundled MAPS2/MAPS4 files. Prefer the footer over
+    the layer: it preserves multiple animals at the same starting position.
+    """
+    if len(m.trailing) > 1:
+        if m.trailing[-1] != 0xFF or (len(m.trailing) - 1) % 5:
+            raise ValueError("invalid animal footer")
+        animals = [struct.unpack_from("<BHH", m.trailing, i) for i in range(0, len(m.trailing) - 1, 5)]
+    else:
+        animals = [
+            (species, n % m.width, n // m.width) for n, species in enumerate(m.layers["animals"]) if 1 <= species <= 9
+        ]
+    # SASIA/GREEN retain footer entries beyond their cropped map bounds. Those
+    # entries have no layer counterpart and must not wrap onto unrelated land.
+    return [
+        {"species": species, "x": x, "y": y}
+        for species, x, y in animals
+        if 1 <= species <= 9 and x < m.width and y < m.height
+    ]
+
+
 def _map_to_dict(m: WorldMap) -> dict[str, object]:
     """Serialize a parsed map to a JSON-ready dict with base64 layer planes."""
     return {
@@ -37,6 +61,7 @@ def _map_to_dict(m: WorldMap) -> dict[str, object]:
         "hq_x": m.hq_x,
         "hq_y": m.hq_y,
         "encoding": "base64",
+        "animals": _animals(m),
         "layers": {name: base64.b64encode(plane).decode("ascii") for name, plane in m.layers.items()},
     }
 

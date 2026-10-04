@@ -645,7 +645,7 @@ test('P4: save appears in the load list and can be deleted', async ({ page }) =>
 
   await page.goto('/game.html?map=maps_miss200');
   await expect(page.locator('body[data-map-ready]')).toBeAttached({ timeout: 15_000 });
-  test.skip(!(await savesApiUp(page)), 'saves API not reachable (server offline)');
+  expect(await savesApiUp(page), 'the development launcher starts the saves API').toBe(true);
 
   // Open the Menu overlay.
   await page.getByTestId('menu-toggle').click();
@@ -674,7 +674,7 @@ test('save trays: eleven fixed slots, save into one, load and delete it', async 
   // by no other spec, so the absolute tray counts below cannot race.
   await page.goto('/game.html?map=maps_miss202');
   await expect(page.locator('body[data-map-ready]')).toBeAttached({ timeout: 15_000 });
-  test.skip(!(await savesApiUp(page)), 'saves API not reachable (server offline)');
+  expect(await savesApiUp(page), 'the development launcher starts the saves API').toBe(true);
 
   await page.getByTestId('menu-toggle').click();
   await expect(page.getByTestId('save-panel')).toBeVisible();

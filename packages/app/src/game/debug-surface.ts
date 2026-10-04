@@ -16,6 +16,9 @@ export interface S2Debug {
   granite: number;
   spriteQuads: number;
   spriteDrawCalls: number;
+  /** Read-only outdoor state for gameplay checks. */
+  wildlife(): Array<{ species: number; node: number; dead: boolean }>;
+  outdoorWorkers(): Array<{ job: string; node: number; state: string; workProgress: number }>;
   // P2 fields.
   tick: number;
   counters: Record<string, number>;
@@ -142,6 +145,23 @@ export function installDebugSurface(deps: DebugSurfaceDeps): void {
     ships: 0,
     harbors: 0,
     audio: deps.audio.debug(),
+    wildlife: () =>
+      s.world.animals.items.flatMap((a) =>
+        a ? [{ species: a.species, node: a.node, dead: a.dead }] : [],
+      ),
+    outdoorWorkers: () =>
+      s.world.settlers.items.flatMap((w) =>
+        w
+          ? [
+              {
+                job: w.job,
+                node: w.node,
+                state: w.state,
+                workProgress: s.world.buildings.items[w.homeBuildingId]?.buildProgress ?? 0,
+              },
+            ]
+          : [],
+      ),
     hqNode: deps.hqNode(),
     nodeOf: (x, y) => s.geom.index(x, y),
     flagNodeOf: (node) => s.geom.neighbour(node, 'SE'),

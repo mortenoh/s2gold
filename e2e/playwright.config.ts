@@ -1,6 +1,10 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 
-const PORT = 5199;
+const API_DATA = mkdtempSync(join(tmpdir(), 's2gold-e2e-'));
+const PORT = Number(process.env.S2GOLD_E2E_PORT ?? 5299);
 const BASE_URL = `http://localhost:${PORT}`;
 
 export default defineConfig({
@@ -30,9 +34,18 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `pnpm --filter app dev --port ${PORT} --strictPort`,
+    command: `node ../scripts/dev.mjs --port ${PORT} --strictPort`,
+    env: {
+      S2GOLD_PORT: process.env.S2GOLD_E2E_API_PORT ?? '8299',
+      S2GOLD_DB_PATH: join(API_DATA, 'saves.db'),
+      S2GOLD_SAVES_DIR: join(API_DATA, 'legacy-saves'),
+      S2GOLD_SESSIONS_DIR: join(API_DATA, 'legacy-sessions'),
+    },
     url: BASE_URL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    reuseExistingServer: false,
+    // The launcher owns separate process groups for cargo/server and Vite.
+    // Give it SIGTERM so it can reap them before Playwright resorts to SIGKILL.
+    gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 },
+    timeout: 180_000,
   },
 });

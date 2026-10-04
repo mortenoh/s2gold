@@ -31,8 +31,8 @@ Then exactly 14 data blocks, each a 16-byte header + ``width * height`` bytes::
     magic u16 = 0x2710 ("10 27"), dummy u32, width u16, height u16,
     multiplier u16, length u32 (== width * height)
 
-The file ends with a single ``0xFF`` byte; some maps append an optional animal
-position list after it (captured here as ``trailing`` bytes, losslessly).
+The file ends with a single ``0xFF`` byte. Some maps place an optional animal
+position list before this terminator (captured as ``trailing`` bytes, losslessly).
 """
 
 from __future__ import annotations

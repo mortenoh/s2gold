@@ -30,7 +30,21 @@ import { seedRng, type RngState } from './rng';
 import { recalcTerritory } from './systems/territory';
 
 /** Format version for serialized worlds. */
-export const WORLD_VERSION = 7;
+export const WORLD_VERSION = 8;
+
+/** Map wildlife; species use WLD codes and reservations prevent double hunts. */
+export interface Animal {
+  id: number;
+  species: number;
+  node: number;
+  path: number[];
+  pathIndex: number;
+  edgeProgress: number;
+  ticksPerEdge: number;
+  timer: number;
+  hunterId: number;
+  dead: boolean;
+}
 
 /**
  * The four playable peoples of Settlers II. In the original these are purely
@@ -385,6 +399,7 @@ export interface World {
   wares: Store<Ware>;
   /** Ship entities (P7 seafaring). */
   ships: Store<Ship>;
+  animals: Store<Animal>;
   players: Player[];
   /** Forester-planted saplings maturing into trees (node + maturation tick). */
   saplings: Array<{ node: number; matureTick: number }>;
@@ -403,6 +418,7 @@ export interface World {
 
 /** The parsed converted-map JSON shape (subset the engine consumes). */
 export interface MapJson {
+  animals?: Array<{ species: number; x: number; y: number }>;
   title?: string;
   width: number;
   height: number;
@@ -510,6 +526,7 @@ export function createWorld(map: MapJson, options: CreateWorldOptions): World {
     settlers: makeStore<Settler>(),
     wares: makeStore<Ware>(),
     ships: makeStore<Ship>(),
+    animals: makeStore<Animal>(),
     players: [],
     saplings: [],
     cropFields: [],
@@ -518,6 +535,42 @@ export function createWorld(map: MapJson, options: CreateWorldOptions): World {
     commands: [],
     seqCounter: 0,
   };
+
+  // The footer is authoritative when present (it can contain several animals
+  // on one node). Older converted maps retain the single-animal layer fallback.
+  const animals =
+    map.animals ??
+    layer('animals').flatMap((species, node) =>
+      species > 0 && species <= 9
+        ? [{ species, x: node % width, y: Math.floor(node / width) }]
+        : [],
+    );
+  for (const a of animals) {
+    if (
+      !Number.isInteger(a.species) ||
+      a.species < 1 ||
+      a.species > 9 ||
+      !Number.isInteger(a.x) ||
+      !Number.isInteger(a.y) ||
+      a.x < 0 ||
+      a.x >= width ||
+      a.y < 0 ||
+      a.y >= height
+    )
+      continue;
+    storeAlloc(world.animals, (id) => ({
+      id,
+      species: a.species,
+      node: geom.index(a.x, a.y),
+      path: [],
+      pathIndex: 0,
+      edgeProgress: 0,
+      ticksPerEdge: 20,
+      timer: id % 40,
+      hunterId: -1,
+      dead: false,
+    }));
+  }
 
   // Determine how many players to seed.
   const validHqs: number[] = [];

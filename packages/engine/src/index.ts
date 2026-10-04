@@ -16,6 +16,7 @@ import { runCheats } from './systems/cheats';
 import { runConstruction } from './systems/construction';
 import { runGeologists } from './systems/geologist';
 import { runPopulation } from './systems/recruit';
+import { runWildlife } from './systems/wildlife';
 import { runProduction } from './systems/production';
 import { runDispatch } from './systems/dispatch';
 import { runMilitary, garrisonCount } from './systems/military';
@@ -58,6 +59,7 @@ export {
   zeroWares,
 } from './world';
 export type {
+  Animal,
   World,
   Flag,
   Road,
@@ -153,6 +155,7 @@ export function tickWorld(world: World, rules: TerrainRules = GREENLAND_RULES): 
   runCheats(world, geom, events); // 1a. free-play cheats (no-op unless enabled)
   runPopulation(world); // 1b. HQ population growth (tops up the Helper pool)
   runConstruction(world, geom, events); // 2. construction (+ builder steps)
+  runWildlife(world, geom, rules);
   runProduction(world, geom, rules, events); // 3. production (+ worker steps)
   runMilitary(world, geom, rules, events); // 4. military (occupy/fight/promote/catapult)
   runDispatch(world, geom, events); // 5a. ware routing + delivery

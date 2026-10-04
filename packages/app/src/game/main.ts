@@ -409,6 +409,13 @@ async function boot(): Promise<void> {
     el('div', { class: 'minimap-box' }, minimapCanvas),
   );
 
+  // The bar wraps on smaller windows; keep the minimap above its actual height.
+  const syncHudHeight = (): void =>
+    root.style.setProperty('--hud-height', `${hudTop.offsetHeight}px`);
+  const hudResize = new ResizeObserver(syncHudHeight);
+  hudResize.observe(hudTop);
+  syncHudHeight();
+
   let renderer: TerrainRenderer;
   let sprites: SpriteRenderer;
   let roads: RoadRenderer;

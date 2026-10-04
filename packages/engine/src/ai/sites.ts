@@ -35,6 +35,7 @@ export type SiteBias =
   | { kind: 'nearHq' }
   | { kind: 'nearTrees' }
   | { kind: 'nearGranite' }
+  | { kind: 'nearAnimals' }
   | { kind: 'mine'; resource: number }
   | { kind: 'frontier'; enemyNode: number }
   // Coast-directed expansion (seafaring.ts): grow territory toward `objective`, a
@@ -42,6 +43,36 @@ export type SiteBias =
   // 'frontier' but aimed at the shore instead of an enemy, so each placed military
   // building steps the frontier toward the sea. Never a planner (enemy) goal.
   | { kind: 'coast'; objective: number };
+
+/** Terrain-only distance to a rival. The torus shortcut may cross an ocean;
+ * a frontier must instead advance along a walkable land route. Buildings are
+ * ignored here because this is a strategic direction, not a committed walk. */
+const approachCache = new WeakMap<
+  World,
+  { target: number; rules: TerrainRules; distances: Int32Array }
+>();
+export function approachDistances(
+  world: World,
+  geom: Geometry,
+  rules: TerrainRules,
+  target: number,
+): Int32Array {
+  const cached = approachCache.get(world);
+  if (cached?.target === target && cached.rules === rules) return cached.distances;
+  const distances = new Int32Array(geom.size).fill(-1);
+  const queue = [target];
+  distances[target] = 0;
+  for (let i = 0; i < queue.length; i++) {
+    const node = queue[i];
+    for (const n of geom.neighbours(node)) {
+      if (distances[n] >= 0 || !isWalkableNode(world, geom, n, rules)) continue;
+      distances[n] = distances[node] + 1;
+      queue.push(n);
+    }
+  }
+  approachCache.set(world, { target, rules, distances });
+  return distances;
+}
 
 /** The HQ node of a player, or -1 when it has none. */
 export function hqNodeOf(world: World, player: number): number {
@@ -244,6 +275,12 @@ export function pickBuildSite(
     );
     if (trees.length === 0) return -1; // nowhere useful to fell
     nearAnchor = nearMask(geom, trees, RADIUS.woodcutter - 1);
+  } else if (bias.kind === 'nearAnimals') {
+    const animals = storeLive(world.animals)
+      .filter((a) => !a.dead && a.species !== 5 && a.species !== 8 && a.species !== 9)
+      .map((a) => a.node);
+    if (!animals.length) return -1;
+    nearAnchor = nearMask(geom, animals, buildingDef('hunter')!.radius!);
   } else if (bias.kind === 'nearGranite') {
     const granites = objectNodesNear(geom, refNode, scanRadius + RADIUS.quarry, (n) =>
       isGraniteType(world.objectType[n]),
@@ -252,6 +289,16 @@ export function pickBuildSite(
     nearAnchor = nearMask(geom, granites, RADIUS.quarry - 1);
   }
 
+  const approach =
+    bias.kind === 'frontier' ? approachDistances(world, geom, rules, bias.enemyNode) : null;
+  let nearestMilitary = Infinity;
+  if (approach && buildingDef(type)?.kind === 'military') {
+    for (const b of storeLive(world.buildings)) {
+      const kind = buildingDef(b.type)?.kind;
+      if (b.player === player && (kind === 'military' || kind === 'hq') && approach[b.node] >= 0)
+        nearestMilitary = Math.min(nearestMilitary, approach[b.node]);
+    }
+  }
   let bestNode = -1;
   let bestScore = Infinity;
   let bestSpacing = -Infinity;
@@ -273,6 +320,7 @@ export function pickBuildSite(
         if (nearAnchor?.[node] !== 1) return;
         score = geom.distance(hq, node);
         break;
+      case 'nearAnimals':
       case 'nearGranite':
         if (nearAnchor?.[node] !== 1) return;
         score = geom.distance(hq, node);
@@ -292,7 +340,8 @@ export function pickBuildSite(
         break;
       }
       case 'frontier':
-        score = geom.distance(bias.enemyNode, node);
+        score = approach![node];
+        if (score < 0 || score >= nearestMilitary - 1) return;
         break;
       case 'coast':
         // Prefer the buildable frontier node nearest the objective shore, so the
@@ -351,13 +400,16 @@ export function ownedNodeNearest(
   geom: Geometry,
   player: number,
   target: number,
+  rules?: TerrainRules,
 ): number {
+  const approach = rules ? approachDistances(world, geom, rules, target) : null;
   let best = -1;
   let bestDist = Infinity;
   for (let n = 0; n < geom.size; n++) {
     if (ownerPlayer(world.owner[n]) !== player) continue;
     if (isWaterNode(world, n)) continue;
-    const d = geom.distance(target, n);
+    const d = approach ? approach[n] : geom.distance(target, n);
+    if (d < 0) continue;
     if (d < bestDist || (d === bestDist && (best < 0 || n < best))) {
       best = n;
       bestDist = d;

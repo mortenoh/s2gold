@@ -56,7 +56,11 @@ export class PriorityPanel {
     this.close();
     const panel = el('div', {
       class: `goods-panel priority-panel priority-${this.mode}`,
-      attrs: { 'data-testid': `${this.mode}-panel` },
+      attrs: {
+        'data-testid': `${this.mode}-panel`,
+        role: 'dialog',
+        'aria-label': this.mode === 'transport' ? 'Transport priorities' : 'Tool production',
+      },
     });
     const closeButton = el('button', {
       text: '✕',
@@ -100,24 +104,32 @@ export class PriorityPanel {
     const key = JSON.stringify(view);
     if (key === this.lastKey && body.childElementCount > 0) return;
     this.lastKey = key;
+    const scrollTop = body.scrollTop;
+    const focused = body.contains(document.activeElement)
+      ? document.activeElement?.getAttribute('data-testid')
+      : null;
     body.replaceChildren();
     if (this.mode === 'transport') {
       view.transport.forEach((ware, i) => {
         body.append(
-          this.row(ware, [
-            this.control(
-              '▲',
-              i === 0,
-              () => this.moveTransport(view.transport, i, -1),
-              `transport-up-${ware}`,
-            ),
-            this.control(
-              '▼',
-              i === view.transport.length - 1,
-              () => this.moveTransport(view.transport, i, 1),
-              `transport-down-${ware}`,
-            ),
-          ]),
+          this.row(
+            ware,
+            [
+              this.control(
+                '▲',
+                i === 0,
+                () => this.moveTransport(view.transport, i, -1),
+                `transport-up-${ware}`,
+              ),
+              this.control(
+                '▼',
+                i === view.transport.length - 1,
+                () => this.moveTransport(view.transport, i, 1),
+                `transport-down-${ware}`,
+              ),
+            ],
+            i + 1,
+          ),
         );
       });
     } else {
@@ -146,13 +158,33 @@ export class PriorityPanel {
         );
       }
     }
+    body.scrollTop = scrollTop;
+    if (focused)
+      body.querySelector<HTMLElement>(`[data-testid="${focused}"]`)?.focus({ preventScroll: true });
   }
 
-  private row(ware: string, controls: HTMLElement[]): HTMLElement {
+  private row(ware: string, controls: HTMLElement[], rank?: number): HTMLElement {
     const row = el('div', { class: 'priority-row', attrs: { 'data-ware': ware } });
+    if (rank !== undefined) row.append(el('span', { class: 'priority-rank', text: String(rank) }));
+    const slot = el('span', { class: 'priority-icon', attrs: { 'aria-hidden': 'true' } });
     const icon = el('span', { class: 'production-ware-icon' });
-    if (this.deps.icons()?.apply(icon, ware as never)) row.append(icon);
+    if (this.deps.icons()?.apply(icon, ware as never)) slot.append(icon);
+    row.append(slot);
     row.append(el('span', { class: 'priority-label', text: WARE_LABEL[ware] ?? ware }));
+    for (const control of controls) {
+      if (control.tagName !== 'BUTTON') continue;
+      const action =
+        control.textContent === '▲'
+          ? 'Move up'
+          : control.textContent === '▼'
+            ? 'Move down'
+            : control.textContent === '+'
+              ? 'Increase'
+              : 'Decrease';
+      const label = `${action}: ${WARE_LABEL[ware] ?? ware}`;
+      control.setAttribute('aria-label', label);
+      control.title = label;
+    }
     row.append(el('span', { class: 'priority-controls' }, ...controls));
     return row;
   }

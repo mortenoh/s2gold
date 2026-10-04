@@ -23,6 +23,10 @@ export function serializeWorld(world: World): string {
  * loads through the same audited path.
  */
 const MIGRATIONS: Readonly<Record<number, (w: World) => void>> = {
+  // v7 -> v8: old saves have no wildlife state; do not repopulate hunted land.
+  7: (w) => {
+    w.animals ??= { items: [], free: [] };
+  },
   // v1 -> v2: everything that landed on top of frozen-v1 saves without a bump:
   // seafaring stores, geologist signs, donkey-road upgrade state, and the
   // military fields (garrison/occupied/coins/promotion), which the old ad-hoc

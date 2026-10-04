@@ -64,7 +64,7 @@ const PLAN: readonly Goal[] = [
   { type: BUILDING.forester, count: 2, bias: 'nearTrees' },
   { type: BUILDING.guardhouse, count: 3, bias: 'frontier' },
   { type: BUILDING.farm, count: 1, bias: 'nearHq' },
-  { type: BUILDING.hunter, count: 1, bias: 'nearHq' },
+  { type: BUILDING.hunter, count: 1, bias: 'nearAnimals' },
   { type: BUILDING.guardhouse, count: 4, bias: 'frontier' },
   { type: BUILDING.mill, count: 1, bias: 'nearHq' },
   { type: BUILDING.well, count: 1, bias: 'nearHq' },
@@ -160,6 +160,8 @@ function resolveBias(world: World, geom: Geometry, player: number, goal: Goal): 
       return { kind: 'nearHq' };
     case 'nearTrees':
       return { kind: 'nearTrees' };
+    case 'nearAnimals':
+      return { kind: 'nearAnimals' };
     case 'nearGranite':
       return { kind: 'nearGranite' };
     case 'mine':
@@ -190,10 +192,23 @@ export function planNextBuilding(
   const hq = hqNodeOf(world, player);
   if (hq < 0) return null;
 
+  const available = warehouseTotals(world, player);
+  // Reserve the still-undelivered cost of current sites before committing more.
+  for (const b of storeLive(world.buildings)) {
+    if (b.player !== player || b.state !== 'site') continue;
+    available.plank -= Math.max(0, b.needBoards - b.deliveredBoards);
+    available.stone -= Math.max(0, b.needStones - b.deliveredStones);
+  }
+  const affordable = (type: BuildingType): boolean => {
+    const cost = buildingDef(type)!.cost;
+    return available.plank >= cost.boards && available.stone >= cost.stones;
+  };
+
   for (let gi = 0; gi < PLAN.length; gi++) {
     const goal = PLAN[gi];
     if (countType(world, player, goal.type) >= goal.count) continue;
     const isMilitary = buildingDef(goal.type)?.kind === 'military';
+    if (!affordable(goal.type)) continue;
     if (isMilitary && militaryCount(world, player) >= state.maxMilitary) continue;
     if (isMilitary && !canGarrison(world, player, goal.type)) continue;
     // A goal that found no site recently is skipped for a while (deterministic).
@@ -208,7 +223,7 @@ export function planNextBuilding(
     // itself left every guardhouse goal unplaceable whenever rivals started more
     // than a scan radius apart, so the AI never expanded and never fought.
     const isFrontier = bias.kind === 'frontier';
-    const refNode = isFrontier ? ownedNodeNearest(world, geom, player, bias.enemyNode) : hq;
+    const refNode = isFrontier ? ownedNodeNearest(world, geom, player, bias.enemyNode, rules) : hq;
     if (refNode < 0) continue;
     // Stone and ore sit where the map put them, not near the HQ: quarries and
     // mines search the whole grown territory, other workshops stay compact.
@@ -241,9 +256,9 @@ export function planNextBuilding(
       bias: 'frontier',
     });
     if (bias && bias.kind === 'frontier') {
-      const type = expansionType(owned, warehouseTotals(world, player).stone ?? 0);
-      if (!canGarrison(world, player, type)) return null;
-      const center = ownedNodeNearest(world, geom, player, bias.enemyNode);
+      const type = expansionType(owned, available.stone);
+      if (!affordable(type) || !canGarrison(world, player, type)) return null;
+      const center = ownedNodeNearest(world, geom, player, bias.enemyNode, rules);
       if (center < 0) return null;
       const node = pickBuildSite(
         world,

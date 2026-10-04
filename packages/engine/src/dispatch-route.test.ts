@@ -6,6 +6,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   applyCommand,
@@ -19,7 +20,9 @@ import { canPlaceBuilding } from './commands';
 import { findWalkPath } from './pathfinding';
 import { GREENLAND_RULES } from './terrain';
 
-const MAP = '/Users/morteoh/dev/local/s2gold/packages/app/public/assets/maps/maps_miss203.json';
+const MAP = fileURLToPath(
+  new URL('../../app/public/assets/maps/maps_miss203.json', import.meta.url),
+);
 
 describe.skipIf(!existsSync(MAP))('warehouse supply requires a route', () => {
   it('holds wares until the site flag is connected, then builds', () => {

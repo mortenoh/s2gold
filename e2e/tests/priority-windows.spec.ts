@@ -58,3 +58,49 @@ test.describe('Transport and Tools windows', () => {
     await page.getByTestId('tools-close').click();
   });
 });
+
+for (const viewport of [
+  { width: 1280, height: 720 },
+  { width: 640, height: 480 },
+]) {
+  test(`priority rows do not overlap at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    test.skip(!(await assetsPresent(page)), 'converted assets not installed');
+    await page.setViewportSize(viewport);
+    await page.goto('/play/maps_miss200');
+    await expect(page.locator('body[data-map-ready]')).toBeAttached();
+    for (const mode of ['transport', 'tools']) {
+      await page.getByTestId(`${mode}-toggle`).click();
+      const panel = page.getByTestId(`${mode}-panel`);
+      await expect(panel).toBeVisible();
+      await panel.screenshot({ path: `test-results/shots/${mode}-${viewport.width}.png` });
+      const layout = await panel.evaluate((p) => {
+        const rows = [...p.querySelectorAll<HTMLElement>('.priority-row')];
+        const bounds = p.getBoundingClientRect();
+        return {
+          inside:
+            bounds.left >= 0 &&
+            bounds.right <= innerWidth &&
+            bounds.top >= 0 &&
+            bounds.bottom <= innerHeight,
+          rowsFit: rows.every((row, i) => {
+            const r = row.getBoundingClientRect();
+            const next = rows[i + 1]?.getBoundingClientRect();
+            return (
+              (!next || r.bottom <= next.top) &&
+              [...row.querySelectorAll('button, .priority-label')].every((child) => {
+                const c = child.getBoundingClientRect();
+                return c.top >= r.top && c.bottom <= r.bottom && c.right <= r.right;
+              })
+            );
+          }),
+        };
+      });
+      expect(layout.inside).toBe(true);
+      expect(layout.rowsFit, 'each label and button must stay inside its own row').toBe(true);
+      const last = panel.locator('.priority-row').last();
+      await last.scrollIntoViewIfNeeded();
+      await expect(last).toBeInViewport();
+      await page.getByTestId(`${mode}-close`).click();
+    }
+  });
+}

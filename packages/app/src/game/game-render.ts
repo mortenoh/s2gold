@@ -168,6 +168,65 @@ export function workSprite(job: JobType, frame: number): number | null {
   return a.start + (((frame % a.frames) + a.frames) % a.frames);
 }
 
+/** Wildlife blocks measured from the converted MAPBOBS atlas filmstrips. */
+const ANIMAL_SPRITES: Readonly<Record<number, { start: number; frames: number; dead?: number }>> = {
+  1: { start: 1700, frames: 6, dead: 1736 },
+  2: { start: 1800, frames: 6, dead: 1836 },
+  3: { start: 1850, frames: 8, dead: 1898 },
+  4: { start: 1910, frames: 8, dead: 1958 },
+  5: { start: 1970, frames: 1 },
+  6: { start: 2100, frames: 10, dead: 2160 },
+  7: { start: 1910, frames: 8, dead: 1958 },
+  8: { start: 1970, frames: 1 },
+  9: { start: 2000, frames: 8 },
+};
+export function animalSprite(
+  species: number,
+  dir: number,
+  frame: number,
+  dead = false,
+): number | null {
+  const a = ANIMAL_SPRITES[species];
+  if (!a) return null;
+  if (dead) return a.dead ?? null;
+  return a.start + ((6 - dir) % 6) * a.frames + (((frame % a.frames) + a.frames) % a.frames);
+}
+
+/** Move between three scaffold work spots, then hammer or kneel facing the wall.
+ * Construction progress drives the pose, so pause and material starvation freeze it. */
+export function builderPose(b: Building): {
+  x: number;
+  y: number;
+  sprite: number | null;
+  dir: number;
+  step: number;
+} {
+  if (b.deliveredBoards < b.needBoards || b.deliveredStones < b.needStones)
+    return { x: 16, y: 8, sprite: null, dir: 3, step: 0 };
+  const clock = Math.floor(b.buildProgress / 2);
+  const section = Math.floor(clock / 36) % 3;
+  const phase = clock % 36;
+  const spots = [
+    { x: -16, y: 8 },
+    { x: 0, y: 12 },
+    { x: 16, y: 8 },
+  ];
+  const here = spots[section];
+  const next = spots[(section + 1) % 3];
+  if (phase >= 28) {
+    const t = (phase - 28) / 8;
+    return {
+      x: here.x + (next.x - here.x) * t,
+      y: here.y + (next.y - here.y) * t,
+      sprite: null,
+      dir: next.x > here.x ? 0 : 3,
+      step: phase % 8,
+    };
+  }
+  const base = section === 1 ? 287 : phase >= 12 && phase < 20 ? 283 : section === 0 ? 353 : 279;
+  return { ...here, sprite: base + (phase % 4), dir: section === 0 ? 0 : 3, step: 0 };
+}
+
 /**
  * Ship sprites (boot_z / converted BOOT_Z.LST, clean-room FACTS verified by
  * rendering the archive's atlas): item indices 0..23 are twelve ship bodies at
@@ -579,6 +638,20 @@ export function buildDynamics(
     });
   }
 
+  for (const animal of world.animals?.items ?? []) {
+    if (!animal || hidden(animal.node)) continue;
+    if (animal.dead && world.settlers.items[animal.hunterId]?.state === 'home') continue;
+    const pos = moverAnchor(world, geom, animal, anim.alpha);
+    const sprite = animalSprite(
+      animal.species,
+      pos.dir,
+      pos.moving ? anim.walkFrame : 0,
+      animal.dead,
+    );
+    if (sprite === null) continue;
+    out.push({ worldX: pos.x, worldY: pos.y, archive: objectArchive, spriteIndex: sprite });
+  }
+
   // Flags + wares waiting on them.
   for (const f of world.flags.items) {
     if (!f) continue;
@@ -646,6 +719,51 @@ export function buildDynamics(
         worldY: pos.y,
         archive: objectArchive,
         spriteIndex: donkeySprite(dir, animating ? anim.walkFrame + s.id : 0),
+      });
+      continue;
+    }
+
+    if (s.job === JOB.builder && s.state === 'working') {
+      const site = world.buildings.items[s.homeBuildingId];
+      if (site?.state === 'site') {
+        const pose = builderPose(site);
+        if (workAvailable && pose.sprite !== null) {
+          out.push({
+            worldX: pos.x + pose.x,
+            worldY: pos.y + pose.y,
+            archive: WORK_ARCHIVE,
+            spriteIndex: pose.sprite,
+            player: s.player,
+          });
+          continue;
+        } else if (jobs) {
+          pushJobFigure(
+            out,
+            jobs,
+            JOB_BOB_ID.builder!,
+            pose.dir,
+            pose.step,
+            pos.x + pose.x,
+            pos.y + pose.y,
+            s.player,
+          );
+          continue;
+        }
+      }
+    }
+    if (s.job === JOB.hunter && s.state === 'working' && workAvailable) {
+      const duration = buildingDef('hunter')!.workTicks;
+      const elapsed = Math.max(0, duration - s.timer);
+      const shooting = elapsed < 32;
+      const sprite = shooting
+        ? 219 + Math.min(12, Math.floor((elapsed * 13) / 32))
+        : 236 + (Math.floor(elapsed / 4) % 8);
+      out.push({
+        worldX: pos.x - (shooting ? 18 : 0),
+        worldY: pos.y + 1,
+        archive: WORK_ARCHIVE,
+        spriteIndex: sprite,
+        player: s.player,
       });
       continue;
     }

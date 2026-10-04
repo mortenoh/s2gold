@@ -49,7 +49,7 @@ function cleanUrls(): Plugin {
  */
 const apiProxy = {
   '/api': {
-    target: 'http://127.0.0.1:8000',
+    target: process.env.S2GOLD_API_URL ?? 'http://127.0.0.1:8000',
     changeOrigin: true,
   },
 } as const;

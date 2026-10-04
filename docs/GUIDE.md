@@ -272,7 +272,7 @@ Food feeds miners (and drink feeds a few chains). The grain chain is the backbon
 | **Mill**           | 2 boards, 2 stone | Flour | Grain                  |
 | **Bakery**         | 2 boards, 2 stone | Bread | Flour + Water          |
 | **Fishery**        | 2 boards          | Fish  | Fish in nearby water   |
-| **Hunter**         | 2 boards          | Meat  | —                      |
+| **Hunter**         | 2 boards          | Meat  | Nearby wildlife        |
 | **Pig farm**       | 3 boards, 3 stone | Ham   | Grain + Water          |
 | **Slaughterhouse** | 2 boards, 2 stone | Meat  | Ham                    |
 | **Brewery**        | 2 boards, 2 stone | Beer  | Grain + Water          |
@@ -280,6 +280,11 @@ Food feeds miners (and drink feeds a few chains). The grain chain is the backbon
 The three foods that feed mines are **fish, meat and bread** — a mine eats any one
 of them per work cycle. So a mining economy needs a farm → mill → bakery chain (or
 fisheries/hunters) running _before_ the mines, or they starve.
+
+Hunters walk out to reachable wildlife, hunt it, and bring meat back to their hut.
+Animals are finite: when nearby wildlife is gone (or the map has none), the hunter
+waits. Ducks and pack donkeys are not prey. Use farming or fishing for additional
+food; placing more hunters does not create animals.
 
 ### Iron, tools and weapons
 

@@ -454,14 +454,15 @@ export const BUILDING_DEFS: Readonly<Record<string, BuildingDef>> = {
     id: 22,
     cost: { boards: 2, stones: 0 },
     size: 'hut',
-    kind: 'generator',
+    kind: 'harvester',
     worker: JOB.hunter,
     inputs: [],
     inputCap: CAP,
     useOneEach: true,
     outputs: [WARE.meat],
     workTicks: 300,
-  }, // §3 Hunter work=0/wait1=300 (no game-animal objects modelled; timed producer — SIMPLIFIED)
+    radius: 19,
+  }, // Wildlife is finite: hunters must reach and bring home an animal.
 
   // Farm: crop-field sow/harvest lifecycle on map nodes.
   farm: {

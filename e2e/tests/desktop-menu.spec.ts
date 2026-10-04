@@ -23,10 +23,10 @@ test.describe('desktop Game menu actions', () => {
 
   test('quicksave and quickload are driven by menu-action events', async ({ page }) => {
     const res = await page.request.get('/api/saves');
-    test.skip(
-      !(res.ok() && (res.headers()['content-type'] ?? '').includes('json')),
-      'API server not running',
-    );
+    expect(
+      res.ok() && (res.headers()['content-type'] ?? '').includes('json'),
+      'the development launcher starts the saves API',
+    ).toBe(true);
     await page.goto('/play/maps_miss201');
     await expect(page.getByTestId('game-canvas')).toBeVisible({ timeout: 15_000 });
     await page.waitForFunction(

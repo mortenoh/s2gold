@@ -25,6 +25,7 @@ import { runConstruction } from '../src/systems/construction';
 import { runDispatch } from '../src/systems/dispatch';
 import { runGeologists } from '../src/systems/geologist';
 import { runMilitary } from '../src/systems/military';
+import { runWildlife } from '../src/systems/wildlife';
 import { runProduction } from '../src/systems/production';
 import { runPopulation } from '../src/systems/recruit';
 import { runSeafaring } from '../src/systems/seafaring';
@@ -63,6 +64,7 @@ for (let i = 0; i < ticks; i++) {
   timed('cheats', () => runCheats(world));
   timed('population', () => runPopulation(world));
   timed('construction', () => runConstruction(world, geom, events));
+  timed('wildlife', () => runWildlife(world, geom, rules));
   timed('production', () => runProduction(world, geom, rules, events));
   timed('military', () => runMilitary(world, geom, rules, events));
   timed('dispatch', () => runDispatch(world, geom, events));

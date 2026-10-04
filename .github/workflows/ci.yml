@@ -134,6 +134,19 @@ jobs:
       - name: Install Playwright browser
         run: pnpm --filter e2e exec playwright install --with-deps chromium
 
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      # Compile before Playwright starts its web-server readiness timeout.
+      - name: Build saves API
+        run: cargo build -p s2gold-server
+
+      - name: Test development launcher lifecycle
+        run: node --test scripts/dev.test.mjs
+
       # Asset-dependent tests skip themselves when converted GOG assets are
       # absent (they are never committed); the rest run against the dev server.
       - name: Run e2e tests

@@ -1039,8 +1039,8 @@ body {
 .minimap-box {
   position: absolute;
   right: 12px;
-  /* Above the HUD bar, which spans the bottom edge on one row. */
-  bottom: 60px;
+  /* Stay above the entire HUD, including its wrapped rows. */
+  bottom: calc(var(--hud-height, 40px) + 20px);
   padding: 4px;
   background: rgba(20, 20, 24, 0.85);
   border: 1px solid #3a3a44;
@@ -1227,32 +1227,78 @@ body {
 
 /* Transport / Tools windows. */
 .priority-panel {
-  min-width: 260px;
+  background: #18181d;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 350px;
+  max-height: min(85vh, calc(100vh - var(--hud-height, 40px) - 28px));
+  max-width: calc(100vw - 24px);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.priority-panel .goods-panel-head,
+.priority-hint {
+  flex-shrink: 0;
 }
 
 .priority-hint {
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   color: #aaa;
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .priority-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  min-height: 0;
   max-height: 60vh;
   overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
 }
 
 .priority-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  padding: 2px 0;
+  min-height: 34px;
+  padding: 4px 2px;
+  border-bottom: 1px solid #ffffff0c;
+}
+
+.priority-transport .priority-row {
+  grid-template-columns: 22px 28px minmax(0, 1fr) auto;
+}
+
+.priority-row:hover {
+  background: #ffffff06;
+}
+
+.priority-rank {
+  text-align: right;
+  color: #898997;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.priority-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+}
+
+.priority-icon .production-ware-icon {
+  display: block;
+  flex-shrink: 0;
 }
 
 .priority-label {
-  flex: 1;
+  min-width: 0;
+  line-height: 1.35;
 }
 
 .priority-controls {
@@ -1262,13 +1308,34 @@ body {
 }
 
 .priority-controls button {
-  min-width: 24px;
-  padding: 1px 6px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #4a4a55;
+  border-radius: 4px;
+  background: #2a2a32;
+  color: #eee;
   font-size: 12px;
+  cursor: pointer;
+}
+
+.priority-controls button:hover:not(:disabled) {
+  background: #3f6fb0;
+  border-color: #6f9fe0;
+}
+
+.priority-controls button:focus-visible {
+  outline: 2px solid #9cf;
+  outline-offset: 1px;
+}
+
+.priority-controls button:disabled {
+  opacity: 0.3;
+  cursor: default;
 }
 
 .priority-weight {
-  min-width: 18px;
+  min-width: 22px;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }

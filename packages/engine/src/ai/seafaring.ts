@@ -327,7 +327,8 @@ function planCoastExpansion(
 ): CommandInput | null {
   const player = state.playerId;
   // Bounded chain: stop growing military toward an unreachable shore.
-  if (militaryCount(world, player) >= COAST_EXPANSION_MAX_MILITARY) return null;
+  if (militaryCount(world, player) >= Math.min(COAST_EXPANSION_MAX_MILITARY, state.maxMilitary))
+    return null;
   const objective = pickCoastObjective(world, geom, rules, sea, hq);
   if (objective < 0) return null;
   // Centre the (bounded) frontier scan on our own land nearest the shore, so the

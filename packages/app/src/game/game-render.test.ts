@@ -10,6 +10,8 @@ import {
 } from '@s2gold/engine';
 import { describe, expect, it } from 'vitest';
 import {
+  animalSprite,
+  builderPose,
   borderStoneSprites,
   buildDynamics,
   BUILDING_ARCHIVE,
@@ -470,5 +472,61 @@ describe('workSprite', () => {
     if (!wc) throw new Error('woodcutter work anim expected');
     expect(workSprite(JOB.woodcutter, wc.frames)).toBe(workSprite(JOB.woodcutter, 0));
     expect(workSprite(JOB.woodcutter, wc.frames - 1)).toBe(wc.start + wc.frames - 1);
+  });
+});
+
+describe('builder and wildlife rendering', () => {
+  it('uses hammering, kneeling and travel poses around the scaffold; waits for materials', () => {
+    const site = {
+      buildProgress: 0,
+      deliveredBoards: 2,
+      needBoards: 2,
+      deliveredStones: 0,
+      needStones: 0,
+    } as Building;
+    const poses = Array.from({ length: 216 }, (_, buildProgress) =>
+      builderPose({ ...site, buildProgress }),
+    );
+    expect(poses.some((p) => p.sprite === 353)).toBe(true);
+    expect(poses.some((p) => p.sprite === 279)).toBe(true);
+    expect(poses.some((p) => p.sprite === 283)).toBe(true);
+    expect(poses.some((p) => p.sprite === null && p.step > 0)).toBe(true);
+    expect(new Set(poses.map((p) => p.x)).size).toBeGreaterThan(3);
+    expect(builderPose({ ...site, deliveredBoards: 0 }).sprite).toBeNull();
+  });
+
+  it('draws animals from map art without player tint and obeys fog', () => {
+    const world = twoPlayerWorld();
+    world.animals = {
+      items: [
+        {
+          id: 0,
+          species: 3,
+          node: 0,
+          path: [],
+          pathIndex: 0,
+          edgeProgress: 0,
+          ticksPerEdge: 20,
+          timer: 0,
+          hunterId: -1,
+          dead: false,
+        },
+      ],
+      free: [],
+    };
+    const atlases = {
+      carrier: {} as BobAtlas,
+      jobs: null,
+      nationArchiveFor: () => 'rom_z',
+      objectArchive: 'mapbobs0',
+      workAvailable: true,
+    };
+    const anim = { waveFrame: 0, walkFrame: 0, alpha: 0 };
+    const sprites = buildDynamics(world, new Geometry(4, 1), atlases, anim);
+    const stag = sprites.find((s) => s.archive === 'mapbobs0');
+    expect(stag?.spriteIndex).toBe(animalSprite(3, 1, 0));
+    expect(stag?.player).toBeUndefined();
+    const hidden = buildDynamics(world, new Geometry(4, 1), atlases, anim, new Uint8Array(4));
+    expect(hidden.some((s) => s.archive === 'mapbobs0')).toBe(false);
   });
 });

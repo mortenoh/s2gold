@@ -11,6 +11,36 @@ the reference-study gap list, and the 2026-07-11/12 full code review
 (findings below marked "review" were confirmed against the code; the
 correctness findings from that review are already fixed).
 
+## Runthrough fixes (2026-09-13)
+
+- Hunters now reserve and hunt finite map wildlife outdoors, then bring meat
+  home. Animals roam deterministically, render from the original MAPBOBS sprites,
+  and survive save/load with their reservation and movement state (WORLD_VERSION
+  8). Map conversion preserves five-byte animal footer records, including multiple
+  animals on one node; out-of-bounds records in cropped SASIA/GREEN maps are ignored.
+  Ducks and pack donkeys are not hunted. Maps without wildlife leave hunters idle.
+- Builders now walk between scaffold work spots and play the original standing,
+  kneeling and hammering frames (279..290, 353..356). Construction progress drives
+  the pose, so paused games and sites waiting for materials do not keep hammering.
+- Chapter II's AI stall was reproduced for 200,000 ticks. Geometric torus distance
+  directed expansion across water; the planner now follows walkable land distance
+  and rejects military sites that do not advance the frontier. It reserves current
+  construction costs before ordering more, and coastal expansion respects the
+  configured military cap. The final 60,000-tick duel produced 64 attacks on the
+  passive human (who held); the real-map regression checks an attack within 30,000
+  ticks. Hunter placement now requires nearby wildlife.
+- `make dev` / `pnpm dev` start Vite and the Rust save API together, handle startup
+  failures and stop both process trees on exit. Browser tests own an isolated API
+  database and dedicated ports; save tests fail if that API is unavailable.
+- The warehouse-route regression no longer skips because of an obsolete absolute
+  checkout path. `scripts/verify-maps.ts` exercises every installed map and checks
+  identical replay after serialization.
+
+Validation: 48 browser tests, 301 TypeScript tests, 78 Python tests and 15 server
+API tests passed. Launcher lifecycle and browser teardown checks passed; all 49
+maps in the converted index passed 1,200 ticks plus save/replay comparison. The
+frontend production build, TypeScript checks, ESLint, Ruff and mypy passed.
+
 ## A. Performance (landed 2026-07-12; AI round 2026-09-07)
 
 Landed 2026-09-07 (big-map AI throughput): a per-system soak
@@ -119,8 +149,7 @@ The Snake 27 / 0. Duels: on The Snake the AI attacked a six-building human 65
 times (and lost every fight, the human held); on chapter II's map the AI
 never reached the passive human in 200k ticks — its nearest garrison sits 25
 nodes from the human's nearest building, beyond the 21-node attack reach, and
-the map's stone runs out before it can push closer. That map remains the
-open case.
+the map's stone runs out before it can push closer. That open case is resolved by the land-route fix above.
 
 Landed 2026-09-07 (cheats, free play only): Instant build joins Unlimited
 resources in the Settings panel's Cheats row (`Player.cheatInstantBuild`,
@@ -220,12 +249,8 @@ own `build` layer across all 50 shipped maps, 940032 nodes):
   now play their real CBOB action loops in `WORK_ANIM` (game-render.ts) -
   the geologist landed 2026-07-14 (bald grey head hammering the rock,
   ore chips flying, cbob_rom_bobs 314..329, cross-checked against RttR's
-  nofGeologist "rom_bobs" offsets). Remaining gap: the builder, whose
-  rom_bobs frames are a multi-posture around-the-scaffold sequence
-  (279..290 / 353..356) with no single in-place loop that fits the
-  simplified single-node construction model, stays on the walk-cycle
-  fallback. The hunter is an in-building generator (SIMPLIFIED, no
-  outdoor game hunt) so it never draws an outdoor action loop.
+  nofGeologist "rom_bobs" offsets). The builder and hunter gaps were resolved in the
+  2026-09-13 runthrough fixes above.
 - Per-nation border-stone sprites — landed 2026-07-14 (multi-nation phase 2;
   each people's boundary-stone sprite at archive index 0/1, player-colour base).
 - AI: seafaring — landed 2026-07-14 (see the model paragraph below).

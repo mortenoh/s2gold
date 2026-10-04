@@ -7,8 +7,10 @@
 import { SOLDIER_HITPOINTS, SOLDIER_RANK_NAMES, type JobType } from '../constants';
 import { storeAlloc, type Settler, type World } from '../world';
 
+type Walker = Pick<Settler, 'node' | 'path' | 'pathIndex' | 'edgeProgress' | 'ticksPerEdge'>;
+
 /** Assign a walk path and start moving. `path` excludes the current node. */
-export function beginWalk(settler: Settler, path: number[], ticksPerEdge: number): void {
+export function beginWalk(settler: Walker, path: number[], ticksPerEdge: number): void {
   settler.path = path;
   settler.pathIndex = 0;
   settler.edgeProgress = 0;
@@ -20,7 +22,7 @@ export function beginWalk(settler: Settler, path: number[], ticksPerEdge: number
  * arrived (path fully consumed). Position (`node`) only changes on edge
  * completion so per-edge progress is observable by the renderer.
  */
-export function stepWalk(settler: Settler): boolean {
+export function stepWalk(settler: Walker): boolean {
   if (settler.pathIndex >= settler.path.length) return true;
   settler.edgeProgress++;
   if (settler.edgeProgress >= settler.ticksPerEdge) {
@@ -32,7 +34,7 @@ export function stepWalk(settler: Settler): boolean {
 }
 
 /** True when the settler has no remaining path to walk. */
-export function walkDone(settler: Settler): boolean {
+export function walkDone(settler: Walker): boolean {
   return settler.pathIndex >= settler.path.length;
 }
 

@@ -61,6 +61,7 @@ geom.forEachNodeWithin(hq, 9, (node) => {
   t1.add(world.terrain1[node]);
   if ((world.terrain1[node] & 0x3f) === 5) water++;
 });
+console.log('water nodes within 9:', water);
 console.log(
   'terrain1 ids within 9:',
   [...t1]

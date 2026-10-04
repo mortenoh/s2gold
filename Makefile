@@ -42,8 +42,8 @@ endif
 doctor: ## Check external tool dependencies for the asset pipeline
 	uv run s2gold doctor
 
-dev: ## Start the Vite dev server for the web app
-	pnpm --filter app dev
+dev: ## Start the web app and Rust save API together
+	node scripts/dev.mjs
 
 serve: ## Build the frontend and run the Rust server (app + assets + /api)
 	pnpm -r build

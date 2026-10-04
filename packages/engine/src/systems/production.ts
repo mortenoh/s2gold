@@ -4,7 +4,7 @@
  * Data-driven from {@link BUILDING_DEFS}: each working building is dispatched by
  * its def `kind` — harvesters (woodcutter/quarry/forester/fishery) send an
  * outdoor worker to a map object/resource node; the farm sows and harvests crop
- * fields; generators (well/hunter) produce on a timer with no input; workshops
+ * fields; generators (well) produce on a timer with no input; workshops
  * consume input wares then produce an output; mines consume 1 food and decrement
  * a subsurface resource. Missing workers are recruited from a Helper (+ tool).
  */
@@ -49,6 +49,7 @@ import {
 import { beginWalk, spawnSettler, stepWalk, walkDone } from './movement';
 import { ensureWorkerAvailable } from './recruit';
 import { playerHasDockedHarbor, spawnShip } from './seafaring';
+import { runHunter } from './wildlife';
 import { isWaterNode } from '../water';
 
 /** A water node adjacent to `node` that still holds fish, or -1. */
@@ -431,7 +432,7 @@ function runFarmer(
   }
 }
 
-/** In-building timed producer with no ware input (well -> water, hunter -> meat). */
+/** In-building timed producer with no ware input (well -> water). */
 function runGenerator(events: EventSink, b: Building, def: BuildingDef): void {
   if (b.workTimer > 0) {
     b.workTimer--;
@@ -585,6 +586,9 @@ function runHarvesterFor(
 ): void {
   const radius = def.radius ?? 6;
   switch (b.type) {
+    case BUILDING.hunter:
+      runHunter(world, geom, rules, events, b, worker, def.workTicks, radius);
+      break;
     case BUILDING.woodcutter:
       runHarvester(
         world,
