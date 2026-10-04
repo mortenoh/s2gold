@@ -55,6 +55,11 @@ export interface S2Debug {
    * non-Roman player really draws from its own people's archive.
    */
   nationArchiveOf(player: number): string;
+  /**
+   * Graphics set in use: the preference, the scale it resolved to, the terrain
+   * index atlas scale, and the atlas scale of a registered sprite archive.
+   */
+  graphics(): { pref: string; scale: number; terrain: number; atlas(archive: string): number };
   /** Live building count for a player (HQ + sites + working). */
   buildingsOf(player: number): number;
   /** Transport order + tool weights of the local player. */
@@ -125,6 +130,8 @@ export interface DebugSurfaceDeps {
   roadPreview: () => { node: number; valid: boolean; hasPath: boolean } | null;
   /** Center the camera on a lattice node. */
   centerNode: (node: number) => void;
+  /** Active graphics set (see {@link S2Debug.graphics}). */
+  graphics: S2Debug['graphics'];
 }
 
 /** (Re)install `window.__s2debug` for the current session. */
@@ -173,6 +180,7 @@ export function installDebugSurface(deps: DebugSurfaceDeps): void {
     aiPlayers: s.aiPlayers.length,
     nationOf: (player) => s.nationOf(player),
     nationArchiveOf: (player) => deps.nationArchiveFor(player),
+    graphics: deps.graphics,
     buildingsOf: (player) => s.buildingsOf(player),
     priorities: () => s.priorities(),
     cheatUnlimited: () => s.cheatUnlimited(),

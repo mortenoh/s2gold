@@ -10,6 +10,7 @@
 import type { MapJson as EngineMapJson } from '@s2gold/engine';
 import type { LandscapeSet, TerrainAssets, TerrainMapData } from '@s2gold/renderer';
 import { assetUrl, fetchJson } from '../lib/manifest';
+import { hdTerrainPath } from './hd-assets';
 
 /** Entry in maps/index.json. */
 export interface MapIndexEntry {
@@ -119,11 +120,14 @@ function b64ToBytes(b64: string): Uint8Array {
  * Load the palette-exact terrain inputs for a landscape set: the palette-index
  * atlas, the palette (+ its water/lava CRNG cycles), and the gouraud LUT.
  */
-export async function loadTerrainAssets(terrain: LandscapeSet): Promise<TerrainAssets> {
+export async function loadTerrainAssets(terrain: LandscapeSet, scale = 1): Promise<TerrainAssets> {
   const set = TERRAIN_SETS[terrain] ?? TERRAIN_SETS[0];
   const base = set ?? { tex: 'tex5', gouraud: 'gouraud5' };
+  // The HD index image covers the same texture sheet at 2x; the mesh uses
+  // normalised UVs, so the renderer needs nothing else to switch.
+  const hdPath = scale > 1 ? await hdTerrainPath(base.tex) : null;
   const img = new Image();
-  img.src = assetUrl(`terrain/${base.tex}_indexed.png`);
+  img.src = assetUrl(hdPath ?? `terrain/${base.tex}_indexed.png`);
   const [palJson, gouJson] = await Promise.all([
     fetchJson<{ colors: string; cycles?: { low: number; high: number; msPerStep: number }[] }>(
       assetUrl(`terrain/${base.tex}_pal.json`),
@@ -139,6 +143,7 @@ export async function loadTerrainAssets(terrain: LandscapeSet): Promise<TerrainA
   }
   return {
     indexed: img,
+    scale: hdPath ? 2 : 1,
     palette: b64ToBytes(palJson.colors),
     gouraud: b64ToBytes(gouJson.data),
     cycles: palJson.cycles ?? [],

@@ -14,6 +14,7 @@
 
 import type { AtlasPage, AtlasSprite, SpriteAtlasMeta } from '@s2gold/renderer';
 import { assetUrl, fetchJson } from '../lib/manifest';
+import { hdAtlasDir } from './hd-assets';
 import { loadMaskPages } from './sprite-atlas';
 
 /** Raw bobs/<name>/atlas.json shape as emitted by the pipeline. */
@@ -26,6 +27,8 @@ interface BobAtlasJson {
   links: number[][][][];
   body_base: number;
   overlay_base: number;
+  /** Atlas pixels per world pixel (2 for the HD set; absent means 1). */
+  scale?: number;
 }
 
 /** Parsed BOB atlas: renderer metadata plus its composition tables. */
@@ -50,7 +53,8 @@ function parseMeta(archive: string, raw: BobAtlasJson): SpriteAtlasMeta {
     const idx = Number(key);
     if (Number.isFinite(idx)) sprites.set(idx, value);
   }
-  return { archive, atlases: raw.atlases, sprites, pmasks: [] };
+  const scale = typeof raw.scale === 'number' && raw.scale > 0 ? raw.scale : 1;
+  return { archive, atlases: raw.atlases, sprites, pmasks: [], scale };
 }
 
 async function loadImage(url: string): Promise<HTMLImageElement> {
@@ -63,18 +67,30 @@ async function loadImage(url: string): Promise<HTMLImageElement> {
 /**
  * Fetch and decode a BOB atlas by name (e.g. `carrier`). The atlas is
  * registered under `archive` (defaults to the bob name) so callers reference
- * its sprites from that archive. Returns null when the atlas is not installed.
+ * its sprites from that archive. With `scale` 2 the HD set is used when the
+ * pipeline built one. Returns null when the atlas is not installed.
  */
-export async function loadBobAtlas(name: string, archive = name): Promise<BobAtlas | null> {
-  const raw = await fetchJson<BobAtlasJson>(assetUrl(`bobs/${name}/atlas.json`));
+export async function loadBobAtlas(
+  name: string,
+  archive = name,
+  scale = 1,
+): Promise<BobAtlas | null> {
+  const hdDir = scale > 1 ? await hdAtlasDir('bobs', name) : null;
+  if (hdDir) {
+    const hd = await loadBobAtlasFrom(hdDir, archive);
+    if (hd) return hd;
+  }
+  return loadBobAtlasFrom(`bobs/${name}`, archive);
+}
+
+async function loadBobAtlasFrom(dir: string, archive: string): Promise<BobAtlas | null> {
+  const raw = await fetchJson<BobAtlasJson>(assetUrl(`${dir}/atlas.json`));
   if (!raw || !raw.sprites || !Array.isArray(raw.atlases) || !Array.isArray(raw.body_table)) {
     return null;
   }
   const meta = parseMeta(archive, raw);
-  const pages = await Promise.all(
-    raw.atlases.map((file) => loadImage(assetUrl(`bobs/${name}/${file}`))),
-  );
-  const pmaskPages = await loadMaskPages(`bobs/${name}`, raw.pmasks, raw.atlases.length);
+  const pages = await Promise.all(raw.atlases.map((file) => loadImage(assetUrl(`${dir}/${file}`))));
+  const pmaskPages = await loadMaskPages(dir, raw.pmasks, raw.atlases.length);
   return {
     archive,
     meta,

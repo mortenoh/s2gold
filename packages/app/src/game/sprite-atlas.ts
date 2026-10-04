@@ -5,6 +5,7 @@
 
 import type { AtlasPage, AtlasSprite, SpriteAtlasMeta } from '@s2gold/renderer';
 import { assetUrl, fetchJson } from '../lib/manifest';
+import { hdAtlasDir } from './hd-assets';
 
 /** Raw atlas.json shape as emitted by the pipeline. */
 interface AtlasJson {
@@ -13,6 +14,8 @@ interface AtlasJson {
   sprites: Record<string, AtlasSprite>;
   /** Player-colour mask page filenames (index-aligned with `atlases`). */
   pmasks?: string[];
+  /** Atlas pixels per world pixel (2 for the HD set; absent means 1). */
+  scale?: number;
 }
 
 /** Parsed atlas metadata plus its decoded page images. */
@@ -37,6 +40,7 @@ function parseMeta(raw: AtlasJson): SpriteAtlasMeta {
     // Mask *pages* are loaded separately (see loadMaskPages); the per-sprite
     // `pmask` flag drives tinting, so this vestigial index list stays empty.
     pmasks: [],
+    scale: typeof raw.scale === 'number' && raw.scale > 0 ? raw.scale : 1,
   };
 }
 
@@ -49,16 +53,25 @@ async function loadImage(url: string): Promise<HTMLImageElement> {
 
 /**
  * Fetch and decode an atlas by archive name from
- * `/assets/graphics/<archive>/`. Returns null when the atlas is not installed.
+ * `/assets/graphics/<archive>/`. With `scale` 2 the archive's HD set is used
+ * when the pipeline built one, else the original art. Returns null when the
+ * atlas is not installed.
  */
-export async function loadAtlas(archive: string): Promise<LoadedAtlas | null> {
-  const raw = await fetchJson<AtlasJson>(assetUrl(`graphics/${archive}/atlas.json`));
+export async function loadAtlas(archive: string, scale = 1): Promise<LoadedAtlas | null> {
+  const hdDir = scale > 1 ? await hdAtlasDir('graphics', archive) : null;
+  if (hdDir) {
+    const hd = await loadAtlasFrom(hdDir);
+    if (hd) return hd;
+  }
+  return loadAtlasFrom(`graphics/${archive}`);
+}
+
+async function loadAtlasFrom(dir: string): Promise<LoadedAtlas | null> {
+  const raw = await fetchJson<AtlasJson>(assetUrl(`${dir}/atlas.json`));
   if (!raw || !raw.sprites || !Array.isArray(raw.atlases)) return null;
   const meta = parseMeta(raw);
-  const pages = await Promise.all(
-    raw.atlases.map((name) => loadImage(assetUrl(`graphics/${archive}/${name}`))),
-  );
-  const pmaskPages = await loadMaskPages(`graphics/${archive}`, raw.pmasks, raw.atlases.length);
+  const pages = await Promise.all(raw.atlases.map((name) => loadImage(assetUrl(`${dir}/${name}`))));
+  const pmaskPages = await loadMaskPages(dir, raw.pmasks, raw.atlases.length);
   return { meta, pages, pmaskPages };
 }
 

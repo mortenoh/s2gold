@@ -48,11 +48,15 @@ export function makeWareIconSet(atlas: LoadedAtlas | null): WareIconSet | null {
       const natW = page.naturalWidth || page.width;
       const natH = page.naturalHeight || page.height;
       if (!src || !natW || !natH || frame.w <= 0 || frame.h <= 0) return false;
-      box.style.width = `${frame.w}px`;
-      box.style.height = `${frame.h}px`;
+      // Show at the original size: an HD atlas (scale 2) packs twice the
+      // pixels, which then render crisper on high-density screens.
+      const k = 1 / (meta.scale ?? 1);
+      box.style.width = `${frame.w * k}px`;
+      box.style.height = `${frame.h * k}px`;
       box.style.backgroundImage = `url("${src}")`;
       box.style.backgroundRepeat = 'no-repeat';
-      box.style.backgroundPosition = `${-frame.x}px ${-frame.y}px`;
+      box.style.backgroundSize = `${natW * k}px ${natH * k}px`;
+      box.style.backgroundPosition = `${-frame.x * k}px ${-frame.y * k}px`;
       box.style.imageRendering = 'pixelated';
       return true;
     },

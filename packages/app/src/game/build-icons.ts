@@ -53,7 +53,9 @@ export function makeBuildIconSet(atlas: LoadedAtlas | null): BuildIconSet | null
       if (!src || !natW || !natH || frame.w <= 0 || frame.h <= 0) return false;
       // Fit within the cell, never upscaling past 1:1 (the sprites are 60-130px,
       // so this only ever shrinks the taller buildings).
-      const scale = Math.min(cellPx / frame.w, cellPx / frame.h, 1);
+      // CSS px per atlas px: fit the cell, never past the original size (an HD
+      // atlas has `meta.scale` atlas px per original px).
+      const scale = Math.min(cellPx / frame.w, cellPx / frame.h, 1 / (meta.scale ?? 1));
       const dispW = Math.round(frame.w * scale);
       const dispH = Math.round(frame.h * scale);
       box.style.width = `${dispW}px`;

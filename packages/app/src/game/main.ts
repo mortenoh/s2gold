@@ -66,10 +66,15 @@ import { startSessionPersistence } from './session-persistence';
 import { makeToast } from './toasts';
 import {
   FPS_LS_KEY,
+  graphicsLabel,
+  graphicsScale,
+  nextGraphicsPref,
   readFogPref,
+  readGraphicsPref,
   readVisPref,
   TICK_LS_KEY,
   writeFogPref,
+  writeGraphicsPref,
   writeVisPref,
 } from './view-prefs';
 import { buildAudioControls } from './audio-controls';
@@ -312,6 +317,30 @@ async function boot(): Promise<void> {
     applyFpsVis();
     applyFpsToggle();
   });
+  // Graphics set: read once at page start (atlases are loaded at that scale);
+  // a change is saved and applies after a reload.
+  const gfxPref = readGraphicsPref();
+  const gfxScale = graphicsScale(gfxPref, window.devicePixelRatio || 1);
+  let gfxPending = gfxPref;
+  const gfxToggle = el('button', {
+    attrs: {
+      'data-testid': 'graphics-toggle',
+      type: 'button',
+      title: 'Original art or the 2x HD set (Auto picks HD on high-density screens)',
+    },
+  });
+  const applyGfxToggle = (): void => {
+    const dpr = window.devicePixelRatio || 1;
+    const pending = graphicsScale(gfxPending, dpr) !== gfxScale;
+    gfxToggle.textContent = graphicsLabel(gfxPending, dpr) + (pending ? ' (after reload)' : '');
+    gfxToggle.classList.toggle('active', graphicsScale(gfxPending, dpr) === 2);
+  };
+  applyGfxToggle();
+  gfxToggle.addEventListener('click', () => {
+    gfxPending = nextGraphicsPref(gfxPending);
+    writeGraphicsPref(gfxPending);
+    applyGfxToggle();
+  });
   // Free-play cheats (hidden in campaign chapters: see startCampaign).
   const cheatToggle = el('button', {
     text: 'Unlimited resources: off',
@@ -367,6 +396,7 @@ async function boot(): Promise<void> {
       mapSelect.element,
     ),
     el('div', { class: 'settings-row' }, fogButton, tickToggle, fpsToggle),
+    el('div', { class: 'settings-row' }, gfxToggle),
     cheatRow,
     audioControls,
   );
@@ -459,11 +489,11 @@ async function boot(): Promise<void> {
   // only (not the world sprite renderer), so it is loaded here but never
   // registered as a game-sprite archive. Non-fatal when missing.
   const [romanAtlas, shipAtlas, workAtlas, carrier, jobs, ioAtlas] = await Promise.all([
-    loadAtlas(BUILDING_ARCHIVE),
-    loadAtlas(SHIP_ARCHIVE),
-    loadAtlas(WORK_ARCHIVE),
-    loadBobAtlas('carrier', BOB_ARCHIVE),
-    loadBobAtlas('jobs', JOBS_ARCHIVE),
+    loadAtlas(BUILDING_ARCHIVE, gfxScale),
+    loadAtlas(SHIP_ARCHIVE, gfxScale),
+    loadAtlas(WORK_ARCHIVE, gfxScale),
+    loadBobAtlas('carrier', BOB_ARCHIVE, gfxScale),
+    loadBobAtlas('jobs', JOBS_ARCHIVE, gfxScale),
     loadAtlas(IO_ARCHIVE),
   ]);
   if (romanAtlas) sprites.registerAtlas(romanAtlas.meta, romanAtlas.pages, romanAtlas.pmaskPages);
@@ -589,7 +619,7 @@ async function boot(): Promise<void> {
     const gen = ++switchGen;
     delete document.body.dataset.mapReady;
     const map = await loadMap(entry);
-    const atlas = await loadTerrainAssets(map.terrain);
+    const atlas = await loadTerrainAssets(map.terrain, gfxScale);
     if (gen !== switchGen) return; // superseded by a newer switch
     renderer.resize();
     renderer.load(map.data, atlas);
@@ -598,7 +628,7 @@ async function boot(): Promise<void> {
     const archive = objectAtlasForLandscape(map.terrain);
     let objAtlas = objectAtlasCache.get(archive) ?? null;
     if (!objAtlas) {
-      objAtlas = await loadAtlas(archive);
+      objAtlas = await loadAtlas(archive, gfxScale);
       if (gen !== switchGen) return;
       if (objAtlas) {
         objectAtlasCache.set(archive, objAtlas);
@@ -638,7 +668,7 @@ async function boot(): Promise<void> {
     wantedArchives.add(buildingArchiveForLandscape(map.terrain));
     const toLoad = [...wantedArchives].filter((a) => !sprites.hasAtlas(a));
     if (toLoad.length > 0) {
-      const loaded = await Promise.all(toLoad.map((a) => loadAtlas(a)));
+      const loaded = await Promise.all(toLoad.map((a) => loadAtlas(a, gfxScale)));
       if (gen !== switchGen) return; // superseded by a newer switch
       for (let i = 0; i < toLoad.length; i++) {
         const la = loaded[i];
@@ -771,6 +801,12 @@ async function boot(): Promise<void> {
         return rp ? { node: rp.node, valid: rp.valid, hasPath: rp.path !== null } : null;
       },
       centerNode: (node) => centerOnNode(node),
+      graphics: () => ({
+        pref: gfxPref,
+        scale: gfxScale,
+        terrain: renderer.textureScale,
+        atlas: (archive) => sprites.atlasScale(archive),
+      }),
     });
     rebuildStatics();
   }

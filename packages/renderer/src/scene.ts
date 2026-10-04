@@ -118,6 +118,12 @@ export interface SpriteAtlasMeta {
   readonly sprites: ReadonlyMap<number, AtlasSprite>;
   /** Player-colour mask sprite indices, when the archive ships them. */
   readonly pmasks: readonly number[];
+  /**
+   * Atlas pixels per world pixel: 1 for the original art, 2 for the magnified
+   * HD set. Sprite rects, sizes and anchors are in atlas pixels; the renderer
+   * divides by this to place them in the world. Absent means 1.
+   */
+  readonly scale?: number;
 }
 
 /**

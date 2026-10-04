@@ -25,6 +25,7 @@ import { HEIGHT_FACTOR, TR_H, TR_W } from './terrain-data';
 import {
   PLAYER_COLORS,
   unpackColor,
+  type AtlasSprite,
   type DynamicSprite,
   type SpriteAtlasMeta,
   type StaticObject,
@@ -100,6 +101,24 @@ const NO_TINT: readonly [number, number, number] = [1, 1, 1];
 
 /** An atlas page image that carries its pixel dimensions. */
 export type AtlasPage = TexImageSource & { readonly width: number; readonly height: number };
+
+/**
+ * Screen rectangle of a sprite whose anchor lands at (`ax`, `ay`). `scale` is
+ * screen pixels per world pixel and `atlasScale` atlas pixels per world pixel,
+ * so an HD sprite (atlasScale 2) covers exactly the rectangle of its 1x twin.
+ */
+export function spriteScreenRect(
+  s: Pick<AtlasSprite, 'w' | 'h' | 'nx' | 'ny'>,
+  ax: number,
+  ay: number,
+  scale: number,
+  atlasScale = 1,
+): { x0: number; y0: number; x1: number; y1: number } {
+  const k = scale / atlasScale;
+  const x0 = ax - s.nx * k;
+  const y0 = ay - s.ny * k;
+  return { x0, y0, x1: x0 + s.w * k, y1: y0 + s.h * k };
+}
 
 /** Registered atlas: metadata plus one GL texture (and size) per page. */
 interface RegisteredAtlas {
@@ -337,6 +356,12 @@ export class SpriteRenderer {
     return this.atlases.has(archive);
   }
 
+  /** Atlas pixels per world pixel of a registered archive (0 when not registered). */
+  atlasScale(archive: string): number {
+    const reg = this.atlases.get(archive);
+    return reg ? (reg.meta.scale ?? 1) : 0;
+  }
+
   /**
    * Set the map layout used to resolve node anchors and torus wrapping. Pass
    * the per-node elevation plane (row-major width * height) so anchors are
@@ -431,12 +456,12 @@ export class SpriteRenderer {
     const reg = this.atlases.get(archive);
     const s = reg?.meta.sprites.get(index);
     if (!reg || !s) return;
-    const w = s.w * scale;
-    const h = s.h * scale;
-    const x0 = ax - s.nx * scale;
-    let y0 = ay - s.ny * scale;
-    const x1 = x0 + w;
-    const y1 = y0 + h;
+    const rect = spriteScreenRect(s, ax, ay, scale, reg.meta.scale ?? 1);
+    const x0 = rect.x0;
+    let y0 = rect.y0;
+    const x1 = rect.x1;
+    const y1 = rect.y1;
+    const h = y1 - y0;
     const size = reg.sizes[s.atlas] ?? [1, 1];
     const tw = size[0];
     const th = size[1];

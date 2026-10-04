@@ -68,6 +68,6 @@ export {
   type StaticObject,
 } from './scene';
 
-export { SpriteRenderer, type AtlasPage, type SpriteDrawStats } from './sprites';
+export { SpriteRenderer, spriteScreenRect, type AtlasPage, type SpriteDrawStats } from './sprites';
 
 export { RoadRenderer, DONKEY_ROAD_COLOR, type RoadSegment } from './roads';

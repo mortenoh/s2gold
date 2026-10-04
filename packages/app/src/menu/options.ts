@@ -5,7 +5,7 @@
  * resolution and mouse-driver choices, which have no browser equivalent; ours
  * carries the settings the app actually has: music on/off + volume and sound
  * effects on/off + volume, persisted in the same localStorage keys the menu
- * and game audio engines read.
+ * and game audio engines read, plus the graphics set (Original, HD or Auto).
  */
 
 import { clear, el } from '../lib/dom';
@@ -13,6 +13,12 @@ import { BitmapFont } from '../ui/font';
 import { fontHeading } from '../ui/widgets';
 import { applyBackdrop } from './pics';
 import { MenuMusic } from './music';
+import {
+  graphicsLabel,
+  nextGraphicsPref,
+  readGraphicsPref,
+  writeGraphicsPref,
+} from '../game/view-prefs';
 
 const GOLD = '#f0c84a';
 
@@ -118,6 +124,15 @@ export async function renderOptions(root: HTMLElement): Promise<void> {
         const v = Number(lsGet(LS.sfxVolume) ?? '0.8');
         lsSet(LS.sfxVolume, String(nextStep(Number.isFinite(v) ? v : 0.8)));
       },
+    ),
+  );
+  // Graphics set (Original, 2x HD, or Auto by screen density); the game
+  // reads it when a map starts.
+  list.append(
+    row(
+      'options-graphics',
+      () => graphicsLabel(readGraphicsPref(), window.devicePixelRatio || 1),
+      () => writeGraphicsPref(nextGraphicsPref(readGraphicsPref())),
     ),
   );
   panel.append(list);

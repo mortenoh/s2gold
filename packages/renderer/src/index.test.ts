@@ -15,6 +15,7 @@ import {
   neighbourSW,
   nodeWorldPos,
   rectForTexture,
+  spriteScreenRect,
   RENDERER_VERSION,
   TERRAIN_RECTS,
   texTypeForTexture,
@@ -260,5 +261,18 @@ describe('minimap', () => {
     expect(heightBrightness(30)).toBeGreaterThan(1);
     expect(heightBrightness(0)).toBeLessThan(1);
     expect(heightBrightness(200)).toBeLessThanOrEqual(1.5);
+  });
+});
+
+describe('sprite atlas scale', () => {
+  it('places an HD sprite on the same screen rectangle as its 1x twin', () => {
+    const low = { w: 30, h: 21, nx: 16, ny: 18 };
+    const high = { w: 60, h: 42, nx: 32, ny: 36 };
+    for (const scale of [1, 2, 3]) {
+      expect(spriteScreenRect(high, 100, 50, scale, 2)).toEqual(
+        spriteScreenRect(low, 100, 50, scale, 1),
+      );
+    }
+    expect(spriteScreenRect(low, 100, 50, 2)).toEqual({ x0: 68, y0: 14, x1: 128, y1: 56 });
   });
 });

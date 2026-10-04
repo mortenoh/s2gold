@@ -110,8 +110,10 @@ export interface PaletteCycle {
 
 /** The palette-exact terrain inputs (all from the converted asset pipeline). */
 export interface TerrainAssets {
-  /** Grayscale palette-index atlas (terrain/texN_indexed.png). */
+  /** Grayscale palette-index atlas (terrain/texN_indexed.png), any size. */
   readonly indexed: TexImageSource;
+  /** Index-atlas pixels per original texel: 1, or 2 for the HD sheet. */
+  readonly scale?: number;
   /** 768-byte RGB palette (terrain/texN_pal.json colors). */
   readonly palette: Uint8Array;
   /** 65536-byte gouraud LUT, row-major table[shade * 256 + index]. */
@@ -136,6 +138,8 @@ export class TerrainRenderer {
   /** Base (unrotated) 256-entry RGBA palette; cycles rotate slots of a copy. */
   private basePalette: Uint8Array = new Uint8Array(0);
   private paletteScratch: Uint8Array = new Uint8Array(256 * 4);
+  /** Scale of the loaded index atlas (1 original, 2 HD); 0 before a load. */
+  textureScale = 0;
   private cycles: readonly PaletteCycle[] = [];
   /** Last uploaded per-cycle phases; palette re-uploads only on change. */
   private cyclePhases: number[] = [];
@@ -227,6 +231,7 @@ export class TerrainRenderer {
   /** Upload a map mesh and its terrain assets. Replaces any previous map. */
   load(map: TerrainMapData, assets: TerrainAssets): void {
     const gl = this.gl;
+    this.textureScale = assets.scale ?? 1;
     const mesh = buildTerrainMesh(map);
     this.vertexCount = mesh.vertexCount;
     this.baseVertexCount = mesh.baseVertexCount;
