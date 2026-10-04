@@ -61,6 +61,7 @@ import {
   DISTRIBUTION_GROUPS,
 } from '@s2gold/engine';
 import { soundForEvent, type SoundCue } from './audio-map';
+import { Postbox } from './postbox';
 
 /** Per-node fog state used by the renderer (see TerrainRenderer.setFog). */
 export const FOG = { unexplored: 0, explored: 1, visible: 2 } as const;
@@ -250,6 +251,8 @@ export class GameSession {
   private acc = 0;
   /** Sound cues emitted since the last drain (bounded to avoid unbounded growth). */
   private readonly soundCues: SoundCue[] = [];
+  /** The local player's message list (presentation state, saved with the game). */
+  readonly postbox = new Postbox();
 
   constructor(
     map: MapJson,
@@ -449,7 +452,13 @@ export class GameSession {
       counters: GameCounters;
       stats: SerializedStats;
       ai?: Record<number, AiState>;
-    } = { world, counters: { ...this.counters }, stats: this.serializeStats() };
+      postbox: ReturnType<Postbox['toJSON']>;
+    } = {
+      world,
+      counters: { ...this.counters },
+      stats: this.serializeStats(),
+      postbox: this.postbox.toJSON(),
+    };
     if (this.aiStates.length > 0) {
       const ai: Record<number, AiState> = {};
       for (const s of this.aiStates) ai[s.playerId] = s;
@@ -487,13 +496,16 @@ export class GameSession {
     let aiData: Record<string, AiState> | undefined;
     let counterData: unknown;
     let statsData: unknown;
+    let postboxData: unknown;
     if (data && typeof data === 'object' && 'world' in data) {
       const wrapped = data as {
         world: unknown;
         ai?: Record<string, AiState>;
         counters?: unknown;
         stats?: unknown;
+        postbox?: unknown;
       };
+      postboxData = wrapped.postbox;
       worldData = wrapped.world;
       aiData = wrapped.ai;
       counterData = wrapped.counters;
@@ -519,6 +531,8 @@ export class GameSession {
     // explicitly. Old-format saves carry neither and correctly reset to zero.
     this.restoreCounters(counterData);
     if (!this.restoreStats(statsData)) this.initStats();
+    // Messages ride with the save; older saves have none.
+    this.postbox.restore(postboxData);
   }
 
   /** Overwrite the live counters from a save, zeroing any absent/invalid field. */
@@ -586,6 +600,7 @@ export class GameSession {
     const cue = soundForEvent(e, this.world);
     // Bound the buffer: at extreme catch-up the renderer may skip a drain.
     if (cue && this.soundCues.length < 64) this.soundCues.push(cue);
+    this.postbox.ingest(e, this.world, this.localPlayer);
     const c = this.counters;
     switch (e.type) {
       case 'TreeFelled':

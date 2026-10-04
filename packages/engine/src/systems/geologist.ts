@@ -44,7 +44,14 @@ function isMountainNode(world: World, geom: Geometry, node: number): boolean {
 }
 
 /** Survey every mountain node within range of `center`, recording a sign each. */
-function survey(world: World, geom: Geometry, center: number): void {
+function survey(
+  world: World,
+  geom: Geometry,
+  center: number,
+  player: number,
+  events: EventSink,
+): void {
+  const found = new Map<number, number>(); // ore kind -> first node
   for (let node = 0; node < geom.size; node++) {
     if (geom.distance(center, node) > GEOLOGIST_RADIUS) continue;
     if (!isMountainNode(world, geom, node)) continue;
@@ -56,15 +63,32 @@ function survey(world: World, geom: Geometry, center: number): void {
     const existing = world.signs.find((s) => s.node === node);
     if (existing) existing.res = res;
     else world.signs.push({ node, res });
+    if (
+      res !== RESOURCE.none &&
+      res !== RESOURCE.water &&
+      res !== RESOURCE.fish &&
+      !found.has(res)
+    ) {
+      found.set(res, node);
+    }
+  }
+  for (const [res, node] of [...found].sort((a, b) => a[0] - b[0])) {
+    events.emit({ type: 'ResourceFound', node, res, player });
   }
 }
 
 /** Step one geologist through its walk -> survey -> return -> retire cycle. */
-function stepGeologist(world: World, geom: Geometry, rules: TerrainRules, g: Settler): void {
+function stepGeologist(
+  world: World,
+  geom: Geometry,
+  rules: TerrainRules,
+  g: Settler,
+  events: EventSink,
+): void {
   if (g.state === 'toWork') {
     const arrived = walkDone(g) ? true : stepWalk(g);
     if (!arrived) return;
-    survey(world, geom, g.node);
+    survey(world, geom, g.node, g.player, events);
     g.state = 'working';
     g.timer = GEOLOGIST_SURVEY_TICKS;
     return;
@@ -109,9 +133,9 @@ export function runGeologists(
   world: World,
   geom: Geometry,
   rules: TerrainRules,
-  _events: EventSink,
+  events: EventSink,
 ): void {
   for (const s of storeLive(world.settlers)) {
-    if (s.job === JOB.geologist) stepGeologist(world, geom, rules, s);
+    if (s.job === JOB.geologist) stepGeologist(world, geom, rules, s, events);
   }
 }

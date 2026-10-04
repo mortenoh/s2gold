@@ -33,6 +33,16 @@ export const HUD_ICON = {
   zoom: 36,
   /** iocon_025: a cog with crossed spanners — settings. */
   settings: 43,
+  /** iocon_026: a road between two flags — the transport order window. */
+  transport: 44,
+  /** iocon_119: crossed tools under a question mark — tool production. */
+  tools: 137,
+  /** iocon_010: a pair of scales — the ware distribution window. */
+  distribution: 28,
+  /** iocon_041: a white dove on its perch — the postbox, mail waiting. */
+  postboxMail: 59,
+  /** iocon_044: the empty perch — the postbox, nothing unread. */
+  postboxEmpty: 62,
 } as const;
 
 /** Default on-screen icon size (px); the sprites are 24-32px and only shrink. */

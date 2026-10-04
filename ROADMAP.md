@@ -112,6 +112,20 @@ never committed (original art, same policy as the converted assets).
 
 ## Gameplay fidelity
 
+Landed 2026-10-04 (postbox): the original's pigeon post. `game/postbox.ts`
+turns engine events for the local player into letters (under attack,
+rate-limited per spot; building captured or lost; military, warehouse and
+shipyard completions; mine exhausted; ore found; ship built; expedition
+ready/landed; promotions; a player defeated). Clicking a letter centres the
+camera on it. The HUD button uses the original io_dat dove sprites (59 with
+mail, 62 the empty perch) with an unread badge; letters are saved with the
+game (absent in older saves). The engine gained `ResourceFound` (one per ore
+kind per geologist survey) and `PlayerDefeated` (headquarters razed). In the
+same change Transport, Tools and Distribution got original icons (road between
+flags, tools with a question mark, scales), keeping the HUD bar on one row
+down to about 960px. Covered by `app/src/game/postbox.test.ts`, the geologist
+and HQ-razing engine tests, and `e2e/tests/postbox.spec.ts`.
+
 Landed 2026-10-04 (distribution window): the original's ware distribution
 settings. `DISTRIBUTION_GROUPS` (engine constants) lists every ware with more
 than one consumer kind: fish/meat/bread to the four mines; grain to mill, pig

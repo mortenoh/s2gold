@@ -77,6 +77,7 @@ import { makeHudIconSet, iconifyHudButton, HUD_ICON, IO_ARCHIVE } from './hud-ic
 import { MilitaryPanel } from './military-ui';
 import { ProductionPanel } from './production-ui';
 import { PriorityPanel } from './priority-ui';
+import { PostboxPanel } from './postbox';
 import { HarborPanel } from './harbor-ui';
 import { SaveMenu } from './save-ui';
 import { StatsPanel } from './stats-ui';
@@ -189,6 +190,19 @@ async function boot(): Promise<void> {
   const statsButton = el('button', {
     text: 'Stats',
     attrs: { 'data-testid': 'stats-toggle', type: 'button', title: 'In-game statistics' },
+  });
+  /** Swap the postbox bar icon for the mail-waiting state (set once icons load). */
+  let setPostboxIcon: (hasMail: boolean) => void = () => {};
+  // Postbox: the message list, with an unread badge on its bar button.
+  const postboxBadge = el('span', {
+    class: 'postbox-badge',
+    attrs: { 'data-testid': 'postbox-badge', 'aria-hidden': 'true' },
+  });
+  postboxBadge.hidden = true;
+  const postboxButton = el('button', {
+    class: 'postbox-toggle',
+    text: 'Postbox',
+    attrs: { 'data-testid': 'postbox-toggle', type: 'button', title: 'Postbox (messages)' },
   });
   const goodsButton = el('button', {
     text: 'Goods',
@@ -385,6 +399,7 @@ async function boot(): Promise<void> {
     transportButton,
     toolsButton,
     distributionButton,
+    postboxButton,
     zoomButton,
     settingsButton,
     resources.element,
@@ -467,8 +482,28 @@ async function boot(): Promise<void> {
   iconifyHudButton(goodsButton, ioIcons, HUD_ICON.goods);
   iconifyHudButton(zoomButton, ioIcons, HUD_ICON.zoom);
   iconifyHudButton(settingsButton, ioIcons, HUD_ICON.settings);
+  iconifyHudButton(transportButton, ioIcons, HUD_ICON.transport);
+  iconifyHudButton(toolsButton, ioIcons, HUD_ICON.tools);
+  iconifyHudButton(distributionButton, ioIcons, HUD_ICON.distribution);
+  // The original's pigeon post: a dove on its perch while mail waits, the
+  // empty perch otherwise (swapped per frame below). The badge rides on top.
+  iconifyHudButton(postboxButton, ioIcons, HUD_ICON.postboxEmpty);
+  postboxButton.append(postboxBadge);
+  const postboxIcon = postboxButton.querySelector<HTMLElement>('.hud-btn-icon');
+  let postboxHasMail = false;
+  setPostboxIcon = (hasMail: boolean): void => {
+    if (!postboxIcon || hasMail === postboxHasMail) return;
+    postboxHasMail = hasMail;
+    ioIcons?.apply(postboxIcon, hasMail ? HUD_ICON.postboxMail : HUD_ICON.postboxEmpty);
+  };
 
   let camera = new Camera(1, 1);
+  /** Centre the camera on a map node (postbox messages, debug surface). */
+  function centerOnNode(node: number): void {
+    if (!session) return;
+    const a = nodeAnchor(session.world, node);
+    camera.centerOn(a.x, a.y, canvas.width, canvas.height);
+  }
   let session: GameSession | null = null;
   let landscape: LandscapeSet = 0;
   // Decoded building/flag/border-stone atlases by archive name, kept so the build
@@ -732,10 +767,7 @@ async function boot(): Promise<void> {
         const rp = interaction.roadPreview;
         return rp ? { node: rp.node, valid: rp.valid, hasPath: rp.path !== null } : null;
       },
-      centerNode: (node) => {
-        const a = nodeAnchor(s.world, node);
-        camera.centerOn(a.x, a.y, canvas.width, canvas.height);
-      },
+      centerNode: (node) => centerOnNode(node),
     });
     rebuildStatics();
   }
@@ -970,6 +1002,18 @@ async function boot(): Promise<void> {
     open: () => goodsPanel.open(),
     close: () => goodsPanel.close(),
     element: () => goodsPanel.element,
+  });
+  const postboxPanel = new PostboxPanel({
+    root,
+    postbox: () => session?.postbox ?? null,
+    centerOn: (node) => centerOnNode(node),
+    onVisibility: (open) => syncHudPanelButton(postboxButton, open),
+  });
+  wireHudPanel(postboxButton, {
+    isOpen: () => postboxPanel.isOpen,
+    open: () => postboxPanel.open(),
+    close: () => postboxPanel.close(),
+    element: () => postboxPanel.element,
   });
   // Economy settings: the original's Transport and Tools windows.
   for (const [button, mode] of [
@@ -1220,6 +1264,18 @@ async function boot(): Promise<void> {
     // Keep the open floating panels tracking live state (no-ops while closed).
     goodsPanel.update();
     statsPanel.update();
+    postboxPanel.update();
+    const unread = session?.postbox.unread ?? 0;
+    const badgeText = unread > 99 ? '99+' : String(unread);
+    if (postboxBadge.textContent !== badgeText || postboxBadge.hidden !== (unread === 0)) {
+      postboxBadge.textContent = badgeText;
+      postboxBadge.hidden = unread === 0;
+      postboxButton.setAttribute(
+        'aria-label',
+        unread > 0 ? `Postbox, ${unread} unread` : 'Postbox',
+      );
+      setPostboxIcon(unread > 0);
+    }
 
     frames++;
     if (now - fpsWindowStart >= 500) {

@@ -212,6 +212,10 @@ describe('attacking a headquarters (MILITARY.md §4)', () => {
     }
     expect(capturedByP0).toBe(true);
     expect(burned).toBe(true); // taking the HQ razes it
+    // The postbox's "defeated" message: one PlayerDefeated for the loser.
+    const defeated = events.filter((e) => e.type === 'PlayerDefeated');
+    expect(defeated).toHaveLength(1);
+    expect(defeated[0]).toMatchObject({ player: 1, byPlayer: 0 });
     expect(world.players[1].hqBuildingId).toBe(-1); // lost its HQ anchor
     expect(world.buildings.items[hqId]).toBeNull(); // building removed
   });

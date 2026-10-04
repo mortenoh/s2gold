@@ -248,6 +248,27 @@ export interface ShipArrived {
   player: number;
 }
 
+/**
+ * A geologist's survey revealed ore. One event per ore kind per survey (the
+ * signs themselves mark every node); `node` is the first node of that kind.
+ */
+export interface ResourceFound {
+  type: 'ResourceFound';
+  node: number;
+  /** RESOURCE id: iron, gold, coal or granite. */
+  res: number;
+  player: number;
+}
+
+/** A player lost its headquarters (the original's "defeated" message). */
+export interface PlayerDefeated {
+  type: 'PlayerDefeated';
+  player: number;
+  /** Who razed the headquarters. */
+  byPlayer: number;
+  node: number;
+}
+
 /** Discriminated union of every emitted event. */
 export type GameEvent =
   | FlagPlaced
@@ -279,7 +300,9 @@ export type GameEvent =
   | ShipBuilt
   | ExpeditionReady
   | ExpeditionLanded
-  | ShipArrived;
+  | ShipArrived
+  | ResourceFound
+  | PlayerDefeated;
 
 /** Mutable per-tick event sink passed through the systems. */
 export class EventSink {

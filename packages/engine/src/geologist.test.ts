@@ -29,11 +29,14 @@ describe('geologist survey', () => {
     applyCommand(world, { type: 'sendGeologist', player: 0, flagNode });
 
     let coalSign = false;
+    const found: { res: number; player: number }[] = [];
     for (let i = 0; i < 2000 && !coalSign; i++) {
-      tickWorld(world);
+      for (const e of tickWorld(world)) if (e.type === 'ResourceFound') found.push(e);
       coalSign = world.signs.some((s) => s.res === RESOURCE.coal);
     }
     expect(coalSign).toBe(true); // the coal deposit was revealed
+    // One ResourceFound per ore kind per survey (the postbox's geologist message).
+    expect(found).toEqual([expect.objectContaining({ res: RESOURCE.coal, player: 0 })]);
 
     // Run out the return trip; the Helper is back in the pool (net zero cost).
     for (let i = 0; i < 2000; i++) tickWorld(world);

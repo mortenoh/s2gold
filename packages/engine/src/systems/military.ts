@@ -282,6 +282,7 @@ function captureBuilding(
     world.buildingAtNode[b.node] = -1;
     world.objectType[b.node] = 0;
     if (world.players[from]) world.players[from].hqBuildingId = -1;
+    events.emit({ type: 'PlayerDefeated', player: from, byPlayer: to, node: b.node });
     storeFree(world.buildings, b.id);
     recalcTerritory(world, geom);
     events.emit({ type: 'TerritoryChanged', player: to });

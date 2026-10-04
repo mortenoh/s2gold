@@ -114,6 +114,7 @@ Reading the bar from the left:
 | **Goods**             | Your whole inventory, summed across all warehouses.                                                  |
 | **Transport**         | The ware transport order: wares higher in the list are carried first (move with the arrows).         |
 | **Tools**             | Per-tool production weights for the metalworks: how often each tool is made (0 = never).             |
+| **Postbox**           | Messages: attacks, captures and losses, finished military buildings, ore found, ships, defeats. Click one to jump there; the dove means unread mail. |
 | **Distribution**      | Which buildings get a scarce ware first, per ware (e.g. grain: mill, pig farm, brewery); 0 = none.   |
 | **Zoom**              | Toggles 1× / 2× zoom. Shortcut: **Z**; the mouse wheel zooms freely.                                 |
 | **Settings**          | A pop-up panel: map picker, fog-of-war, tick/FPS readouts, and audio.                                |

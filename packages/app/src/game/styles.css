@@ -1356,3 +1356,74 @@ body {
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
+
+/* Postbox: bar button badge and the message window. */
+.hud-top button.postbox-toggle {
+  position: relative;
+}
+
+.postbox-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #c0392b;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.postbox-panel {
+  width: 300px;
+}
+
+.postbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.postbox-item {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #bbb;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.postbox-item.unread {
+  color: #fff;
+  font-weight: 600;
+}
+
+.postbox-item:hover:not(:disabled) {
+  border-color: #4a4a55;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.postbox-item:disabled {
+  cursor: default;
+}
+
+.postbox-attack .postbox-text,
+.postbox-lost .postbox-text,
+.postbox-defeated .postbox-text {
+  color: #ff9a7a;
+}
+
+.postbox-empty {
+  color: #888;
+  font-size: 12px;
+}
