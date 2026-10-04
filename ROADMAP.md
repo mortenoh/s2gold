@@ -634,3 +634,47 @@ today's screens:
 Follow-ups (still 1x, drawn with pixelated scaling): HUD and menu icons,
 bitmap fonts, the cursor, menu backdrops and the campaign globe. A 3x or 4x
 set would be MMPX applied twice; it is not planned until a display needs it.
+
+## J. Native client in egui (idea, not scheduled)
+
+Goal: one Rust binary that draws everything itself, with no HTML, DOM or
+webview. eframe (egui with the glow OpenGL backend, as used in
+`~/dev/mortenoh/egui-demos`) supplies the window, input and UI widgets, and
+the game world is drawn into a paint callback. The bundled `.app` would then
+be a plain native application instead of a Tauri webview around a local
+server.
+
+What moves, in rough size order (2026-10 line counts, tests excluded):
+
+1. Engine, about 10.7k lines of deterministic TypeScript. Port it to a Rust
+   crate. Determinism is the main constraint: run the TypeScript and Rust
+   engines in lockstep over the `verify-maps.ts` replays and compare world
+   hashes every tick until they agree on all 49 maps, then retire the
+   TypeScript copy. Saves stay compatible by keeping the JSON world format
+   and `WORLD_VERSION` migrations. An embedded JavaScript runtime (deno_core
+   or boa) would avoid the port, but it keeps two languages in the binary
+   and costs speed, so the port is the better end state.
+2. App and UI, about 14k lines of DOM code: HUD bar, panels, menus,
+   campaign screens, postbox, distribution and the other windows. Rebuild
+   them as egui windows that use the original bitmap fonts and io_dat icons
+   as textures, so the look stays the same. This is the largest part of the
+   work.
+3. Renderer, about 2.5k lines. The WebGL2 shaders are GLSL ES 3.0 and carry
+   over to glow nearly unchanged: the R8 terrain index texture with gouraud
+   LUT and palette cycling, sprite atlases with pmask tinting, roads, fog
+   and the HD sets. The camera, mesh and atlas code become Rust.
+4. Server and saves. The axum server is Rust already; the client would call
+   the SQLite store directly with no HTTP in between.
+5. Audio and video: rodio or kira for the WAV effects and MP3 music. The
+   intro video needs a decoder crate or is dropped from the native build.
+6. Tests: the 56 Playwright specs drive the DOM and `__s2debug`. Replace
+   them with egui_kittest UI tests plus the engine's own suites, and keep
+   the debug surface as a Rust test API.
+
+Order: engine port with the parity harness first, since it is useful on its
+own (faster AI, native soak runs). Then a world viewer in eframe, then
+interaction and the HUD, then menus, campaigns and audio. The Tauri shell
+and the TypeScript app retire last, once the native client covers
+everything. eframe also builds to WebAssembly, so a browser version could
+come from the same code instead of being dropped. The Python asset
+pipeline does not change.
