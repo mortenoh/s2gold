@@ -102,6 +102,34 @@ test('the Options screen cycles the graphics preference', async ({ page }) => {
   await expect(row).toHaveText('Graphics: Original');
   await row.click();
   await expect(row).toHaveText('Graphics: HD');
+  await row.click();
+  await expect(row).toHaveText('Graphics: AI remaster');
+});
+
+test('AI remaster loads the remastered set where the pipeline built one', async ({
+  browser,
+  page,
+  baseURL,
+}) => {
+  test.skip(!(await assetsPresent(page)), 'converted assets not installed');
+  const manifest = (await (await page.request.get(`${baseURL}/assets/manifest.json`)).json()) as {
+    categories: { graphics_ai?: { archives: Record<string, string> } };
+  };
+  test.skip(!manifest.categories.graphics_ai?.archives.rom_z, 'no AI remaster built for rom_z');
+  const context = await browser.newContext({ deviceScaleFactor: 2 });
+  await context.addInitScript(() => localStorage.setItem('s2gold.view.graphics', 'ai'));
+  const p = await context.newPage();
+  const aiAtlas = p.waitForRequest(/graphics\/rom_z\/ai2\/atlas\.json/);
+  await p.goto(`${baseURL}/play/maps_miss200`);
+  await aiAtlas;
+  await expect(p.locator('body[data-map-ready]')).toBeAttached({ timeout: 15_000 });
+  const g = await p.evaluate(() => {
+    const d = (window as unknown as { __s2debug: Dbg }).__s2debug;
+    const info = d.graphics();
+    return { pref: info.pref, scale: info.scale, buildings: info.atlas('rom_z') };
+  });
+  expect(g).toEqual({ pref: 'ai', scale: 2, buildings: 2 });
+  await context.close();
 });
 
 test('HD uses the vector menu fonts, Original keeps the bitmap font', async ({

@@ -530,6 +530,8 @@ settings, saved across sessions:
   smoothed 2x copy made when the assets were converted: the same colours and
   shapes with cleaner diagonals and curves. **Auto** (the default) uses HD
   on high-density (retina) screens and the original art elsewhere.
+  **AI remaster** is HD with repainted buildings where your asset build
+  includes them (see the roadmap); everything else is drawn as in HD.
 
 Each button cycles its value on click. (The same audio controls also live in the
 in-game **Settings** panel.)

@@ -50,3 +50,6 @@ sessions/
 
 # Guide screenshots (contain original game art; generated via `pnpm guide:shots`)
 docs/guide-shots/
+
+# AI remaster references and generated art (derived from the game data)
+remaster/

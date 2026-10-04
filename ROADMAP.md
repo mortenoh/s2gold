@@ -635,6 +635,29 @@ Follow-ups (still 1x, drawn with pixelated scaling): HUD and menu icons,
 bitmap fonts, the cursor, menu backdrops and the campaign globe. A 3x or 4x
 set would be MMPX applied twice; it is not planned until a display needs it.
 
+### AI remaster (pilot landed 2026-10-04)
+
+A fourth Graphics choice, **AI remaster**, swaps repainted art into the 2x set.
+`uv run s2gold remaster-prep <archive>` exports each finished building as a
+reference on a magenta backdrop; `scripts/remaster-gen.sh <archive> [host]`
+runs Qwen Image 2.1 image editing with the official 4-step acceleration LoRA
+through stable-diffusion.cpp on a GPU host (about 22 s per sprite on the
+Strix Halo box); `uv run s2gold remaster-pack <archive>` keys out the
+backdrop, fits each result onto the original outline at 2x (so footprints,
+anchors, the game's shadow sprites and flags still line up) and writes
+`graphics/<archive>/ai2/`. Everything the model did not repaint keeps its MMPX
+version. Generated art is derived from the game data, so it lives in the
+gitignored `remaster/` directory. The Roman set (rom_z, 32 buildings) is done.
+
+Open:
+
+1. The other nation sets and their winter twins.
+2. Map objects (trees, stones), ships and decorations. Trees have sway frames,
+   so they need the same image for every frame or a consistency check.
+3. Construction sites keep MMPX: their dithered floors are a transparency
+   effect the model paints as solid ground.
+4. Settlers and work animations stay MMPX: per-frame generation flickers.
+
 ## J. Native client in egui (idea, not scheduled)
 
 Goal: one Rust binary that draws everything itself, with no HTML, DOM or

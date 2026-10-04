@@ -145,8 +145,11 @@ def write_hd_set(
     write_json(hd_dir / "atlas.json", hd_payload)
 
 
-def _convert_archive(path: Path, standard: Palette, out_dir: Path, *, hd: bool = False) -> dict[str, object]:
-    """Decode, pack and serialise a single archive; return a small summary dict."""
+def decode_archive(path: Path, standard: Palette) -> tuple[list[tuple[int, DecodedSprite]], dict[str, int]]:
+    """Decode every bitmap of a graphics archive, with counts of the skipped item kinds.
+
+    An embedded palette item applies to the bitmaps that follow it.
+    """
     items = lst.read_lst(path.read_bytes())
     palette = standard
     decoded: list[tuple[int, DecodedSprite]] = []
@@ -163,6 +166,17 @@ def _convert_archive(path: Path, standard: Palette, out_dir: Path, *, hd: bool =
             skipped["bob"] += 1
         else:
             decoded.append((item.index, decode_bitmap(item, palette)))
+    return decoded, skipped
+
+
+def archive_path(extracted: Path, name: str) -> Path | None:
+    """Source LST of an output archive name (e.g. ``rom_z``), or None."""
+    return next((path for path, n in _archive_paths(extracted) if n == name), None)
+
+
+def _convert_archive(path: Path, standard: Palette, out_dir: Path, *, hd: bool = False) -> dict[str, object]:
+    """Decode, pack and serialise a single archive; return a small summary dict."""
+    decoded, skipped = decode_archive(path, standard)
 
     by_key, atlas_count, has_masks = pack_sprites(decoded, out_dir)
     sprites = _sprite_entries(decoded, by_key, has_masks)

@@ -321,6 +321,7 @@ async function boot(): Promise<void> {
   // a change is saved and applies after a reload.
   const gfxPref = readGraphicsPref();
   const gfxScale = graphicsScale(gfxPref, window.devicePixelRatio || 1);
+  const gfxAi = gfxPref === 'ai';
   let gfxPending = gfxPref;
   const gfxToggle = el('button', {
     attrs: {
@@ -489,9 +490,9 @@ async function boot(): Promise<void> {
   // only (not the world sprite renderer), so it is loaded here but never
   // registered as a game-sprite archive. Non-fatal when missing.
   const [romanAtlas, shipAtlas, workAtlas, carrier, jobs, ioAtlas] = await Promise.all([
-    loadAtlas(BUILDING_ARCHIVE, gfxScale),
-    loadAtlas(SHIP_ARCHIVE, gfxScale),
-    loadAtlas(WORK_ARCHIVE, gfxScale),
+    loadAtlas(BUILDING_ARCHIVE, gfxScale, gfxAi),
+    loadAtlas(SHIP_ARCHIVE, gfxScale, gfxAi),
+    loadAtlas(WORK_ARCHIVE, gfxScale, gfxAi),
     loadBobAtlas('carrier', BOB_ARCHIVE, gfxScale),
     loadBobAtlas('jobs', JOBS_ARCHIVE, gfxScale),
     loadAtlas(IO_ARCHIVE),
@@ -628,7 +629,7 @@ async function boot(): Promise<void> {
     const archive = objectAtlasForLandscape(map.terrain);
     let objAtlas = objectAtlasCache.get(archive) ?? null;
     if (!objAtlas) {
-      objAtlas = await loadAtlas(archive, gfxScale);
+      objAtlas = await loadAtlas(archive, gfxScale, gfxAi);
       if (gen !== switchGen) return;
       if (objAtlas) {
         objectAtlasCache.set(archive, objAtlas);
@@ -668,7 +669,7 @@ async function boot(): Promise<void> {
     wantedArchives.add(buildingArchiveForLandscape(map.terrain));
     const toLoad = [...wantedArchives].filter((a) => !sprites.hasAtlas(a));
     if (toLoad.length > 0) {
-      const loaded = await Promise.all(toLoad.map((a) => loadAtlas(a, gfxScale)));
+      const loaded = await Promise.all(toLoad.map((a) => loadAtlas(a, gfxScale, gfxAi)));
       if (gen !== switchGen) return; // superseded by a newer switch
       for (let i = 0; i < toLoad.length; i++) {
         const la = loaded[i];

@@ -44,14 +44,15 @@ export function writeVisPref(key: string, on: boolean): void {
 }
 
 /**
- * Graphics set: the original art, the 2x MMPX-magnified HD set, or Auto (HD on
+ * Graphics set: the original art, the 2x MMPX-magnified HD set, the AI remaster
+ * (repainted world sprites where the pipeline built them, HD elsewhere), or Auto (HD on
  * high-density screens, where each world pixel covers 1.5 or more device
  * pixels). Read once when the game page starts; a change applies on reload.
  */
-export type GraphicsPref = 'auto' | 'original' | 'hd';
+export type GraphicsPref = 'auto' | 'original' | 'hd' | 'ai';
 
 export const GRAPHICS_LS_KEY = 's2gold.view.graphics';
-const GRAPHICS_PREFS: readonly GraphicsPref[] = ['auto', 'original', 'hd'];
+const GRAPHICS_PREFS: readonly GraphicsPref[] = ['auto', 'original', 'hd', 'ai'];
 
 export function readGraphicsPref(): GraphicsPref {
   try {
@@ -70,7 +71,7 @@ export function writeGraphicsPref(pref: GraphicsPref): void {
   }
 }
 
-/** The preference after `pref` in the Auto, Original, HD cycle. */
+/** The preference after `pref` in the Auto, Original, HD, AI remaster cycle. */
 export function nextGraphicsPref(pref: GraphicsPref): GraphicsPref {
   const i = GRAPHICS_PREFS.indexOf(pref);
   return GRAPHICS_PREFS[(i + 1) % GRAPHICS_PREFS.length] ?? 'auto';
@@ -78,7 +79,7 @@ export function nextGraphicsPref(pref: GraphicsPref): GraphicsPref {
 
 /** Asset scale a preference selects on a screen with this device pixel ratio. */
 export function graphicsScale(pref: GraphicsPref, dpr: number): 1 | 2 {
-  if (pref === 'hd') return 2;
+  if (pref === 'hd' || pref === 'ai') return 2;
   if (pref === 'original') return 1;
   return dpr >= 1.5 ? 2 : 1;
 }
@@ -86,6 +87,7 @@ export function graphicsScale(pref: GraphicsPref, dpr: number): 1 | 2 {
 /** Human label, e.g. "Graphics: Auto (HD)". */
 export function graphicsLabel(pref: GraphicsPref, dpr: number): string {
   if (pref === 'hd') return 'Graphics: HD';
+  if (pref === 'ai') return 'Graphics: AI remaster';
   if (pref === 'original') return 'Graphics: Original';
   return `Graphics: Auto (${graphicsScale(pref, dpr) === 2 ? 'HD' : 'Original'})`;
 }

@@ -54,11 +54,16 @@ async function loadImage(url: string): Promise<HTMLImageElement> {
 /**
  * Fetch and decode an atlas by archive name from
  * `/assets/graphics/<archive>/`. With `scale` 2 the archive's HD set is used
- * when the pipeline built one, else the original art. Returns null when the
+ * when the pipeline built one (its AI remaster first with `ai`), else the
+ * original art. Returns null when the
  * atlas is not installed.
  */
-export async function loadAtlas(archive: string, scale = 1): Promise<LoadedAtlas | null> {
-  const hdDir = scale > 1 ? await hdAtlasDir('graphics', archive) : null;
+export async function loadAtlas(
+  archive: string,
+  scale = 1,
+  ai = false,
+): Promise<LoadedAtlas | null> {
+  const hdDir = scale > 1 ? await hdAtlasDir('graphics', archive, ai) : null;
   if (hdDir) {
     const hd = await loadAtlasFrom(hdDir);
     if (hd) return hd;

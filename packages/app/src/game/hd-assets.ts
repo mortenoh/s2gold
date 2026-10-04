@@ -9,6 +9,8 @@ import { loadManifest } from '../lib/manifest';
 
 interface HdIndex {
   readonly graphics: ReadonlyMap<string, string>;
+  /** AI-remastered sets (`graphics_ai`), preferred over `graphics` when asked for. */
+  readonly ai: ReadonlyMap<string, string>;
   readonly bobs: ReadonlyMap<string, string>;
   readonly terrain: ReadonlyMap<string, string>;
 }
@@ -34,7 +36,12 @@ async function buildIndex(): Promise<HdIndex> {
     const path = (entry as { indexed_hd?: { path?: unknown } } | null)?.indexed_hd?.path;
     if (typeof path === 'string') terrain.set(name, path);
   }
-  return { graphics: archives(cats.graphics_hd), bobs: archives(cats.bobs_hd), terrain };
+  return {
+    graphics: archives(cats.graphics_hd),
+    ai: archives(cats.graphics_ai),
+    bobs: archives(cats.bobs_hd),
+    terrain,
+  };
 }
 
 function index(): Promise<HdIndex> {
@@ -42,9 +49,17 @@ function index(): Promise<HdIndex> {
   return cached;
 }
 
-/** Directory of an archive's HD set (e.g. `graphics/rom_z/hd2`), or null. */
-export async function hdAtlasDir(kind: 'graphics' | 'bobs', name: string): Promise<string | null> {
-  const path = (await index())[kind].get(name);
+/**
+ * Directory of an archive's 2x set (e.g. `graphics/rom_z/hd2`), or null. With
+ * `ai`, a graphics archive's AI remaster (`ai2`) wins when the pipeline built one.
+ */
+export async function hdAtlasDir(
+  kind: 'graphics' | 'bobs',
+  name: string,
+  ai = false,
+): Promise<string | null> {
+  const idx = await index();
+  const path = (ai && kind === 'graphics' ? idx.ai.get(name) : undefined) ?? idx[kind].get(name);
   return path ? path.replace(/\/atlas\.json$/, '') : null;
 }
 

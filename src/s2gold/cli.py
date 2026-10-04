@@ -73,6 +73,31 @@ def install(
     typer.echo(f"assets ready at {assets}")
 
 
+@app.command("remaster-prep")
+def remaster_prep(
+    archive: Annotated[str, typer.Argument(help="Graphics archive, e.g. rom_z")],
+    extracted: Annotated[Path, typer.Option(help="Installer extraction directory")] = EXTRACTED_DIR,
+) -> None:
+    """Export reference images of an archive's buildings for AI remastering."""
+    from s2gold.remaster import REMASTER_DIR, prepare  # noqa: PLC0415
+
+    chosen = prepare(extracted, archive)
+    typer.echo(f"{len(chosen)} references in {REMASTER_DIR / archive / 'ref'}")
+
+
+@app.command("remaster-pack")
+def remaster_pack(
+    archive: Annotated[str, typer.Argument(help="Graphics archive, e.g. rom_z")],
+    assets: Annotated[Path, typer.Option(help="Converted assets output directory")] = ASSETS_DIR,
+    extracted: Annotated[Path, typer.Option(help="Installer extraction directory")] = EXTRACTED_DIR,
+) -> None:
+    """Fit generated images onto the originals and write the archive's ai2 atlas set."""
+    from s2gold.remaster import pack  # noqa: PLC0415
+
+    replaced = pack(extracted, assets, archive)
+    typer.echo(f"{archive}: {replaced} remastered sprites packed into ai2")
+
+
 def main() -> None:
     """CLI entry point."""
     app()

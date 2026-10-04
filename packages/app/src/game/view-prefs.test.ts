@@ -14,7 +14,10 @@ describe('graphics preference', () => {
   it('cycles Auto, Original, HD and labels the resolved set', () => {
     expect(nextGraphicsPref('auto')).toBe('original');
     expect(nextGraphicsPref('original')).toBe('hd');
-    expect(nextGraphicsPref('hd')).toBe('auto');
+    expect(nextGraphicsPref('hd')).toBe('ai');
+    expect(nextGraphicsPref('ai')).toBe('auto');
+    expect(graphicsScale('ai', 1)).toBe(2);
+    expect(graphicsLabel('ai', 1)).toBe('Graphics: AI remaster');
     expect(graphicsLabel('auto', 2)).toBe('Graphics: Auto (HD)');
     expect(graphicsLabel('auto', 1)).toBe('Graphics: Auto (Original)');
     expect(graphicsLabel('hd', 1)).toBe('Graphics: HD');
