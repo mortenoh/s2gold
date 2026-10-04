@@ -19,6 +19,7 @@ Generated images are derived from the game's art, so they live under the gitigno
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -35,6 +36,7 @@ from s2gold.convert.graphics import (
 from s2gold.core import REPO_ROOT, Manifest, write_json
 from s2gold.formats.bitmaps import DecodedSprite
 from s2gold.formats.palette import Palette
+from s2gold.sway import colour_match, derive_frames
 from s2gold.upscale import SCALE, upscale_sprite
 
 REMASTER_DIR = REPO_ROOT / "remaster"
@@ -72,10 +74,22 @@ def reference_image(sprite: DecodedSprite) -> Image.Image:
 
 # Static landscape objects of a MAPBOBS archive: nature decorations 500..515 and the
 # two granite types in six sizes each, 516..527 (their shadows at 600+ stay MMPX).
-# Trees (200 + 15 * species) sway over eight frames and are not included.
 OBJECT_INDICES = range(500, 528)
 
-SELECTIONS = ("buildings", "objects")
+# Trees of a MAPBOBS archive: species s uses 200 + 15 * s + frame. Frames 0..7 are the
+# sway animation (only frame 0 is repainted; :mod:`s2gold.sway` derives the rest),
+# 8..11 the growth stages and 12..14 the fall, each a still image repainted on its own.
+TREE_BASE = 200
+TREE_STRIDE = 15
+TREE_SPECIES = range(9)
+SWAY_FRAMES = 8
+TREE_STILL_FRAMES = range(8, 15)
+
+# Landscape archives: their repaints are colour-matched to the originals (the model
+# brightens foliage and stone) and their tree sway frames are derived from frame 0.
+LANDSCAPE_ARCHIVES = frozenset({"mapbobs", "mapbobs0", "mapbobs1"})
+
+SELECTIONS = ("buildings", "objects", "trees")
 
 # The edit instruction given to the model. Winter sets add a line about snow: without
 # it the model tends to clean most of the snow off roofs and ledges.
@@ -107,6 +121,16 @@ def prompt_for(archive: str) -> str:
 MIN_OBJECT_SIZE = 20
 
 
+def tree_indices(decoded: list[tuple[int, DecodedSprite]]) -> list[int]:
+    """Frame 0 of every tree species plus its growth and falling frames (not tiny ones)."""
+    present = {i for i, s in decoded if max(s.width, s.height) >= MIN_OBJECT_SIZE and s.kind != "shadow"}
+    chosen: list[int] = []
+    for species in TREE_SPECIES:
+        base = TREE_BASE + TREE_STRIDE * species
+        chosen += [base + f for f in (0, *TREE_STILL_FRAMES) if base + f in present]
+    return chosen
+
+
 def object_indices(decoded: list[tuple[int, DecodedSprite]]) -> list[int]:
     """Static decoration and granite sprite indices present in a landscape archive."""
     present = {i for i, s in decoded if max(s.width, s.height) >= MIN_OBJECT_SIZE and s.kind != "shadow"}
@@ -119,8 +143,9 @@ def prepare(extracted: Path, archive: str, selection: str = "buildings", out_roo
     Args:
         extracted: innoextract output root.
         archive: Graphics archive name.
-        selection: ``buildings`` (finished buildings of a nation set) or ``objects``
-            (static decorations and granite of a landscape set).
+        selection: ``buildings`` (finished buildings of a nation set), ``objects``
+            (static decorations and granite of a landscape set) or ``trees`` (frame 0
+            and the still frames of every tree species of a landscape set).
         out_root: Remaster working directory.
 
     Returns:
@@ -132,12 +157,23 @@ def prepare(extracted: Path, archive: str, selection: str = "buildings", out_roo
     by_index = dict(decoded)
     ref_dir = out_root / archive / "ref"
     ref_dir.mkdir(parents=True, exist_ok=True)
-    chosen = building_indices(decoded) if selection == "buildings" else object_indices(decoded)
+    pick = {"buildings": building_indices, "objects": object_indices, "trees": tree_indices}[selection]
+    chosen = pick(decoded)
     for index in chosen:
         reference_image(by_index[index]).save(ref_dir / f"{index}.png")
+    jobs_path = out_root / archive / "jobs.json"
+    selections: dict[str, list[int]] = {}
+    if jobs_path.exists():
+        selections = dict(json.loads(jobs_path.read_text()).get("selections", {}))
+    selections[selection] = chosen
     write_json(
-        out_root / archive / "jobs.json",
-        {"archive": archive, "selection": selection, "prompt": prompt_for(archive), "indices": chosen},
+        jobs_path,
+        {
+            "archive": archive,
+            "prompt": prompt_for(archive),
+            "selections": selections,
+            "indices": sorted({i for ids in selections.values() for i in ids}),
+        },
     )
     return chosen
 
@@ -211,19 +247,27 @@ def pack(extracted: Path, assets: Path, archive: str, out_root: Path = REMASTER_
         How many sprites came from generated images.
     """
     decoded = _decode(extracted, archive)
+    by_index = dict(decoded)
     gen_dir = out_root / archive / "out"
-    sprites: list[tuple[int, DecodedSprite]] = []
-    replaced = 0
+    landscape = archive in LANDSCAPE_ARCHIVES
+    fitted_by_index: dict[int, DecodedSprite] = {}
     for index, sprite in decoded:
         path = gen_dir / f"{index}.png"
-        fitted = None
         if path.exists() and sprite.player_mask is None and sprite.width and sprite.height:
             fitted = fit(Image.open(path), sprite)
-        if fitted is not None:
-            replaced += 1
-            sprites.append((index, fitted))
-        else:
-            sprites.append((index, upscale_sprite(sprite)))
+            if fitted is not None:
+                fitted_by_index[index] = _colour_matched(fitted, sprite) if landscape else fitted
+    if landscape:
+        for species in TREE_SPECIES:
+            base = TREE_BASE + TREE_STRIDE * species
+            frames = [by_index.get(base + f) for f in range(SWAY_FRAMES)]
+            if base not in fitted_by_index or any(f is None for f in frames):
+                continue
+            derived = derive_frames([f for f in frames if f is not None], fitted_by_index[base], SCALE)
+            for f, sprite in enumerate(derived, start=1):
+                fitted_by_index[base + f] = sprite
+    sprites = [(index, fitted_by_index.get(index) or upscale_sprite(sprite)) for index, sprite in decoded]
+    replaced = len(fitted_by_index)
 
     out_dir = assets / "graphics" / archive / AI_DIR
     if out_dir.exists():
@@ -252,6 +296,16 @@ def pack(extracted: Path, assets: Path, archive: str, out_root: Path = REMASTER_
     manifest.add("graphics_ai", {"scale": SCALE, "archives": current})
     manifest.save(assets)
     return replaced
+
+
+def _colour_matched(fitted: DecodedSprite, original: DecodedSprite) -> DecodedSprite:
+    """A repaint with its colours mapped onto the original's (via the MMPX version)."""
+    reference = upscale_sprite(original)
+    shape = (fitted.height, fitted.width, 4)
+    mine = np.frombuffer(fitted.rgba, dtype=np.uint8).reshape(shape).astype(np.float64)
+    ref = np.frombuffer(reference.rgba, dtype=np.uint8).reshape(shape).astype(np.float64)
+    matched = colour_match(mine, ref)
+    return replace(fitted, rgba=np.round(np.clip(matched, 0, 255)).astype(np.uint8).tobytes())
 
 
 def _decode(extracted: Path, archive: str) -> list[tuple[int, DecodedSprite]]:

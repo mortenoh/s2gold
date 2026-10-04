@@ -76,7 +76,9 @@ def install(
 @app.command("remaster-prep")
 def remaster_prep(
     archive: Annotated[str, typer.Argument(help="Graphics archive, e.g. rom_z or mapbobs")],
-    select: Annotated[str, typer.Option(help="buildings (nation sets) or objects (landscape sets)")] = "buildings",
+    select: Annotated[
+        str, typer.Option(help="buildings (nation sets), objects or trees (landscape sets)")
+    ] = "buildings",
     extracted: Annotated[Path, typer.Option(help="Installer extraction directory")] = EXTRACTED_DIR,
 ) -> None:
     """Export reference images of an archive's sprites for AI remastering."""
